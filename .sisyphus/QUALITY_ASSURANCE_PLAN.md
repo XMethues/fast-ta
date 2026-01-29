@@ -363,7 +363,7 @@ impl QualityMetrics {
 
 - [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
 - [The Rust Performance Book](https://nnethercote.github.io/perf-book/)
-- [Rust SIMD Guide](https://rust-lang.github.io/packed_simd/perf-guide/)
+- [wide crate documentation](https://docs.rs/wide/) - SIMD abstraction library
 - [High Assurance Rust](https://highassurance.rs/)
 
 ### C. 相关标准

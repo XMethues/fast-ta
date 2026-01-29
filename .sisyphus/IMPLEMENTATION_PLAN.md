@@ -38,10 +38,11 @@
 - 流式 API 延迟 < 1ms
 
 ### 关键技术决策
-- **SIMD**: 使用 `std::simd`（`f64x4`），无 `#[cfg]` 条件编译
+- **SIMD**: 使用 `wide` 库（`f64x4`/`f32x8`）替代 `std::simd`，因为 `std::simd` 目前处于 nightly 不稳定状态
 - **架构**: 4-crate workspace（core, py, wasm, benchmarks）
-- **API**: 零拷贝（`&[f64]` / `&mut [f64]`）
+- **API**: 零拷贝（`&[Float]` / `&mut [Float]`），`Float` 类型通过条件编译确定
 - **模式**: 批量 + 流式双 trait 系统
+- **浮点精度**: 通过 Cargo features 在编译时选择 `f32` 或 `f64`（默认 `f64`），使用条件编译实现零成本抽象
 
 ---
 
@@ -92,6 +93,33 @@
 - [ ] 1.1.2 创建 `ta-core` crate
   - 创建目录结构: `crates/ta-core/src/`
   - 配置 Cargo.toml (no_std, core dependencies)
+  - **配置浮点精度特性**: 添加 `f32` 和 `f64` 特性（默认 `f64`）
+    ```toml
+    [features]
+    default = ["f64"]
+    f32 = []
+    f64 = []
+    ```
+  - **定义条件编译浮点类型**: 在 `crates/ta-core/src/types.rs` 中定义：
+    ```rust
+    #[cfg(feature = "f32")]
+    pub type Float = f32;
+    
+    #[cfg(feature = "f64")]
+    pub type Float = f64;
+    
+    #[cfg(feature = "f32")]
+    pub use wide::f32x8 as SimdFloat;
+    
+    #[cfg(feature = "f64")]
+    pub use wide::f64x4 as SimdFloat;
+    
+    #[cfg(feature = "f32")]
+    pub const LANES: usize = 8;
+    
+    #[cfg(feature = "f64")]
+    pub const LANES: usize = 4;
+    ```
   - 创建空的 lib.rs
   
 - [ ] 1.1.3 创建 `ta-py` crate
@@ -302,18 +330,29 @@
 **负责人**: TBD  
 
 **描述**:  
-实现基于 `std::simd` 的简化 SIMD 抽象层，**不使用 `#[cfg]` 条件编译**。
+实现基于 `wide` 库的 SIMD 抽象层，**不使用 `#[cfg]` 条件编译**。由于 `std::simd` 是 nightly 特性，使用 `wide` 库提供稳定的跨平台 SIMD 支持。
+
+**依赖添加**:  
+在 workspace 根目录的 Cargo.toml 的 `[workspace.dependencies]` 中添加:  
+```toml
+wide = "0.7"
+```
+
+在 `ta-core` 的 Cargo.toml 的 `[dependencies]` 中添加:  
+```toml
+wide.workspace = true
+```
 
 **子任务**:
 
 - [ ] 1.4.1 创建 `simd.rs` 模块
   - 创建 `crates/ta-core/src/simd.rs`
   - 添加模块文档
-  - 说明 Phase 1 不使用 `#[cfg]` 的策略
+  - 说明使用 `wide` 库而不是 `std::simd` 的原因
   
 - [ ] 1.4.2 定义 SIMD 类型
   ```rust
-  use std::simd::{f64x4, SimdFloat};
+  use wide::f64x4;
   
   /// SIMD vector type for f64 operations
   pub type SimdF64 = f64x4;
@@ -328,12 +367,13 @@
       let chunks = data.chunks_exact(LANES);
       let remainder = chunks.remainder();
       
-      let sum_vec: SimdF64 = chunks
-          .map(|chunk| SimdF64::from_slice(chunk))
-          .reduce(|a, b| a + b)
-          .unwrap_or(SimdF64::splat(0.0));
+      let mut sum_vec = SimdF64::ZERO;
+      for chunk in chunks {
+          let vec = SimdF64::from_slice(chunk);
+          sum_vec += vec;
+      }
       
-      let mut sum = sum_vec.reduce_sum();
+      let mut sum = sum_vec.reduce_add();
       for &x in remainder { sum += x; }
       sum
   }
