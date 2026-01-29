@@ -270,6 +270,8 @@ pub trait Resettable {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
     use crate::Float;
 
@@ -296,6 +298,14 @@ mod tests {
 
         fn next(&mut self, _input: Self::Input) -> Option<Self::Output> {
             None
+        }
+
+        fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
+            todo!()
+        }
+
+        fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
+            todo!()
         }
     }
 
@@ -343,6 +353,14 @@ mod tests {
             fn next(&mut self, input: Self::Input) -> Option<Self::Output> {
                 Some(input)
             }
+
+            fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
+                todo!()
+            }
+
+            fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
+                todo!()
+            }
         }
 
         let mut indicator = StreamMock;
@@ -375,6 +393,14 @@ mod tests {
             fn next(&mut self, input: Self::Input) -> Option<Self::Output> {
                 self.sum += input;
                 Some(self.sum)
+            }
+
+            fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
+                todo!()
+            }
+
+            fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
+                todo!()
             }
         }
 

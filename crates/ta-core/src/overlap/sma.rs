@@ -9,6 +9,7 @@ use crate::{
     Float,
 };
 use alloc::vec;
+use alloc::vec::Vec;
 
 /// Simple Moving Average (SMA) indicator
 ///
@@ -62,6 +63,7 @@ use alloc::vec;
 ///     Ok(())
 /// }
 /// ```
+#[derive(Debug)]
 pub struct Sma {
     /// Number of periods for the moving average
     period: usize,
@@ -125,34 +127,6 @@ impl Sma {
     pub fn period(&self) -> usize {
         self.period
     }
-
-    fn compute_to_vec_impl(&self, inputs: &[Float]) -> Result<Vec<Float>> {
-        let lookback = self.lookback();
-        if inputs.len() <= lookback {
-            return Ok(Vec::new());
-        }
-
-        let mut outputs = Vec::with_capacity(inputs.len() - lookback);
-        for i in lookback..inputs.len() {
-            unsafe {
-                outputs.set_len(i - lookback + 1);
-            }
-            let window = &inputs[i - lookback..=i];
-
-            for &value in window {
-                if !value.is_finite() {
-                    return Err(TalibError::invalid_input(
-                        "Input contains NaN or infinite values",
-                    ));
-                }
-            }
-
-            let sum: Float = window.iter().sum();
-            outputs[i - lookback] = sum / self.period as Float;
-        }
-
-        Ok(outputs)
-    }
 }
 
 impl Indicator<1> for Sma {
@@ -180,8 +154,9 @@ impl Indicator<1> for Sma {
         }
 
         for (i, output) in outputs.iter_mut().enumerate().take(expected_outputs) {
-            let end = i + lookback + 1;
-            let window = &inputs[i..end];
+            let start = i;
+            let end = i + self.period;
+            let window = &inputs[start..end];
 
             for &value in window {
                 if !value.is_finite() {
@@ -206,8 +181,8 @@ impl Indicator<1> for Sma {
 
         let mut outputs = Vec::with_capacity(inputs.len() - lookback);
         for i in lookback..inputs.len() {
-            let end = i + 1;
-            let window = &inputs[i..end];
+            let window_start = i + 1 - self.period;
+            let window = &inputs[window_start..=i];
 
             for &value in window {
                 if !value.is_finite() {
