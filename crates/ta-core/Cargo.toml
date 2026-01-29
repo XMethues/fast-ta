@@ -11,9 +11,11 @@ keywords = ["technical-analysis", "trading", "indicators", "ta-lib", "finance"]
 categories = ["algorithms", "data-structures", "mathematics", "no-std"]
 
 [features]
-default = ["f64"]
+default = ["f64", "std"]
 f32 = []
 f64 = []
+std = []
+core_error = []
 
 [dependencies]
 wide = { workspace = true, optional = true }
