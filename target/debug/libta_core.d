@@ -1,1 +1,0 @@
-/var/tmp/vibe-kanban/worktrees/446d-1-1-workspace/rs-indicators/target/debug/libta_core.rlib: /var/tmp/vibe-kanban/worktrees/446d-1-1-workspace/rs-indicators/crates/ta-core/src/lib.rs /var/tmp/vibe-kanban/worktrees/446d-1-1-workspace/rs-indicators/crates/ta-core/src/types.rs
