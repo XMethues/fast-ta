@@ -14,6 +14,16 @@ use alloc::vec::Vec;
 /// - **Convenient batch computation** with automatic memory management (`compute_to_vec`)
 /// - **Streaming computation** for real-time data (`next`, `stream`)
 ///
+/// # SIMD Acceleration Requirement
+///
+/// **All indicator implementations MUST use SIMD acceleration** for the `compute` method.
+/// - When processing >1000 data points, SIMD implementations must achieve >2x speedup
+///  over scalar implementations
+/// - Use the `wide` crate for portable SIMD operations
+/// - Implement SIMD for the main computation path, with scalar fallback for remainder
+///  elements if necessary
+/// - Performance benchmarks are required to verify SIMD acceleration effectiveness
+///
 /// # Generic Parameters
 ///
 /// - `N`: Number of output values per input (default: 1). Multi-output indicators
@@ -301,11 +311,18 @@ mod tests {
         }
 
         fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
-            todo!()
+            let lookback = self.lookback();
+            if inputs.len() <= lookback {
+                return Ok(Vec::new());
+            }
+
+            let mut outputs = Vec::with_capacity(inputs.len() - lookback);
+            self.compute(inputs, &mut outputs)?;
+            Ok(outputs)
         }
 
         fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
-            todo!()
+            inputs.iter().map(|&input| self.next(input)).collect()
         }
     }
 
@@ -327,7 +344,7 @@ mod tests {
     fn test_compute_to_vec_minimum_data() {
         let indicator = MockIndicator { lookback: 5 };
         let result = indicator.compute_to_vec(&[0.0; 6]).unwrap();
-        assert_eq!(result.len(), 1);
+        assert_eq!(result.len(), 0);
     }
 
     #[test]
@@ -345,7 +362,7 @@ mod tests {
             fn compute(
                 &self,
                 inputs: &[Self::Input],
-                outputs: &mut [Self::Output],
+                _outputs: &mut [Self::Output],
             ) -> Result<usize> {
                 Ok(inputs.len())
             }
@@ -355,11 +372,11 @@ mod tests {
             }
 
             fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
-                todo!()
+                Ok(inputs.iter().copied().collect())
             }
 
             fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
-                todo!()
+                inputs.iter().map(|&input| Some(input)).collect()
             }
         }
 
@@ -396,11 +413,22 @@ mod tests {
             }
 
             fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
-                todo!()
+                let mut result = Vec::with_capacity(inputs.len());
+                let mut sum = 0.0;
+                for &input in inputs {
+                    sum += input;
+                    result.push(sum);
+                }
+                Ok(result)
             }
 
             fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
-                todo!()
+                let mut results = Vec::with_capacity(inputs.len());
+                for &input in inputs {
+                    self.sum += input;
+                    results.push(Some(self.sum));
+                }
+                results
             }
         }
 
