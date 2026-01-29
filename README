@@ -1,0 +1,182 @@
+# rs-ta-lib
+
+[![Rust](https://img.shields.io/badge/rust-1.78+-blue.svg)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+
+Rust 实现的高性能技术分析指标库（TA-Lib 的 Rust 版本）
+
+## 特性
+
+- 🚀 **高性能**: SIMD 优化，零拷贝 API，延迟 < 1μs
+- 🔄 **双模计算**: 支持批量（离线分析）和流式（实时处理）模式
+- 🦀 **Rust 原生**: 纯 Rust 实现，支持 `no_std`，零外部依赖
+- 🎯 **精确匹配**: 100% 数值精度匹配原版 TA-Lib C（ε < 1e-10）
+- 🐍 **Python 支持**: 通过 PyO3 提供 Python 绑定
+- 🌐 **WASM 支持**: 通过 wasm-bindgen 提供 WebAssembly 支持
+
+## 核心设计原则
+
+### 1. 零拷贝优先 (Zero-Copy)
+
+```rust
+// ✅ 正确：零拷贝接口
+fn calculate(&self, input: &[f64], output: &mut [f64]) -> Result<usize>;
+
+// ❌ 错误：返回Vec（有分配）
+fn calculate(&self, input: &[f64]) -> Result<Vec<f64>>;
+```
+
+### 2. SIMD 一等公民 (Simplified)
+
+**Phase 1**: 使用纯 `std::simd`，**无 `#[cfg]` 条件编译**
+
+```rust
+use std::simd::{f64x4, SimdFloat};
+
+pub type SimdF64 = f64x4;
+pub const LANES: usize = 4;
+
+pub fn sum_simd(data: &[f64]) -> f64 {
+    let chunks = data.chunks_exact(LANES);
+    let sum_vec: SimdF64 = chunks
+        .map(|chunk| SimdF64::from_slice(chunk))
+        .reduce(|a, b| a + b)
+        .unwrap_or(SimdF64::splat(0.0));
+    sum_vec.reduce_sum()
+}
+```
+
+**Phase 2+**: 根据性能分析，按需添加 `#[cfg]` 优化
+
+### 3. 双模计算范式
+
+```rust
+pub trait BatchIndicator<const N: usize = 1> {
+    fn compute(&self, inputs: &[Self::Input], outputs: &mut [Self::Output]) -> Result<usize>;
+}
+
+pub trait StreamingIndicator<const N: usize = 1> {
+    fn next(&self, state: &mut Self::State, input: Self::Input) -> Option<Self::Output>;
+}
+```
+
+### 4. 接口严格解耦
+
+```
+Workspace
+├── ta-core (纯Rust, no_std) ← 纯算法实现
+├── ta-py (PyO3) ← 依赖 ta-core
+└── ta-wasm (wasm-bindgen) ← 依赖 ta-core
+```
+
+### 5. 验证驱动开发
+
+- Level 1: 单元测试
+- Level 2: 精度验证 (vs TA-Lib C, ε < 1e-10)
+- Level 3: 一致性验证 (批量 vs 流式)
+- Level 4: 性能基准
+
+## 项目结构
+
+```
+rs-indicators/
+├── .sisyphus/
+│   ├── IMPLEMENTATION_PLAN.md    # 详细实施计划
+│   ├── PROJECT_README.md         # 本文档
+│   └── README.md                 # 项目总览
+├── Cargo.toml (workspace)
+└── crates/
+    ├── ta-core/     # 核心库 (no_std)
+    ├── ta-py/       # Python 绑定
+    ├── ta-wasm/     # WASM 绑定
+    └── ta-benchmarks/ # 基准测试
+```
+
+## 实施计划
+
+### 阶段总览
+
+| 阶段 | 名称 | 持续时间 | 主要交付物 |
+|------|------|----------|------------|
+| **Phase 1** | 核心基础设施 | 4 周 | Workspace, traits, SIMD 层 |
+| **Phase 2** | 重叠研究指标 | 4 周 | 16 个移动平均指标 |
+| **Phase 3** | 动量指标 | 4 周 | 33 个动量指标 |
+| **Phase 4** | 成交量与波动率 | 3 周 | 6 个指标 |
+| **Phase 5** | 绑定层 | 3 周 | Python 和 WASM 绑定 |
+| **Phase 6** | 验证与优化 | 4 周 | 完整测试套件，性能优化 |
+
+**总工期**: 26 周（约 6 个月）
+
+### Phase 1 详细任务
+
+**任务 1.1**: 创建 Workspace 结构 (8h)
+- [ ] 1.1.1 创建 workspace 根目录和 Cargo.toml
+- [ ] 1.1.2 创建 `ta-core` crate
+- [ ] 1.1.3 创建 `ta-py` crate
+- [ ] 1.1.4 创建 `ta-wasm` crate
+- [ ] 1.1.5 创建 `ta-benchmarks` crate
+
+**任务 1.2**: 实现错误类型系统 (6h)
+- [ ] 1.2.1 定义 `TalibError` 枚举
+- [ ] 1.2.2 实现 `std::error::Error` trait
+- [ ] 1.2.3 实现错误转换
+- [ ] 1.2.4 创建 Result 类型别名
+- [ ] 1.2.5 编写单元测试
+
+**任务 1.3**: 实现核心 Traits (12h)
+- [ ] 1.3.1 定义 `BatchIndicator` trait
+- [ ] 1.3.2 定义 `StreamingIndicator` trait
+- [ ] 1.3.3 定义 `DualModeIndicator` trait
+- [ ] 1.3.4 实现示例指标（SMA）
+- [ ] 1.3.5 编写单元测试
+
+**任务 1.4**: 实现 SIMD 抽象层 (10h)
+- [ ] 1.4.1 创建 `simd.rs` 模块
+- [ ] 1.4.2 定义 SIMD 类型 (`SimdF64 = f64x4`)
+- [ ] 1.4.3 实现 `sum_simd` 函数
+- [ ] 1.4.4 实现 `sma_simd` 函数
+- [ ] 1.4.5 编写单元测试
+
+**任务 1.5**: 设置测试基础设施 (6h)
+- [ ] 1.5.1 配置测试框架
+- [ ] 1.5.2 创建测试工具函数
+- [ ] 1.5.3 添加示例测试数据
+
+**Phase 1 验收标准**:
+- [ ] Workspace 可以成功编译
+- [ ] 所有核心 traits 有完整文档
+- [ ] SIMD 层通过所有单元测试
+- [ ] 代码覆盖率 > 80%
+
+## 技术决策
+
+### SIMD 策略决策
+
+| 方案 | 条件编译 | 复杂度 | 可维护性 | 适用阶段 |
+|------|----------|--------|----------|----------|
+| v1 (初始) | 9个 `#[cfg]` 块 | 高 | 低 | 后期优化 |
+| **v2 (当前)** | **无** | **低** | **高** | **Phase 1** |
+
+✅ **采用 v2 方案**: Phase 1 纯 `std::simd`，Phase 2+ 按需添加 `#[cfg]`
+
+## 相关文档
+
+- [IMPLEMENTATION_PLAN.md](.sisyphus/IMPLEMENTATION_PLAN.md) - 详细实施计划
+- [CONTRIBUTING.md](CONTRIBUTING.md) - 贡献指南
+- [CHANGELOG.md](CHANGELOG.md) - 变更日志
+
+## 许可证
+
+本项目采用 MIT 或 Apache-2.0 双重许可证授权。详情请查看 [LICENSE-MIT](LICENSE-MIT) 和 [LICENSE-APACHE](LICENSE-APACHE) 文件。
+
+## 致谢
+
+- 原版 [TA-Lib](http://ta-lib.org/) 项目提供算法参考
+- Rust SIMD 工作组提供 `std::simd` 支持
+- 所有贡献者和社区成员
+
+---
+
+<p align="center">
+  <strong>🚀 高性能技术分析，用 Rust 实现</strong>
+</p>
