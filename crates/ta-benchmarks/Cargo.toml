@@ -1,0 +1,24 @@
+[package]
+name = "ta-benchmarks"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+authors = ["TA-Lib Rust Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/rs-indicators"
+description = "Performance benchmarks for technical analysis indicators"
+keywords = ["benchmark", "performance", "technical-analysis", "indicators"]
+categories = ["development-tools::profiling", "development-tools::testing"]
+
+[[bench]]
+name = "basic"
+harness = false
+
+[dependencies]
+ta-core = { path = "../ta-core" }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[package.metadata.docs.rs]
+all-features = true

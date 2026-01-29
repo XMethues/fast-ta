@@ -1,0 +1,26 @@
+[package]
+name = "ta-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+authors = ["TA-Lib Rust Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/rs-indicators"
+description = "Core library for technical analysis indicators - no_std compatible"
+keywords = ["technical-analysis", "trading", "indicators", "ta-lib", "finance"]
+categories = ["algorithms", "data-structures", "mathematics", "no-std"]
+
+[features]
+default = ["f64"]
+f32 = []
+f64 = []
+
+[dependencies]
+wide = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
