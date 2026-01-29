@@ -1,6 +1,6 @@
 # TA-Lib Rust 重写项目 - 完整实施计划
 
-**版本**: v1.2
+**版本**: v1.4
 **创建日期**: 2026-01-29
 **最后更新**: 2026-01-29
 **状态**: 执行中 (Phase 1: 2/5 任务完成)  
@@ -42,7 +42,11 @@
 - **SIMD**: 使用 `wide` 库（`f64x4`/`f32x8`）替代 `std::simd`，因为 `std::simd` 目前处于 nightly 不稳定状态
 - **架构**: 4-crate workspace（core, py, wasm, benchmarks）
 - **API**: 零拷贝（`&[Float]` / `&mut [Float]`），`Float` 类型通过条件编译确定
-- **模式**: 批量 + 流式双 trait 系统
+- **指标接口**: 统一 `Indicator` trait，采用混合方案（性能 + 易用性）
+  - `compute(&self, inputs, outputs)` - **零拷贝批量计算**（性能优先，无内存分配）
+  - `compute_to_vec(&self, inputs)` - **便捷批量计算**（易用性优先，返回 Vec）
+  - `next(&mut self, input)` - 获取最新值（实时流式）
+  - `stream(&mut self, inputs)` - 流式处理多个输入
 - **浮点精度**: 通过 Cargo features 在编译时选择 `f32` 或 `f64`（默认 `f64`），使用条件编译实现零成本抽象
 
 ---
@@ -239,91 +243,173 @@
 
 ### 任务 1.3: 实现核心 Traits
 
-**任务 ID**: 1.3  
-**任务名称**: 实现 BatchIndicator 和 StreamingIndicator traits  
-**优先级**: P0 (最高)  
-**预估工时**: 12 小时  
-**负责人**: TBD  
+**任务 ID**: 1.3
+**任务名称**: 实现统一 Indicator trait（支持批量、流式和单值查询）
+**优先级**: P0 (最高)
+**预估工时**: 12 小时
+**负责人**: TBD
 
-**描述**:  
-定义核心 traits，实现批量和流式计算模式，建立指标实现的标准接口。
+**描述**:
+定义统一的 `Indicator` trait，同时支持批量计算、获取最新值和流式处理，建立指标实现的标准接口。
+
+**设计理念**:
+- 一个统一的 trait 支持三种使用模式
+- 采用混合方案（方案3）：同时提供零拷贝核心接口和便捷包装接口
+- 零拷贝 `compute()` 方法（性能优先）：使用输出缓冲区，无内存分配
+- 便捷 `compute_to_vec()` 方法（易用性优先）：返回 Vec，自动管理内存
+- 用户可以根据场景选择合适的接口
 
 **子任务**:
 
-- [ ] 1.3.1 定义 `BatchIndicator` trait
+- [ ] 1.3.1 定义 `Indicator` trait
   - 创建 `crates/ta-core/src/traits.rs`
-  - 定义 trait:
+  - 定义统一 trait:
     ```rust
-    pub trait BatchIndicator<const N: usize = 1> {
+    pub trait Indicator<const N: usize = 1> {
         type Input;
         type Output;
-        
+
+        /// 返回产生第一个有效输出所需的历史数据长度
         fn lookback(&self) -> usize;
-        
-        fn compute(
-            &self,
-            inputs: &[Self::Input],
-            outputs: &mut [Self::Output],
-        ) -> Result<usize>;
-        
-        fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>>;
+
+        /// 零拷贝批量计算（性能优先）
+        ///
+        /// # Arguments
+        /// * `inputs` - 输入数据
+        /// * `outputs` - 输出缓冲区，必须足够大：`outputs.len() >= inputs.len() - lookback()`
+        ///
+        /// # Returns
+        /// 实际写入的输出数量
+        ///
+        /// # Performance
+        /// 零内存分配，适合高频调用场景
+        ///
+        /// # Example
+        /// ```rust
+        /// let sma = Sma::new(20)?;
+        /// let prices: &[Float] = &large_price_array;
+        ///
+        /// // 预先分配输出缓冲区（可重用）
+        /// let mut outputs = vec![0.0; prices.len() - 19];
+        ///
+        /// // 零拷贝计算
+        /// let count = sma.compute(prices, &mut outputs)?;
+        /// ```
+        fn compute(&self, inputs: &[Self::Input], outputs: &mut [Self::Output]) -> Result<usize>;
+
+        /// 便捷批量计算（易用性优先）
+        ///
+        /// # Returns
+        /// 包含所有计算结果的 Vec
+        ///
+        /// # Performance
+        /// 需要一次内存分配，适合一般使用场景
+        ///
+        /// # Example
+        /// ```rust
+        /// let sma = Sma::new(20)?;
+        /// let prices = &[1.0, 2.0, 3.0, 4.0, 5.0];
+        ///
+        /// // 简单直接
+        /// let results = sma.compute_to_vec(prices)?;
+        /// ```
+        fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
+            let lookback = self.lookback();
+            if inputs.len() <= lookback {
+                return Ok(Vec::new());
+            }
+
+            let mut outputs = vec![Self::Output::default(); inputs.len() - lookback];
+            let count = self.compute(inputs, &mut outputs)?;
+            debug_assert_eq!(count, outputs.len());
+            Ok(outputs)
+        }
+
+        /// 获取最新值（流式模式）
+        ///
+        /// # Returns
+        /// `Some(output)` 如果有足够的累积数据
+        /// `None` 如果数据不足
+        ///
+        /// # Example
+        /// ```rust
+        /// let mut sma = Sma::new(20)?;
+        ///
+        /// for price in prices {
+        ///     if let Some(value) = sma.next(price) {
+        ///         println!("SMA: {}", value);
+        ///     }
+        /// }
+        /// ```
+        fn next(&mut self, input: Self::Input) -> Option<Self::Output>;
+
+        /// 流式处理（批量流式模式）
+        ///
+        /// # Example
+        /// ```rust
+        /// let mut sma = Sma::new(20)?;
+        /// let prices = &[1.0, 2.0, 3.0, 4.0, 5.0];
+        ///
+        /// let results: Vec<_> = sma.stream(prices);
+        /// // results: [None, None, None, None, None, ...]
+        /// ```
+        fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
+            inputs.iter().map(|&input| self.next(input)).collect()
+        }
     }
     ```
   - 添加文档字符串和示例
-  
-- [ ] 1.3.2 定义 `StreamingIndicator` trait
-  - 定义 trait:
+
+- [ ] 1.3.2 定义辅助 trait
+  - 定义 `Resettable` trait（可选，用于重置指标状态）:
     ```rust
-    pub trait StreamingIndicator<const N: usize = 1> {
-        type Input;
-        type Output;
-        type State: Default + Clone;
-        
-        fn init(&self) -> Self::State;
-        
-        fn next(&self, state: &mut Self::State, input: Self::Input) -> Option<Self::Output>;
-        
-        fn process_batch(
-            &self,
-            inputs: &[Self::Input],
-        ) -> (Self::State, Vec<Self::Output>);
+    pub trait Resettable {
+        fn reset(&mut self);
     }
     ```
-  - 添加文档字符串和示例
-  
-- [ ] 1.3.3 定义 `DualModeIndicator` trait
-  - 定义 marker trait:
-    ```rust
-    pub trait DualModeIndicator<const N: usize = 1>: 
-        BatchIndicator<N> + 
-        StreamingIndicator<N, Input = Self::Input, Output = Self::Output>
-    {
-        fn verify_consistency(&self, test_data: &[Self::Input]) -> Result<()>
-        where
-            Self::Output: PartialEq + std::fmt::Debug;
-    }
-    ```
-  - 实现默认的一致性验证方法
-  
-- [ ] 1.3.4 实现示例指标（SMA）
+  - 添加文档字符串
+
+- [ ] 1.3.3 实现示例指标（SMA）
   - 创建 `crates/ta-core/src/overlap/sma.rs`
-  - 实现 `Sma` 结构体
-  - 实现 `BatchIndicator` trait
-  - 实现 `StreamingIndicator` trait
-  - 实现 `DualModeIndicator` trait
+  - 实现 `Sma` 结构体：
+    ```rust
+    pub struct Sma {
+        period: usize,
+        buffer: Vec<Float>,
+        sum: Float,
+        index: usize,
+        count: usize,
+    }
+    ```
+  - 实现 `Indicator` trait：
+    - 核心方法 `compute()`：零拷贝实现，使用输出缓冲区
+    - `compute_to_vec()`：直接使用 trait 默认实现（复用 `compute()`）
+    - `next()`：滚动和算法，支持流式处理
+    - `stream()`：直接使用 trait 默认实现
+  - 实现 `Resettable` trait
   - 添加完整文档和示例
-  
-- [ ] 1.3.5 编写单元测试
-  - 测试 `BatchIndicator` 实现
-  - 测试 `StreamingIndicator` 实现
-  - 测试一致性验证
-  - 测试边界条件
+
+- [ ] 1.3.4 编写单元测试
+  - 测试批量计算模式 (`compute`)
+  - 测试流式模式 (`next`, `stream`)
+  - 测试边界条件（空数组、单元素、非对齐长度）
   - 测试错误处理
+  - 测试 `Resettable` trait
+
+- [ ] 1.3.5 添加示例代码和文档
+  - 批量计算示例
+  - 流式处理示例
+  - 单值查询示例
+  - 性能最佳实践说明
 
 **验收标准**:
-- [ ] 所有 traits 定义完成且有完整文档
+- [ ] `Indicator` trait 定义完成且有完整文档
+- [ ] `Resettable` trait 定义完成（可选）
 - [ ] SMA 示例指标实现并测试通过
-- [ ] 批量和流式模式结果一致
+- [ ] 零拷贝 `compute()` 接口正常工作（性能验证）
+- [ ] 便捷 `compute_to_vec()` 接口正常工作（易用性验证）
+- [ ] 流式 `next()` 和 `stream()` 接口正常工作
+- [ ] 三种模式（批量、流式、单值查询）都能正常工作
 - [ ] 所有单元测试通过
 - [ ] 代码覆盖率 > 90%
 
