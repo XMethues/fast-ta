@@ -22,7 +22,11 @@
 extern crate alloc;
 
 pub mod error;
+pub mod overlap;
+pub mod traits;
 pub mod types;
 
 pub use error::{Result, TalibError};
+pub use overlap::Sma;
+pub use traits::{Indicator, Resettable};
 pub use types::Float;
