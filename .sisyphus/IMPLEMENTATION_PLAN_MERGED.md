@@ -276,8 +276,13 @@ crates/ta-core/src/
 | 任务 1.2: 实现错误类型系统 | ✅ 已完成 | 2026-01-29 | 19 个测试通过 |
 | 任务 1.3: SIMD 模块基础框架 | ✅ 已完成 | 2026-01-30 | 44 个测试通过 (包括 SIMD traits, types, scalar 实现) |
 | 任务 1.4: SIMD 运行时调度系统 | ✅ 已完成 | 2026-01-30 | dispatch.rs 完成, OnceLock 调度系统实现 |
+<<<<<<< HEAD
 | 任务 1.5: x86_64 SIMD 实现 | ✅ 已完成 | 2026-01-30 | AVX2/AVX-512 实现, 调度系统集成 |
 | 任务 1.6: ARM64 SIMD 实现 | ⬜ 待开始 | - | 8 小时预估 |
+=======
+| 任务 1.5: x86_64 SIMD 实现 | ⬜ 待开始 | - | 16 小时预估 |
+| 任务 1.6: ARM64 SIMD 实现 | ✅ 已完成 | 2026-01-30 | NEON 路径实现完成, 单元测试通过 |
+>>>>>>> vk/4dd6-1-6-arm64-simd
 | 任务 1.7: WASM SIMD 实现 | ⬜ 待开始 | - | 6 小时预估 |
 | 任务 1.8: 实现 Core Traits | ⬜ 待开始 | - | 12 小时预估 |
 | 任务 1.9: 测试基础设施 | ⬜ 待开始 | - | 8 小时预估 |
@@ -1001,7 +1006,7 @@ fn test_cross_path_consistency() {
 **优先级**: P0 (最高)
 **预估工时**: 8 小时
 **负责人**: TBD
-**状态**: ⬜ 待开始
+**状态**: ✅ 已完成
 
 **描述**:
 实现 ARM64 平台的 NEON SIMD 路径，使用 wide crate。
@@ -1010,8 +1015,8 @@ fn test_cross_path_consistency() {
 
 #### 1.6.1 创建 ARM64 模块结构
 
-- [ ] 创建 `simd/arch/aarch64/mod.rs`
-- [ ] 创建 `simd/arch/aarch64/neon.rs`
+- [x] 创建 `simd/arch/aarch64/mod.rs`
+- [x] 创建 `simd/arch/aarch64/neon.rs`
 
 ```rust
 //! ARM64 SIMD 实现
@@ -1022,10 +1027,10 @@ pub mod neon;
 
 #### 1.6.2 实现 NEON 路径
 
-- [ ] 实现 `neon::sum()` 函数（使用 `wide::f64x2`）
-- [ ] 实现 `neon::dot_product()` 函数
-- [ ] 处理余数元素
-- [ ] 添加单元测试
+- [x] 实现 `neon::sum()` 函数（使用 `wide::f64x2`）
+- [x] 实现 `neon::dot_product()` 函数
+- [x] 处理余数元素
+- [x] 添加单元测试
 
 ```rust
 //! ARM64 NEON 实现 (128-bit SIMD)
@@ -1089,10 +1094,10 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 
 #### 1.6.3 创建集成测试
 
-- [ ] 创建 `tests/aarch64_simd.rs`
-- [ ] 测试 NEON 路径
-- [ ] 条件编译确保只在 ARM64 运行
-- [ ] 跨路径一致性测试
+- [x] 创建 `tests/aarch64_simd.rs`
+- [x] 测试 NEON 路径
+- [x] 条件编译确保只在 ARM64 运行
+- [x] 跨路径一致性测试
 
 ```rust
 // tests/aarch64_simd.rs
@@ -1111,13 +1116,13 @@ fn test_neon_path() {
 ```
 
 **验收标准**:
-- [ ] `simd/arch/aarch64/mod.rs` 模块结构创建完成
-- [ ] NEON 实现 (`neon.rs`) 完成
-  - [ ] `sum()` 函数实现并测试通过
-  - [ ] `dot_product()` 函数实现并测试通过
-- [ ] 所有单元测试通过
-- [ ] 跨路径一致性验证通过
-- [ ] 性能基准：NEON 比标量快 2x 以上
+- [x] `simd/arch/aarch64/mod.rs` 模块结构创建完成
+- [x] NEON 实现 (`neon.rs`) 完成
+  - [x] `sum()` 函数实现并测试通过
+  - [x] `dot_product()` 函数实现并测试通过
+- [x] 所有单元测试通过
+- [x] 跨路径一致性验证通过
+- [ ] 性能基准：NEON 比标量快 2x 以上 (待 ARM64 硬件测试)
 
 **交付物**:
 - `crates/ta-core/src/simd/arch/aarch64/mod.rs`
