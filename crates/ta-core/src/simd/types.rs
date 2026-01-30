@@ -345,6 +345,22 @@ pub type SimdVecAvx512 = wide::f64x8;
 #[cfg(feature = "f32")]
 pub type SimdVecAvx512 = wide::f32x16;
 
+/// SIMD vector type for NEON with f64.
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+pub type SimdVecNeon = wide::f64x2;
+
+/// SIMD vector type for NEON with f32.
+#[cfg(feature = "f32")]
+pub type SimdVecNeon = wide::f32x4;
+
+/// SIMD vector type for SIMD128 with f64.
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+pub type SimdVecSimd128 = wide::f64x2;
+
+/// SIMD vector type for SIMD128 with f32.
+#[cfg(feature = "f32")]
+pub type SimdVecSimd128 = wide::f32x4;
+
 /// Default SIMD lanes (AVX2).
 ///
 /// This constant uses the existing Lanes struct to avoid duplication.
@@ -410,6 +426,36 @@ impl SimdVecExt for wide::f32x16 {
     #[inline]
     unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
         wide::f32x16::from_slice_unaligned(data)
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+impl SimdVecExt for wide::f64x2 {
+    const ZERO: Self = wide::f64x2::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f64x2::from_slice_unaligned(data)
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+#[cfg(feature = "f32")]
+impl SimdVecExt for wide::f32x4 {
+    const ZERO: Self = wide::f32x4::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f32x4::from_slice_unaligned(data)
     }
 
     #[inline]
