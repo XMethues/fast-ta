@@ -66,13 +66,16 @@
   - 使用 `std::arch::is_aarch64_feature_detected!` 检测 ARM64 特性
   - 使用 `OnceLock` 缓存检测结果和函数指针
   - 启动后零运行时开销（直接函数指针调用）
-- **底层 SIMD 实现**: 使用 `wide` crate 提供稳定的跨平台 SIMD 原语
+- **底层 SIMD 实现**: **统一使用 `wide` crate 提供稳定的跨平台 SIMD 原语**
+  - `wide` 已支持 AVX-512 (`wide::f64x8` / `wide::f32x16`)，无需使用 `std::arch` intrinsics
+  - **关键优势**: 代码更简洁，类型更安全，编译器自动优化
+- **平台支持矩阵**:
 - **平台支持矩阵**:
 
 | 平台 | 指令集 | 实现方式 | Lanes (f64) | Lanes (f32) |
 |------|--------|----------|-------------|-------------|
 | x86_64 | AVX2 | `wide::f64x4` / `f32x8` | 4 | 8 |
-| x86_64 | AVX-512 | `std::arch::_mm512_*` | 8 | 16 |
+| x86_64 | AVX-512 | `wide::f64x8` / `f32x16` (wide 已支持) | 8 | 16 |
 | ARM64 | NEON | `wide::f64x2` / `f32x4` | 2 | 4 |
 | WASM | SIMD128 | `wide::f64x2` / `f32x4` | 2 | 4 |
 | 通用 | Scalar | 纯 Rust 标量实现 | 1 | 1 |
@@ -187,14 +190,14 @@ crates/ta-core/src/
     └── arch/
         ├── x86_64/
         │   ├── mod.rs
-        │   ├── avx2.rs       # AVX2 实现 (wide::f64x4)
-        │   └── avx512.rs    # AVX-512 实现 (std::arch)
+        │   ├── avx2.rs     # AVX2 实现 (wide::f64x4/f32x8)
+        │   └── avx512.rs    # AVX-512 实现 (wide::f64x8/f32x16)
         ├── aarch64/
         │   ├── mod.rs
-        │   └── neon.rs       # ARM64 NEON 实现 (wide::f64x2)
+        │   └── neon.rs     # ARM64 NEON 实现 (wide::f64x2/f32x4)
         └── wasm32/
             ├── mod.rs
-            └── simd128.rs    # WASM SIMD128 实现 (wide::f64x2)
+            └── simd128.rs    # WASM SIMD128 实现 (wide::f64x2/f32x4)
 ```
 
 ### Architecture Decision Records
@@ -207,7 +210,19 @@ crates/ta-core/src/
 需要高性能的 SIMD 加速，同时支持多平台和运行时动态选择最优指令集。
 
 **Decision**:
-使用手动运行时调度系统，结合 `wide` crate 和 `std::arch` intrinsics。
+**统一使用 `wide` crate** 进行所有 SIMD 实现（包括 AVX-512）。`wide` crate 已经支持 AVX-512 (f64x8/f32x16)，提供统一的 API。结合 `std::is_x86_feature_detected!` 运行时特性检测和 `OnceLock` 函数指针调度。
+
+**关键优势**:
+1. **wide 已支持 AVX-512**: `wide::f64x8` (8 lanes for f64) 和 `wide::f32x16` (16 lanes for f32) 可直接使用
+2. **代码更简洁**: 无需条件编译的 `std::arch` intrinsics，统一使用 wide API
+3. **类型更安全**: 通过条件编译的类型别名 `SimdVec` 自动选择正确的 wide 类型
+4. **编译器优化**: wide crate 内部已优化，编译器可以更好地优化代码
+
+**Rationale**:
+1. **统一 API**: 所有平台（AVX2, AVX-512, NEON, WASM）都使用相同的 wide API
+2. **条件编译**: 通过 `#[cfg(feature = "f32")]` 和 `#[cfg(feature = "f64")]` 选择正确的 wide 类型别名
+3. **运行时调度**: 仍然使用 `std::is_x86_feature_detected!` 检测 CPU 特性并选择最优实现
+4. **维护性提升**: 代码更少，逻辑更清晰，更容易理解和扩展
 
 **Rationale**:
 1. **Runtime Dispatch**: 手动调度确保最大灵活性和性能
@@ -426,6 +441,9 @@ pub const fn current_simd_level() -> SimdLevel {
 // ============================================================================
 // 条件编译的 SIMD 向量类型别名（根据 Float 配置自动选择）
 // ============================================================================
+//
+// **重要**: wide crate 已经支持 AVX-512，无需使用 std::arch intrinsics。
+// 统一使用 wide crate 提供的类型。
 
 /// SIMD 向量类型别名（根据 Float 配置自动选择 f32/f64 对应的类型）
 ///
@@ -436,49 +454,17 @@ pub const fn current_simd_level() -> SimdLevel {
 /// |-------|------|---------|------|------|--------|
 /// | f64   | f64x4 (4 lanes) | f64x8 (8 lanes) | f64x2 (2 lanes) | f64x2 (2 lanes) | N/A |
 /// | f32   | f32x8 (8 lanes) | f32x16 (16 lanes) | f32x4 (4 lanes) | f32x4 (4 lanes) | N/A |
-#[cfg(all(
-    feature = "f32",
-    any(
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        all(target_arch = "x86_64", target_feature = "avx512f")
-    )
-))]
+#[cfg(feature = "f32")]
 pub type SimdVec = wide::f32x8;
 
-#[cfg(all(
-    feature = "f32",
-    not(any(
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        all(target_arch = "x86_64", target_feature = "avx512f")
-    )),
-    any(
-        all(target_arch = "aarch64", target_feature = "neon"),
-        all(target_arch = "wasm32", target_feature = "simd128")
-    )
-))]
-pub type SimdVec = wide::f32x4;
+#[cfg(feature = "f32")]
+pub type SimdVecDouble = wide::f32x16;
 
-#[cfg(all(
-    feature = "f64",
-    any(
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        all(target_arch = "x86_64", target_feature = "avx512f")
-    )
-))]
+#[cfg(feature = "f64")]
 pub type SimdVec = wide::f64x4;
 
-#[cfg(all(
-    feature = "f64",
-    not(any(
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        all(target_arch = "x86_64", target_feature = "avx512f")
-    )),
-    any(
-        all(target_arch = "aarch64", target_feature = "neon"),
-        all(target_arch = "wasm32", target_feature = "simd128")
-    )
-))]
-pub type SimdVec = wide::f64x2;
+#[cfg(feature = "f64")]
+pub type SimdVecDouble = wide::f64x8;
 
 /// SIMD lanes 数量（根据 Float 和平台配置自动选择）
 ///
@@ -488,49 +474,45 @@ pub type SimdVec = wide::f64x2;
 /// | f32   | 8 | 16 | 4 | 4 |
 #[cfg(all(
     feature = "f32",
-    all(target_arch = "x86_64", target_feature = "avx512f")
+    any(
+        all(target_arch = "x86_64", target_feature = "avx512f")
+    )
 ))]
 pub const SIMD_LANES: usize = 16;
 
 #[cfg(all(
     feature = "f32",
-    all(target_arch = "x86_64", target_feature = "avx2"),
-    not(target_feature = "avx512f")
+    any(
+        all(target_arch = "x86_64", target_feature = "avx2"),
+        not(target_feature = "avx512f")
+    ),
+    any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "wasm32", target_feature = "simd128")
+    )
 ))]
 pub const SIMD_LANES: usize = 8;
 
 #[cfg(all(
-    feature = "f32",
-    not(target_arch = "x86_64"),
+    feature = "f64",
+    any(
+        all(target_arch = "x86_64", target_feature = "avx512f")
+    )
+))]
+pub const SIMD_LANES: usize = 8;
+
+#[cfg(all(
+    feature = "f64",
+    any(
+        all(target_arch = "x86_64", target_feature = "avx2"),
+        not(target_feature = "avx512f")
+    ),
     any(
         all(target_arch = "aarch64", target_feature = "neon"),
         all(target_arch = "wasm32", target_feature = "simd128")
     )
 ))]
 pub const SIMD_LANES: usize = 4;
-
-#[cfg(all(
-    feature = "f64",
-    all(target_arch = "x86_64", target_feature = "avx512f")
-))]
-pub const SIMD_LANES: usize = 8;
-
-#[cfg(all(
-    feature = "f64",
-    all(target_arch = "x86_64", target_feature = "avx2"),
-    not(target_feature = "avx512f")
-))]
-pub const SIMD_LANES: usize = 4;
-
-#[cfg(all(
-    feature = "f64",
-    not(target_arch = "x86_64"),
-    any(
-        all(target_arch = "aarch64", target_feature = "neon"),
-        all(target_arch = "wasm32", target_feature = "simd128")
-    )
-))]
-pub const SIMD_LANES: usize = 2;
 ```
 
 #### 1.3.3 创建 `simd/scalar.rs`
@@ -892,69 +874,41 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 ```rust
 //! AVX-512 实现 (512-bit SIMD)
 //!
-//! 使用 std::arch::x86_64 intrinsics 进行 SIMD 计算。
-//! **重要**: 所有实现必须使用条件编译的 intrinsics，
-//! 以确保根据 Float 配置正确选择 f32/f64。
+//! 使用 wide crate 进行 SIMD 计算。
+//! **重要**: wide crate 已经支持 AVX-512，无需使用 std::arch intrinsics。
+//!
+//! | Float | AVX-512 类型 | Lanes |
+//! |-------|--------------|-------|
+//! | f64   | wide::f64x8 | 8      |
+//! | f32   | wide::f32x16 | 16     |
 
 use crate::types::Float;
-use crate::simd::types::{SIMD_LANES};
+use crate::simd::types::{SimdVec, SIMD_LANES};
 use crate::Result;
-
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
 
 /// AVX-512 SIMD 数组求和
 #[inline(never)]
 #[target_feature(enable = "avx512f")]
-#[cfg(target_arch = "x86_64")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    #[cfg(feature = "f64")]
-    {
-        let mut sum = _mm512_setzero_pd();
+    let chunks = data.chunks_exact(SIMD_LANES);
+    let remainder = chunks.remainder();
 
-        let chunks = data.chunks_exact(SIMD_LANES);
-        let remainder = chunks.remainder();
-
-        for chunk in chunks {
-            let vec = _mm512_loadu_pd(chunk.as_ptr());
-            sum = _mm512_add_pd(sum, vec);
-        }
-
-        let mut scalar_sum = _mm512_reduce_add_pd(sum);
-
-        for &x in remainder {
-            scalar_sum += x;
-        }
-
-        scalar_sum
+    let mut sum_vec = SimdVec::ZERO;
+    for chunk in chunks {
+        let vec = SimdVec::from_slice_unaligned(chunk);
+        sum_vec += vec;
     }
 
-    #[cfg(feature = "f32")]
-    {
-        let mut sum = _mm512_setzero_ps();
-
-        let chunks = data.chunks_exact(SIMD_LANES);
-        let remainder = chunks.remainder();
-
-        for chunk in chunks {
-            let vec = _mm512_loadu_ps(chunk.as_ptr());
-            sum = _mm512_add_ps(sum, vec);
-        }
-
-        let mut scalar_sum = _mm512_reduce_add_ps(sum);
-
-        for &x in remainder {
-            scalar_sum += x;
-        }
-
-        scalar_sum
+    let mut sum = sum_vec.horizontal_sum();
+    for &x in remainder {
+        sum += x;
     }
+    sum
 }
 
 /// AVX-512 SIMD 点积计算
 #[inline(never)]
 #[target_feature(enable = "avx512f")]
-#[cfg(target_arch = "x86_64")]
 pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     if a.len() != b.len() {
         return Err(crate::TalibError::InvalidInput {
@@ -962,53 +916,22 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
         });
     }
 
-    #[cfg(feature = "f64")]
-    {
-        let mut sum = _mm512_setzero_pd();
+    let mut sum = Float::from(0.0);
+    let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
+    let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
+    let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
 
-        let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
-        let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
-        let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
-
-        for (chunk_a, chunk_b) in chunks {
-            let vec_a = _mm512_loadu_pd(chunk_a.as_ptr());
-            let vec_b = _mm512_loadu_pd(chunk_b.as_ptr());
-            let product = _mm512_mul_pd(vec_a, vec_b);
-            sum = _mm512_add_pd(sum, product);
-        }
-
-        let mut scalar_sum = _mm512_reduce_add_pd(sum);
-
-        for (&x, &y) in remainder_a.iter().zip(remainder_b.iter()) {
-            scalar_sum += x * y;
-        }
-
-        Ok(scalar_sum)
+    for (chunk_a, chunk_b) in chunks {
+        let vec_a = SimdVec::from_slice_unaligned(chunk_a);
+        let vec_b = SimdVec::from_slice_unaligned(chunk_b);
+        sum += (vec_a * vec_b).horizontal_sum();
     }
 
-    #[cfg(feature = "f32")]
-    {
-        let mut sum = _mm512_setzero_ps();
-
-        let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
-        let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
-        let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
-
-        for (chunk_a, chunk_b) in chunks {
-            let vec_a = _mm512_loadu_ps(chunk_a.as_ptr());
-            let vec_b = _mm512_loadu_ps(chunk_b.as_ptr());
-            let product = _mm512_mul_ps(vec_a, vec_b);
-            sum = _mm512_add_ps(sum, product);
-        }
-
-        let mut scalar_sum = _mm512_reduce_add_ps(sum);
-
-        for (&x, &y) in remainder_a.iter().zip(remainder_b.iter()) {
-            scalar_sum += x * y;
-        }
-
-        Ok(scalar_sum)
+    for (&x, &y) in remainder_a.iter().zip(remainder_b.iter()) {
+        sum += x * y;
     }
+
+    Ok(sum)
 }
 ```
 
