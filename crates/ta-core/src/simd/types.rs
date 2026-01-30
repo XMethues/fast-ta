@@ -85,13 +85,28 @@ impl SimdLevel {
         SimdLevel::Scalar
     }
 
-    /// Get the number of lanes (f64 elements) for this SIMD level.
+    /// Get the number of lanes for this SIMD level.
+    ///
+    /// # f64 (default):
+    /// - SCALAR: 1
+    /// - AVX2: 4
+    /// - AVX-512: 8
+    /// - NEON: 2
+    /// - SIMD128: 2
+    ///
+    /// # f32 (when "f32" feature is enabled):
+    /// - SCALAR: 1
+    /// - AVX2: 8
+    /// - AVX-512: 16
+    /// - NEON: 4
+    /// - SIMD128: 4
     ///
     /// # Examples
     ///
     /// ```rust
     /// use ta_core::simd::SimdLevel;
     ///
+    /// // f64 (default)
     /// assert_eq!(SimdLevel::Avx2.lanes(), 4);
     /// assert_eq!(SimdLevel::Scalar.lanes(), 1);
     /// ```
@@ -99,26 +114,65 @@ impl SimdLevel {
     pub fn lanes(&self) -> usize {
         match self {
             SimdLevel::Scalar => 1,
+            #[cfg(all(feature = "f64", not(feature = "f32")))]
             SimdLevel::Avx2 => 4,
+            #[cfg(feature = "f32")]
+            SimdLevel::Avx2 => 8,
+            #[cfg(all(feature = "f64", not(feature = "f32")))]
             SimdLevel::Avx512 => 8,
+            #[cfg(feature = "f32")]
+            SimdLevel::Avx512 => 16,
+            #[cfg(all(feature = "f64", not(feature = "f32")))]
             SimdLevel::Neon => 2,
+            #[cfg(feature = "f32")]
+            SimdLevel::Neon => 4,
+            #[cfg(all(feature = "f64", not(feature = "f32")))]
             SimdLevel::Simd128 => 2,
+            #[cfg(feature = "f32")]
+            SimdLevel::Simd128 => 4,
         }
     }
 
     /// Get the vector width in bits for this SIMD level.
+    ///
+    /// # f64 (default):
+    /// - SCALAR: 64 bits
+    /// - AVX2: 256 bits
+    /// - AVX-512: 512 bits
+    /// - NEON: 128 bits
+    /// - SIMD128: 128 bits
+    ///
+    /// # f32 (when "f32" feature is enabled):
+    /// - SCALAR: 32 bits
+    /// - AVX2: 256 bits
+    /// - AVX-512: 512 bits
+    /// - NEON: 128 bits
+    /// - SIMD128: 128 bits
     ///
     /// # Examples
     ///
     /// ```rust
     /// use ta_core::simd::SimdLevel;
     ///
+    /// // f64 (default)
     /// assert_eq!(SimdLevel::Avx2.width_bits(), 256);
     /// assert_eq!(SimdLevel::Scalar.width_bits(), 64);
     /// ```
     #[inline]
     pub fn width_bits(&self) -> usize {
-        self.lanes() * 64
+        #[cfg(all(feature = "f64", not(feature = "f32")))]
+        {
+            self.lanes() * 64
+        }
+        #[cfg(feature = "f32")]
+        {
+            self.lanes() * 32
+        }
+        #[cfg(not(any(feature = "f32", feature = "f64")))]
+        {
+            // Fallback if neither feature is explicitly set
+            self.lanes() * 64
+        }
     }
 }
 
@@ -137,7 +191,21 @@ impl fmt::Display for SimdLevel {
 /// Lane count for each SIMD level.
 ///
 /// This struct provides compile-time constants for the number of lanes
-/// supported by each SIMD instruction set when working with f64.
+/// supported by each SIMD instruction set.
+///
+/// # f64 Lanes (default):
+/// - SCALAR: 1 lane
+/// - AVX2: 4 lanes (256-bit / 64-bit)
+/// - AVX-512: 8 lanes (512-bit / 64-bit)
+/// - NEON: 2 lanes (128-bit / 64-bit)
+/// - SIMD128: 2 lanes (128-bit / 64-bit)
+///
+/// # f32 Lanes (when "f32" feature is enabled):
+/// - SCALAR: 1 lane
+/// - AVX2: 8 lanes (256-bit / 32-bit)
+/// - AVX-512: 16 lanes (512-bit / 32-bit)
+/// - NEON: 4 lanes (128-bit / 32-bit)
+/// - SIMD128: 4 lanes (128-bit / 32-bit)
 #[derive(Debug, Clone, Copy)]
 pub struct Lanes;
 
@@ -145,17 +213,37 @@ impl Lanes {
     /// Number of lanes for scalar operations
     pub const SCALAR: usize = 1;
 
-    /// Number of lanes for AVX2 (4 × f64)
+    /// Number of lanes for AVX2
+    #[cfg(all(feature = "f64", not(feature = "f32")))]
     pub const AVX2: usize = 4;
 
-    /// Number of lanes for AVX-512 (8 × f64)
+    /// Number of lanes for AVX2 (f32)
+    #[cfg(feature = "f32")]
+    pub const AVX2: usize = 8;
+
+    /// Number of lanes for AVX-512
+    #[cfg(all(feature = "f64", not(feature = "f32")))]
     pub const AVX512: usize = 8;
 
-    /// Number of lanes for NEON (2 × f64)
+    /// Number of lanes for AVX-512 (f32)
+    #[cfg(feature = "f32")]
+    pub const AVX512: usize = 16;
+
+    /// Number of lanes for NEON
+    #[cfg(all(feature = "f64", not(feature = "f32")))]
     pub const NEON: usize = 2;
 
-    /// Number of lanes for SIMD128 (2 × f64)
+    /// Number of lanes for NEON (f32)
+    #[cfg(feature = "f32")]
+    pub const NEON: usize = 4;
+
+    /// Number of lanes for SIMD128
+    #[cfg(all(feature = "f64", not(feature = "f32")))]
     pub const SIMD128: usize = 2;
+
+    /// Number of lanes for SIMD128 (f32)
+    #[cfg(feature = "f32")]
+    pub const SIMD128: usize = 4;
 }
 
 /// Base trait for SIMD floating-point operations.
@@ -243,30 +331,22 @@ mod tests {
     use alloc::format;
 
     #[test]
-    fn test_simd_level_lanes() {
-        assert_eq!(SimdLevel::Scalar.lanes(), 1);
-        assert_eq!(SimdLevel::Avx2.lanes(), 4);
-        assert_eq!(SimdLevel::Avx512.lanes(), 8);
-        assert_eq!(SimdLevel::Neon.lanes(), 2);
-        assert_eq!(SimdLevel::Simd128.lanes(), 2);
-    }
-
-    #[test]
-    fn test_simd_level_width_bits() {
-        assert_eq!(SimdLevel::Scalar.width_bits(), 64);
-        assert_eq!(SimdLevel::Avx2.width_bits(), 256);
-        assert_eq!(SimdLevel::Avx512.width_bits(), 512);
-        assert_eq!(SimdLevel::Neon.width_bits(), 128);
-        assert_eq!(SimdLevel::Simd128.width_bits(), 128);
-    }
-
-    #[test]
     fn test_lanes_constants() {
         assert_eq!(Lanes::SCALAR, 1);
-        assert_eq!(Lanes::AVX2, 4);
-        assert_eq!(Lanes::AVX512, 8);
-        assert_eq!(Lanes::NEON, 2);
-        assert_eq!(Lanes::SIMD128, 2);
+        #[cfg(feature = "f64")]
+        {
+            assert_eq!(Lanes::AVX2, 4);
+            assert_eq!(Lanes::AVX512, 8);
+            assert_eq!(Lanes::NEON, 2);
+            assert_eq!(Lanes::SIMD128, 2);
+        }
+        #[cfg(feature = "f32")]
+        {
+            assert_eq!(Lanes::AVX2, 8);
+            assert_eq!(Lanes::AVX512, 16);
+            assert_eq!(Lanes::NEON, 4);
+            assert_eq!(Lanes::SIMD128, 4);
+        }
     }
 
     #[test]
@@ -276,5 +356,44 @@ mod tests {
         assert_eq!(format!("{}", SimdLevel::Avx512), "AVX-512");
         assert_eq!(format!("{}", SimdLevel::Neon), "NEON");
         assert_eq!(format!("{}", SimdLevel::Simd128), "SIMD128");
+    }
+
+    #[test]
+    fn test_simd_level_lanes() {
+        assert_eq!(SimdLevel::Scalar.lanes(), 1);
+        #[cfg(feature = "f64")]
+        {
+            assert_eq!(SimdLevel::Avx2.lanes(), 4);
+            assert_eq!(SimdLevel::Avx512.lanes(), 8);
+            assert_eq!(SimdLevel::Neon.lanes(), 2);
+            assert_eq!(SimdLevel::Simd128.lanes(), 2);
+        }
+        #[cfg(feature = "f32")]
+        {
+            assert_eq!(SimdLevel::Avx2.lanes(), 8);
+            assert_eq!(SimdLevel::Avx512.lanes(), 16);
+            assert_eq!(SimdLevel::Neon.lanes(), 4);
+            assert_eq!(SimdLevel::Simd128.lanes(), 4);
+        }
+    }
+
+    #[test]
+    fn test_simd_level_width_bits() {
+        #[cfg(feature = "f64")]
+        {
+            assert_eq!(SimdLevel::Scalar.width_bits(), 64);
+            assert_eq!(SimdLevel::Avx2.width_bits(), 256);
+            assert_eq!(SimdLevel::Avx512.width_bits(), 512);
+            assert_eq!(SimdLevel::Neon.width_bits(), 128);
+            assert_eq!(SimdLevel::Simd128.width_bits(), 128);
+        }
+        #[cfg(feature = "f32")]
+        {
+            assert_eq!(SimdLevel::Scalar.width_bits(), 32);
+            assert_eq!(SimdLevel::Avx2.width_bits(), 256);
+            assert_eq!(SimdLevel::Avx512.width_bits(), 512);
+            assert_eq!(SimdLevel::Neon.width_bits(), 128);
+            assert_eq!(SimdLevel::Simd128.width_bits(), 128);
+        }
     }
 }
