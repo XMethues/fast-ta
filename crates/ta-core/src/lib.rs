@@ -23,6 +23,7 @@ extern crate alloc;
 
 pub mod error;
 pub mod overlap;
+pub mod simd;
 pub mod traits;
 pub mod types;
 
