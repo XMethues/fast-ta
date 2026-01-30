@@ -19,9 +19,10 @@ core_error = []
 
 [dependencies]
 wide = { workspace = true }
+once_cell = { version = "1.21", default-features = false, optional = true }
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8"
 
 [package.metadata.docs.rs]
 all-features = true

@@ -38,6 +38,8 @@ use alloc::vec::Vec;
 
 pub use types::{Lanes, SimdFloat, SimdLevel, SimdMask, SimdOps};
 
+pub mod dispatch;
+
 /// Calculate the sum of all elements in a slice.
 ///
 /// # Arguments
