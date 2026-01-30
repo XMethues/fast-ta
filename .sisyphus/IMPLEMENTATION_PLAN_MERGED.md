@@ -371,6 +371,10 @@ pub fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 //!
 //! 这些类型和常量在不同平台有不同的值，
 //! 但 API 保持一致。
+//!
+//! **关键设计**: 所有 SIMD 实现必须使用 `SimdVec` 类型别名，
+//! 而不是直接使用 `f64x4` 或 `f32x8` 等硬编码类型。
+//! 这样可以确保通过 Cargo feature 正确切换 f32/f64。
 
 use crate::types::Float;
 
@@ -418,6 +422,115 @@ pub const fn current_simd_level() -> SimdLevel {
 pub const fn current_simd_level() -> SimdLevel {
     SimdLevel::Scalar
 }
+
+// ============================================================================
+// 条件编译的 SIMD 向量类型别名（根据 Float 配置自动选择）
+// ============================================================================
+
+/// SIMD 向量类型别名（根据 Float 配置自动选择 f32/f64 对应的类型）
+///
+/// **使用规则**: 所有 SIMD 实现必须使用 `SimdVec` 类型别名，
+/// 绝对不要直接使用 `wide::f64x4` 或 `wide::f32x8` 等硬编码类型。
+///
+/// | Float | AVX2 | AVX-512 | NEON | WASM | 标量 |
+/// |-------|------|---------|------|------|--------|
+/// | f64   | f64x4 (4 lanes) | f64x8 (8 lanes) | f64x2 (2 lanes) | f64x2 (2 lanes) | N/A |
+/// | f32   | f32x8 (8 lanes) | f32x16 (16 lanes) | f32x4 (4 lanes) | f32x4 (4 lanes) | N/A |
+#[cfg(all(
+    feature = "f32",
+    any(
+        all(target_arch = "x86_64", target_feature = "avx2"),
+        all(target_arch = "x86_64", target_feature = "avx512f")
+    )
+))]
+pub type SimdVec = wide::f32x8;
+
+#[cfg(all(
+    feature = "f32",
+    not(any(
+        all(target_arch = "x86_64", target_feature = "avx2"),
+        all(target_arch = "x86_64", target_feature = "avx512f")
+    )),
+    any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "wasm32", target_feature = "simd128")
+    )
+))]
+pub type SimdVec = wide::f32x4;
+
+#[cfg(all(
+    feature = "f64",
+    any(
+        all(target_arch = "x86_64", target_feature = "avx2"),
+        all(target_arch = "x86_64", target_feature = "avx512f")
+    )
+))]
+pub type SimdVec = wide::f64x4;
+
+#[cfg(all(
+    feature = "f64",
+    not(any(
+        all(target_arch = "x86_64", target_feature = "avx2"),
+        all(target_arch = "x86_64", target_feature = "avx512f")
+    )),
+    any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "wasm32", target_feature = "simd128")
+    )
+))]
+pub type SimdVec = wide::f64x2;
+
+/// SIMD lanes 数量（根据 Float 和平台配置自动选择）
+///
+/// | Float | AVX2 | AVX-512 | NEON | WASM |
+/// |-------|------|---------|------|------|
+/// | f64   | 4 | 8 | 2 | 2 |
+/// | f32   | 8 | 16 | 4 | 4 |
+#[cfg(all(
+    feature = "f32",
+    all(target_arch = "x86_64", target_feature = "avx512f")
+))]
+pub const SIMD_LANES: usize = 16;
+
+#[cfg(all(
+    feature = "f32",
+    all(target_arch = "x86_64", target_feature = "avx2"),
+    not(target_feature = "avx512f")
+))]
+pub const SIMD_LANES: usize = 8;
+
+#[cfg(all(
+    feature = "f32",
+    not(target_arch = "x86_64"),
+    any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "wasm32", target_feature = "simd128")
+    )
+))]
+pub const SIMD_LANES: usize = 4;
+
+#[cfg(all(
+    feature = "f64",
+    all(target_arch = "x86_64", target_feature = "avx512f")
+))]
+pub const SIMD_LANES: usize = 8;
+
+#[cfg(all(
+    feature = "f64",
+    all(target_arch = "x86_64", target_feature = "avx2"),
+    not(target_feature = "avx512f")
+))]
+pub const SIMD_LANES: usize = 4;
+
+#[cfg(all(
+    feature = "f64",
+    not(target_arch = "x86_64"),
+    any(
+        all(target_arch = "aarch64", target_feature = "neon"),
+        all(target_arch = "wasm32", target_feature = "simd128")
+    )
+))]
+pub const SIMD_LANES: usize = 2;
 ```
 
 #### 1.3.3 创建 `simd/scalar.rs`
@@ -712,22 +825,24 @@ pub mod avx512;
 ```rust
 //! AVX2 实现 (256-bit SIMD)
 //!
-//! 使用 wide::f64x4 进行 SIMD 计算（4 lanes for f64）
+//! 使用 wide crate 进行 SIMD 计算。
+//! **重要**: 所有实现必须使用 `SimdVec` 类型别名，
+//! 以确保根据 Float 配置正确选择 f32/f64。
 
 use crate::types::Float;
+use crate::simd::types::{SimdVec, SIMD_LANES};
 use crate::Result;
-use wide::f64x4;
 
 /// AVX2 SIMD 数组求和
 #[inline(never)]
 #[target_feature(enable = "avx2")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    let chunks = data.chunks_exact(4);
+    let chunks = data.chunks_exact(SIMD_LANES);
     let remainder = chunks.remainder();
 
-    let mut sum_vec = f64x4::ZERO;
+    let mut sum_vec = SimdVec::ZERO;
     for chunk in chunks {
-        let vec = f64x4::from_slice_unaligned(chunk);
+        let vec = SimdVec::from_slice_unaligned(chunk);
         sum_vec += vec;
     }
 
@@ -749,13 +864,13 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     }
 
     let mut sum = Float::from(0.0);
-    let chunks = a.chunks_exact(4).zip(b.chunks_exact(4));
-    let remainder_a = a.chunks_exact(4).remainder();
-    let remainder_b = b.chunks_exact(4).remainder();
+    let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
+    let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
+    let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
 
     for (chunk_a, chunk_b) in chunks {
-        let vec_a = f64x4::from_slice_unaligned(chunk_a);
-        let vec_b = f64x4::from_slice_unaligned(chunk_b);
+        let vec_a = SimdVec::from_slice_unaligned(chunk_a);
+        let vec_b = SimdVec::from_slice_unaligned(chunk_b);
         sum += (vec_a * vec_b).horizontal_sum();
     }
 
@@ -777,9 +892,12 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 ```rust
 //! AVX-512 实现 (512-bit SIMD)
 //!
-//! 使用 std::arch::x86_64 intrinsics 进行 SIMD 计算（8 lanes for f64）
+//! 使用 std::arch::x86_64 intrinsics 进行 SIMD 计算。
+//! **重要**: 所有实现必须使用条件编译的 intrinsics，
+//! 以确保根据 Float 配置正确选择 f32/f64。
 
 use crate::types::Float;
+use crate::simd::types::{SIMD_LANES};
 use crate::Result;
 
 #[cfg(target_arch = "x86_64")]
@@ -790,23 +908,47 @@ use std::arch::x86_64::*;
 #[target_feature(enable = "avx512f")]
 #[cfg(target_arch = "x86_64")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    let mut sum = _mm512_setzero_pd();
+    #[cfg(feature = "f64")]
+    {
+        let mut sum = _mm512_setzero_pd();
 
-    let chunks = data.chunks_exact(8);
-    let remainder = chunks.remainder();
+        let chunks = data.chunks_exact(SIMD_LANES);
+        let remainder = chunks.remainder();
 
-    for chunk in chunks {
-        let vec = _mm512_loadu_pd(chunk.as_ptr());
-        sum = _mm512_add_pd(sum, vec);
+        for chunk in chunks {
+            let vec = _mm512_loadu_pd(chunk.as_ptr());
+            sum = _mm512_add_pd(sum, vec);
+        }
+
+        let mut scalar_sum = _mm512_reduce_add_pd(sum);
+
+        for &x in remainder {
+            scalar_sum += x;
+        }
+
+        scalar_sum
     }
 
-    let mut scalar_sum = _mm512_reduce_add_pd(sum);
+    #[cfg(feature = "f32")]
+    {
+        let mut sum = _mm512_setzero_ps();
 
-    for &x in remainder {
-        scalar_sum += x;
+        let chunks = data.chunks_exact(SIMD_LANES);
+        let remainder = chunks.remainder();
+
+        for chunk in chunks {
+            let vec = _mm512_loadu_ps(chunk.as_ptr());
+            sum = _mm512_add_ps(sum, vec);
+        }
+
+        let mut scalar_sum = _mm512_reduce_add_ps(sum);
+
+        for &x in remainder {
+            scalar_sum += x;
+        }
+
+        scalar_sum
     }
-
-    scalar_sum
 }
 
 /// AVX-512 SIMD 点积计算
@@ -820,26 +962,53 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
         });
     }
 
-    let mut sum = _mm512_setzero_pd();
+    #[cfg(feature = "f64")]
+    {
+        let mut sum = _mm512_setzero_pd();
 
-    let chunks = a.chunks_exact(8).zip(b.chunks_exact(8));
-    let remainder_a = a.chunks_exact(8).remainder();
-    let remainder_b = b.chunks_exact(8).remainder();
+        let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
+        let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
+        let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
 
-    for (chunk_a, chunk_b) in chunks {
-        let vec_a = _mm512_loadu_pd(chunk_a.as_ptr());
-        let vec_b = _mm512_loadu_pd(chunk_b.as_ptr());
-        let product = _mm512_mul_pd(vec_a, vec_b);
-        sum = _mm512_add_pd(sum, product);
+        for (chunk_a, chunk_b) in chunks {
+            let vec_a = _mm512_loadu_pd(chunk_a.as_ptr());
+            let vec_b = _mm512_loadu_pd(chunk_b.as_ptr());
+            let product = _mm512_mul_pd(vec_a, vec_b);
+            sum = _mm512_add_pd(sum, product);
+        }
+
+        let mut scalar_sum = _mm512_reduce_add_pd(sum);
+
+        for (&x, &y) in remainder_a.iter().zip(remainder_b.iter()) {
+            scalar_sum += x * y;
+        }
+
+        Ok(scalar_sum)
     }
 
-    let mut scalar_sum = _mm512_reduce_add_pd(sum);
+    #[cfg(feature = "f32")]
+    {
+        let mut sum = _mm512_setzero_ps();
 
-    for (&x, &y) in remainder_a.iter().zip(remainder_b.iter()) {
-        scalar_sum += x * y;
+        let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
+        let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
+        let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
+
+        for (chunk_a, chunk_b) in chunks {
+            let vec_a = _mm512_loadu_ps(chunk_a.as_ptr());
+            let vec_b = _mm512_loadu_ps(chunk_b.as_ptr());
+            let product = _mm512_mul_ps(vec_a, vec_b);
+            sum = _mm512_add_ps(sum, product);
+        }
+
+        let mut scalar_sum = _mm512_reduce_add_ps(sum);
+
+        for (&x, &y) in remainder_a.iter().zip(remainder_b.iter()) {
+            scalar_sum += x * y;
+        }
+
+        Ok(scalar_sum)
     }
-
-    Ok(scalar_sum)
 }
 ```
 
@@ -938,22 +1107,24 @@ pub mod neon;
 ```rust
 //! ARM64 NEON 实现 (128-bit SIMD)
 //!
-//! 使用 wide::f64x2 进行 SIMD 计算（2 lanes for f64）
+//! 使用 wide crate 进行 SIMD 计算。
+//! **重要**: 所有实现必须使用 `SimdVec` 类型别名，
+//! 以确保根据 Float 配置正确选择 f32/f64。
 
 use crate::types::Float;
+use crate::simd::types::{SimdVec, SIMD_LANES};
 use crate::Result;
-use wide::f64x2;
 
 /// NEON SIMD 数组求和
 #[inline(never)]
 #[target_feature(enable = "neon")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    let chunks = data.chunks_exact(2);
+    let chunks = data.chunks_exact(SIMD_LANES);
     let remainder = chunks.remainder();
 
-    let mut sum_vec = f64x2::ZERO;
+    let mut sum_vec = SimdVec::ZERO;
     for chunk in chunks {
-        let vec = f64x2::from_slice_unaligned(chunk);
+        let vec = SimdVec::from_slice_unaligned(chunk);
         sum_vec += vec;
     }
 
@@ -975,13 +1146,13 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     }
 
     let mut sum = Float::from(0.0);
-    let chunks = a.chunks_exact(2).zip(b.chunks_exact(2));
-    let remainder_a = a.chunks_exact(2).remainder();
-    let remainder_b = b.chunks_exact(2).remainder();
+    let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
+    let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
+    let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
 
     for (chunk_a, chunk_b) in chunks {
-        let vec_a = f64x2::from_slice_unaligned(chunk_a);
-        let vec_b = f64x2::from_slice_unaligned(chunk_b);
+        let vec_a = SimdVec::from_slice_unaligned(chunk_a);
+        let vec_b = SimdVec::from_slice_unaligned(chunk_b);
         sum += (vec_a * vec_b).horizontal_sum();
     }
 
@@ -1072,22 +1243,24 @@ pub mod simd128;
 ```rust
 //! WASM SIMD128 实现 (128-bit SIMD)
 //!
-//! 使用 wide::f64x2 进行 SIMD 计算（2 lanes for f64）
+//! 使用 wide crate 进行 SIMD 计算。
+//! **重要**: 所有实现必须使用 `SimdVec` 类型别名，
+//! 以确保根据 Float 配置正确选择 f32/f64。
 
 use crate::types::Float;
+use crate::simd::types::{SimdVec, SIMD_LANES};
 use crate::Result;
-use wide::f64x2;
 
 /// SIMD128 SIMD 数组求和
 #[inline(never)]
 #[target_feature(enable = "simd128")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    let chunks = data.chunks_exact(2);
+    let chunks = data.chunks_exact(SIMD_LANES);
     let remainder = chunks.remainder();
 
-    let mut sum_vec = f64x2::ZERO;
+    let mut sum_vec = SimdVec::ZERO;
     for chunk in chunks {
-        let vec = f64x2::from_slice_unaligned(chunk);
+        let vec = SimdVec::from_slice_unaligned(chunk);
         sum_vec += vec;
     }
 
@@ -1109,13 +1282,13 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     }
 
     let mut sum = Float::from(0.0);
-    let chunks = a.chunks_exact(2).zip(b.chunks_exact(2));
-    let remainder_a = a.chunks_exact(2).remainder();
-    let remainder_b = b.chunks_exact(2).remainder();
+    let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
+    let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
+    let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
 
     for (chunk_a, chunk_b) in chunks {
-        let vec_a = f64x2::from_slice_unaligned(chunk_a);
-        let vec_b = f64x2::from_slice_unaligned(chunk_b);
+        let vec_a = SimdVec::from_slice_unaligned(chunk_a);
+        let vec_b = SimdVec::from_slice_unaligned(chunk_b);
         sum += (vec_a * vec_b).horizontal_sum();
     }
 
@@ -1634,6 +1807,11 @@ mod tests {
 - [ ] SMA 示例指标实现并测试通过
   - [ ] 在所有支持平台（x86_64 AVX2/AVX-512、ARM64 NEON、WASM SIMD128）上通过测试
 - [ ] 所有 SIMD 路径结果一致性验证通过
+- [ ] **所有 SIMD 实现正确使用 `Float` 类型别名**：
+  - [ ] 不直接使用 `wide::f64x4` 或 `wide::f32x8` 等硬编码类型
+  - [ ] 不直接使用 `std::arch::x86_64::_mm512_*` 等硬编码 intrinsics（使用条件编译包装）
+  - [ ] 所有函数签名使用 `Float` 类型：`fn sum(data: &[Float]) -> Float`
+  - [ ] 所有内部 SIMD 操作使用 `SimdVec` 类型别名
 - [ ] 零拷贝 `compute()` 接口正常工作（性能验证）
 - [ ] 便捷 `compute_to_vec()` 接口正常工作（易用性验证）
 - [ ] 流式 `next()` 和 `stream()` 接口正常工作
