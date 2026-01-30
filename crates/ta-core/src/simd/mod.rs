@@ -34,6 +34,9 @@
 mod scalar;
 mod types;
 
+#[cfg(all(target_arch = "x86_64", feature = "std"))]
+mod arch;
+
 use alloc::vec::Vec;
 
 pub use types::{Lanes, SimdFloat, SimdLevel, SimdMask, SimdOps};

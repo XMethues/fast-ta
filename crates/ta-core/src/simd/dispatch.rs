@@ -16,6 +16,9 @@ use std::sync::OnceLock;
 
 use super::scalar;
 
+#[cfg(all(target_arch = "x86_64", feature = "std"))]
+use super::arch::x86_64;
+
 /// Function pointer type for sum operations.
 ///
 /// This type alias represents a function that computes the sum of a slice of f64 values.
@@ -82,15 +85,23 @@ fn init_dispatch() -> DispatchTable {
         #[cfg(target_feature = "avx512f")]
         {
             if std::is_x86_feature_detected!("avx512f") {
-                // AVX-512F implementation will be added in future
-                // For now, fall back to AVX2
+                unsafe {
+                    return DispatchTable::new(
+                        |data: &[f64]| x86_64::avx512::sum(data),
+                        |a: &[f64], b: &[f64]| x86_64::avx512::dot_product(a, b).unwrap(),
+                    );
+                }
             }
         }
         #[cfg(target_feature = "avx2")]
         {
             if std::is_x86_feature_detected!("avx2") {
-                // AVX2 implementation will be added in future
-                // For now, use scalar
+                unsafe {
+                    return DispatchTable::new(
+                        |data: &[f64]| x86_64::avx2::sum(data),
+                        |a: &[f64], b: &[f64]| x86_64::avx2::dot_product(a, b).unwrap(),
+                    );
+                }
             }
         }
     }

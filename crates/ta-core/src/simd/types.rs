@@ -325,6 +325,99 @@ pub trait SimdOps: SimdFloat + SimdMask {}
 #[allow(dead_code)]
 pub trait ScalarOps: SimdFloat + SimdMask {}
 
+// ============================================================================
+// SIMD type aliases using wide crate
+// ============================================================================
+
+/// SIMD vector type for AVX2 with f64.
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+pub type SimdVecAvx2 = wide::f64x4;
+
+/// SIMD vector type for AVX2 with f32.
+#[cfg(feature = "f32")]
+pub type SimdVecAvx2 = wide::f32x8;
+
+/// SIMD vector type for AVX-512 with f64.
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+pub type SimdVecAvx512 = wide::f64x8;
+
+/// SIMD vector type for AVX-512 with f32.
+#[cfg(feature = "f32")]
+pub type SimdVecAvx512 = wide::f32x16;
+
+/// Default SIMD lanes (AVX2).
+///
+/// This constant uses the existing Lanes struct to avoid duplication.
+pub const SIMD_LANES: usize = Lanes::AVX2;
+
+pub trait SimdVecExt {
+    const ZERO: Self;
+
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self;
+
+    fn horizontal_sum(self) -> crate::types::Float;
+}
+
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+impl SimdVecExt for wide::f64x4 {
+    const ZERO: Self = wide::f64x4::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f64x4::from_slice_unaligned(data)
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+#[cfg(feature = "f32")]
+impl SimdVecExt for wide::f32x8 {
+    const ZERO: Self = wide::f32x8::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f32x8::from_slice_unaligned(data)
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+impl SimdVecExt for wide::f64x8 {
+    const ZERO: Self = wide::f64x8::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f64x8::from_slice_unaligned(data)
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+#[cfg(feature = "f32")]
+impl SimdVecExt for wide::f32x16 {
+    const ZERO: Self = wide::f32x16::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f32x16::from_slice_unaligned(data)
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,7 +426,7 @@ mod tests {
     #[test]
     fn test_lanes_constants() {
         assert_eq!(Lanes::SCALAR, 1);
-        #[cfg(feature = "f64")]
+        #[cfg(all(feature = "f64", not(feature = "f32")))]
         {
             assert_eq!(Lanes::AVX2, 4);
             assert_eq!(Lanes::AVX512, 8);
@@ -361,7 +454,7 @@ mod tests {
     #[test]
     fn test_simd_level_lanes() {
         assert_eq!(SimdLevel::Scalar.lanes(), 1);
-        #[cfg(feature = "f64")]
+        #[cfg(all(feature = "f64", not(feature = "f32")))]
         {
             assert_eq!(SimdLevel::Avx2.lanes(), 4);
             assert_eq!(SimdLevel::Avx512.lanes(), 8);
@@ -379,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_simd_level_width_bits() {
-        #[cfg(feature = "f64")]
+        #[cfg(all(feature = "f64", not(feature = "f32")))]
         {
             assert_eq!(SimdLevel::Scalar.width_bits(), 64);
             assert_eq!(SimdLevel::Avx2.width_bits(), 256);

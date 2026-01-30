@@ -13,4 +13,4 @@ default-members = [
 ]
 
 [workspace.dependencies]
-wide = "0.7"
+wide = { version = "1.1", features = ["std"] }

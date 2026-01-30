@@ -460,10 +460,10 @@ pub type SimdVec = wide::f32x8;
 #[cfg(feature = "f32")]
 pub type SimdVecDouble = wide::f32x16;
 
-#[cfg(feature = "f64")]
+#[cfg(all(feature = "f64", not(feature = "f32")))]
 pub type SimdVec = wide::f64x4;
 
-#[cfg(feature = "f64")]
+#[cfg(all(feature = "f64", not(feature = "f32")))]
 pub type SimdVecDouble = wide::f64x8;
 
 /// SIMD lanes 数量（根据 Float 和平台配置自动选择）
