@@ -10,13 +10,19 @@ description = "WebAssembly bindings for technical analysis indicators"
 keywords = ["wasm", "webassembly", "javascript", "technical-analysis", "indicators"]
 categories = ["api-bindings", "wasm"]
 
+[features]
+default = ["console_error_panic_hook"]
+console_error_panic_hook = ["dep:console_error_panic_hook"]
+simd = []
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-ta-core = { path = "../ta-core" }
+ta-core = { path = "../ta-core", features = ["std"] }
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["console"] }
+console_error_panic_hook = { version = "0.1", optional = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
