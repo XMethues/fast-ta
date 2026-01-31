@@ -3,14 +3,17 @@ use crate::types::Float;
 use crate::Result;
 
 #[cfg(all(feature = "f64", not(feature = "f32")))]
+#[allow(dead_code)]
 type SimdVec = wide::f64x2;
 
 #[cfg(feature = "f32")]
+#[allow(dead_code)]
 type SimdVec = wide::f32x4;
 
 /// SIMD128 SIMD array sum
 #[inline(never)]
 #[target_feature(enable = "simd128")]
+#[allow(dead_code)]
 pub unsafe fn sum(data: &[Float]) -> Float {
     let chunks = data.chunks_exact(Lanes::SIMD128);
     let remainder = chunks.remainder();
@@ -34,6 +37,7 @@ pub unsafe fn sum(data: &[Float]) -> Float {
 /// SIMD128 SIMD dot product calculation
 #[inline(never)]
 #[target_feature(enable = "simd128")]
+#[allow(dead_code)]
 pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     if a.len() != b.len() {
         return Err(crate::TalibError::InvalidInput {

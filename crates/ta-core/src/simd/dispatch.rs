@@ -17,6 +17,7 @@ use std::sync::OnceLock;
 use super::scalar;
 
 #[cfg(all(target_arch = "x86_64", feature = "std"))]
+#[allow(unused_imports)]
 use super::arch::x86_64;
 
 /// Function pointer type for sum operations.
@@ -44,6 +45,7 @@ pub struct DispatchTable {
 impl DispatchTable {
     /// Create a new dispatch table with the given function pointers.
     #[inline]
+    #[allow(dead_code)]
     const fn new(sum: SumFn, dot_product: DotProductFn) -> Self {
         Self { sum, dot_product }
     }

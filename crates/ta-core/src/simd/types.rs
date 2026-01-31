@@ -331,41 +331,51 @@ pub trait ScalarOps: SimdFloat + SimdMask {}
 
 /// SIMD vector type for AVX2 with f64.
 #[cfg(all(feature = "f64", not(feature = "f32")))]
+#[allow(dead_code)]
 pub type SimdVecAvx2 = wide::f64x4;
 
 /// SIMD vector type for AVX2 with f32.
 #[cfg(feature = "f32")]
+#[allow(dead_code)]
 pub type SimdVecAvx2 = wide::f32x8;
 
 /// SIMD vector type for AVX-512 with f64.
 #[cfg(all(feature = "f64", not(feature = "f32")))]
+#[allow(dead_code)]
 pub type SimdVecAvx512 = wide::f64x8;
 
 /// SIMD vector type for AVX-512 with f32.
 #[cfg(feature = "f32")]
+#[allow(dead_code)]
 pub type SimdVecAvx512 = wide::f32x16;
 
 /// SIMD vector type for NEON with f64.
 #[cfg(all(feature = "f64", not(feature = "f32")))]
+#[allow(dead_code)]
 pub type SimdVecNeon = wide::f64x2;
 
 /// SIMD vector type for NEON with f32.
 #[cfg(feature = "f32")]
+#[allow(dead_code)]
 pub type SimdVecNeon = wide::f32x4;
 
 /// SIMD vector type for SIMD128 with f64.
 #[cfg(all(feature = "f64", not(feature = "f32")))]
+#[allow(dead_code)]
 pub type SimdVecSimd128 = wide::f64x2;
 
 /// SIMD vector type for SIMD128 with f32.
 #[cfg(feature = "f32")]
+#[allow(dead_code)]
 pub type SimdVecSimd128 = wide::f32x4;
 
 /// Default SIMD lanes (AVX2).
 ///
-/// This constant uses the existing Lanes struct to avoid duplication.
+/// This constant uses to existing Lanes struct to avoid duplication.
+#[allow(dead_code)]
 pub const SIMD_LANES: usize = Lanes::AVX2;
 
+#[allow(dead_code)]
 pub trait SimdVecExt {
     const ZERO: Self;
 
@@ -380,7 +390,7 @@ impl SimdVecExt for wide::f64x4 {
 
     #[inline]
     unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
-        wide::f64x4::from_slice_unaligned(data)
+        wide::f64x4::new([data[0], data[1], data[2], data[3]])
     }
 
     #[inline]
@@ -395,7 +405,9 @@ impl SimdVecExt for wide::f32x8 {
 
     #[inline]
     unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
-        wide::f32x8::from_slice_unaligned(data)
+        wide::f32x8::new([
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+        ])
     }
 
     #[inline]
@@ -410,7 +422,9 @@ impl SimdVecExt for wide::f64x8 {
 
     #[inline]
     unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
-        wide::f64x8::from_slice_unaligned(data)
+        wide::f64x8::new([
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+        ])
     }
 
     #[inline]
@@ -425,7 +439,10 @@ impl SimdVecExt for wide::f32x16 {
 
     #[inline]
     unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
-        wide::f32x16::from_slice_unaligned(data)
+        wide::f32x16::new([
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+            data[9], data[10], data[11], data[12], data[13], data[14], data[15],
+        ])
     }
 
     #[inline]
@@ -440,7 +457,7 @@ impl SimdVecExt for wide::f64x2 {
 
     #[inline]
     unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
-        wide::f64x2::from_slice_unaligned(data)
+        wide::f64x2::new([data[0], data[1]])
     }
 
     #[inline]
@@ -455,7 +472,7 @@ impl SimdVecExt for wide::f32x4 {
 
     #[inline]
     unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
-        wide::f32x4::from_slice_unaligned(data)
+        wide::f32x4::new([data[0], data[1], data[2], data[3]])
     }
 
     #[inline]
