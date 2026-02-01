@@ -24,6 +24,14 @@ use super::arch::x86_64;
 #[cfg(all(target_arch = "x86_64", feature = "std"))]
 use std::println as debug_println;
 
+#[cfg(all(target_arch = "aarch64", feature = "std"))]
+#[allow(unused_imports)]
+use super::arch::aarch64;
+
+#[cfg(all(target_arch = "wasm32", feature = "std"))]
+#[allow(unused_imports)]
+use super::arch::wasm32;
+
 /// Function pointer type for sum operations.
 ///
 /// This type alias represents a function that computes the sum of a slice of Float values.
@@ -120,15 +128,29 @@ fn init_dispatch() -> DispatchTable {
     #[cfg(all(target_arch = "aarch64", feature = "std"))]
     {
         // NEON is always available on AArch64
-        // NEON implementation will be added in future
-        // For now, use scalar
+        unsafe {
+            return DispatchTable::new(
+                |data: &[Float]| aarch64::neon::sum(data),
+                |a: &[Float], b: &[Float]| match aarch64::neon::dot_product(a, b) {
+                    Ok(result) => result,
+                    Err(e) => panic!("dot_product error: {}", e),
+                },
+            );
+        }
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "std"))]
     {
         // SIMD128 is enabled at compile-time
-        // SIMD128 implementation will be added in future
-        // For now, use scalar
+        unsafe {
+            return DispatchTable::new(
+                |data: &[Float]| wasm32::simd128::sum(data),
+                |a: &[Float], b: &[Float]| match wasm32::simd128::dot_product(a, b) {
+                    Ok(result) => result,
+                    Err(e) => panic!("dot_product error: {}", e),
+                },
+            );
+        }
     }
 
     // Fall back to scalar implementation

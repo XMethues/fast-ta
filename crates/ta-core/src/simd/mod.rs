@@ -34,7 +34,8 @@
 pub mod scalar;
 mod types;
 
-#[cfg(all(target_arch = "x86_64", feature = "std"))]
+// Include arch module for all platforms with std support
+#[cfg(feature = "std")]
 mod arch;
 
 use alloc::vec::Vec;
