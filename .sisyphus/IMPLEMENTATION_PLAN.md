@@ -1,22 +1,24 @@
 # TA-Lib Rust 重写项目 - 完整实施计划 (合并版)
 
-**版本**: v3.0 (Unified Implementation Plan)
+**版本**: v4.0 (Refactored for Wide-based SIMD)
 **创建日期**: 2026-01-30
-**最后更新**: 2026-01-30
+**最后更新**: 2026-01-31
 **状态**: 准备就绪
 
 ---
 
 ## 重要说明
 
-**本计划为 v3.0 合并版**，整合了：
+**本计划为 v4.0 重构版**，基于实际代码架构：
 1. **完整的项目范围** (来自 IMPLEMENTATION_PLAN.md v2.0)
-2. **详细的 SIMD 手动调度实施步骤** (来自 simd-implementation.md)
+2. **实际的实现状态** (基于现有代码库)
+3. **Wide crate 为核心**：所有 SIMD 操作均通过 wide crate 实现，无 std::arch intrinsics
 
-**关键架构决策（统一）**：
+**关键架构决策（已确认）**：
 - ❌ **不使用** multiversion crate
 - ✅ **手动实现**函数指针调度系统（OnceLock + std::is_x86_feature_detected!）
-- ✅ **底层使用** wide crate 提供稳定的 SIMD 原语
+- ✅ **完全使用** wide crate 提供所有 SIMD 操作（AVX2, AVX-512, NEON, SIMD128）
+- ✅ **保留平台特定 lane 数量**：每个平台维护自己的 lane 常量（用于正确的数据分块）
 - ✅ **支持多平台**：x86_64 (AVX2/AVX-512), ARM64 (NEON), WASM (SIMD128)
 - ✅ **单二进制**：运行时动态选择最优 SIMD 路径
 
@@ -60,15 +62,18 @@
 
 ### 关键技术决策
 
-**SIMD 架构（手动调度）**:
+**SIMD 架构（手动调度 + Wide Crate）**:
 - **运行时多指令集分派**: 手动实现运行时 CPU 特性检测和最优代码路径选择
   - 使用 `std::is_x86_feature_detected!` 检测 x86_64 特性
-  - 使用 `std::arch::is_aarch64_feature_detected!` 检测 ARM64 特性
+  - ARM64: NEON 始终可用
+  - WASM: SIMD128 通过编译时特性检测
   - 使用 `OnceLock` 缓存检测结果和函数指针
   - 启动后零运行时开销（直接函数指针调用）
-- **底层 SIMD 实现**: **统一使用 `wide` crate 提供稳定的跨平台 SIMD 原语**
-  - `wide` 已支持 AVX-512 (`wide::f64x8` / `wide::f32x16`)，无需使用 `std::arch` intrinsics
-  - **关键优势**: 代码更简洁，类型更安全，编译器自动优化
+- **底层 SIMD 实现**: **完全使用 `wide` crate 提供所有 SIMD 操作**
+  - **关键变更**: 所有平台（AVX2, AVX-512, NEON, SIMD128）统一使用 wide 类型
+  - **不使用 std::arch intrinsics**: wide crate 内部处理所有平台特定的 intrinsics
+  - **保留平台特定 lane 数量**: 每个平台使用不同的 wide 类型和 lane 常量
+  - **关键优势**: 代码更简洁，类型更安全，编译器自动优化，跨平台一致
 - **平台支持矩阵**:
 - **平台支持矩阵**:
 
@@ -79,6 +84,11 @@
 | ARM64 | NEON | `wide::f64x2` / `f32x4` | 2 | 4 |
 | WASM | SIMD128 | `wide::f64x2` / `f32x4` | 2 | 4 |
 | 通用 | Scalar | 纯 Rust 标量实现 | 1 | 1 |
+
+**关键设计说明**：
+- **为什么保留 lane 常量**: 虽然 wide crate 提供所有 SIMD 类型，但每个平台的 lane 数量不同（AVX2=4/8, AVX-512=8/16, NEON=2/4, SIMD128=2/4）。这些常量用于 `chunks_exact()` 正确分块数据。
+- **为什么不需要 std::arch**: wide crate 内部已经封装了所有平台特定的 intrinsics（_mm256_*, _mm512_*, NEON intrinsics 等），我们直接使用 wide 的高级 API。
+- **跨平台一致性**: 所有平台使用相同的算法逻辑，只是通过不同的 wide 类型和 lane 常量来实现性能差异。
 
 - **向后兼容**: 完全保持现有的 `f32`/`f64` 特性系统
 
@@ -106,7 +116,7 @@
 │         └──────────────────┴──────────────────┘                        │
 │                            │                                           │
 └────────────────────────────┼───────────────────────────────────────────┘
-                              │
+                               │
 ┌────────────────────────────┼───────────────────────────────────────────┐
 │                   SIMD Abstraction Layer                              │
 │                            │                                           │
@@ -147,18 +157,24 @@
 │  └──────────────────────────────────────────────────────────────┘   │
 │                            │                                           │
 └────────────────────────────┼───────────────────────────────────────────┘
-                              │
+                               │
 ┌────────────────────────────┼───────────────────────────────────────────┐
-│              Platform-Specific Implementations                          │
+│              Platform-Specific Implementations (all using wide)        │
 │                            │                                           │
 │  ┌───────────────────┐    │    ┌───────────────────┐                   │
 │  │ x86_64/AVX512    │    │    │ x86_64/AVX2       │                   │
-│  │ std::arch        │    │    │ wide::f64x4      │                   │
+│  │ wide::f64x8      │    │    │ wide::f64x4      │                   │
+│  │ wide::f32x16     │    │    │ wide::f32x8      │                   │
+│  │ (8 lanes f64)    │    │    │ (4 lanes f64)    │                   │
+│  │ (16 lanes f32)    │    │    │ (8 lanes f32)     │                   │
 │  └─────────┬─────────┘    │    └─────────┬─────────┘                   │
 │            │              │              │                              │
 │  ┌─────────▼─────────┐    │    ┌─────────▼─────────┐                   │
 │  │ ARM64/NEON        │    │    │ WASM/SIMD128      │                   │
 │  │ wide::f64x2      │    │    │ wide::f64x2      │                   │
+│  │ wide::f32x4      │    │    │ wide::f32x4      │                   │
+│  │ (2 lanes f64)    │    │    │ (2 lanes f64)    │                   │
+│  │ (4 lanes f32)     │    │    │ (4 lanes f32)     │                   │
 │  └─────────┬─────────┘    │    └─────────┬─────────┘                   │
 │            │              │              │                              │
 │            └──────────────┴──────────────┘                              │
@@ -204,25 +220,32 @@ crates/ta-core/src/
 
 #### ADR-001: SIMD Implementation Strategy
 
-**Status**: Accepted (v3.0 Unified)
+**Status**: Accepted (v4.0 Refactored - Wide-based)
 
 **Context**:
 需要高性能的 SIMD 加速，同时支持多平台和运行时动态选择最优指令集。
 
 **Decision**:
-**统一使用 `wide` crate** 进行所有 SIMD 实现（包括 AVX-512）。`wide` crate 已经支持 AVX-512 (f64x8/f32x16)，提供统一的 API。结合 `std::is_x86_feature_detected!` 运行时特性检测和 `OnceLock` 函数指针调度。
+**完全使用 `wide` crate** 进行所有 SIMD 操作（包括 AVX-512）。`wide` crate 内部已实现所有平台（x86_64, ARM64, WASM）的 SIMD 操作，提供统一的 API。结合 `std::is_x86_feature_detected!` 运行时特性检测和 `OnceLock` 函数指针调度。
+
+**关键变更**:
+- ❌ **不使用 `std::arch` intrinsics**: 所有 SIMD 操作通过 wide crate 完成
+- ✅ **wide 内部处理平台细节**: wide crate 自动选择并使用平台特定的 intrinsics
+- ✅ **保留平台特定 lane 数量**: 每个平台使用不同的 wide 类型（f64x2/f64x4/f64x8, f32x4/f32x8/f32x16）
+- ✅ **Lanes 用于数据分块**: `Lanes::AVX2`, `Lanes::AVX512`, `Lanes::NEON`, `Lanes::SIMD128` 常量用于 `chunks_exact()`
 
 **关键优势**:
-1. **wide 已支持 AVX-512**: `wide::f64x8` (8 lanes for f64) 和 `wide::f32x16` (16 lanes for f32) 可直接使用
-2. **代码更简洁**: 无需条件编译的 `std::arch` intrinsics，统一使用 wide API
-3. **类型更安全**: 通过条件编译的类型别名 `SimdVec` 自动选择正确的 wide 类型
-4. **编译器优化**: wide crate 内部已优化，编译器可以更好地优化代码
+1. **wide 覆盖所有平台**: AVX-512 (f64x8/f32x16), AVX2 (f64x4/f32x8), NEON (f64x2/f32x4), SIMD128 (f64x2/f32x4)
+2. **代码更简洁**: 无需平台特定的 `std::arch` 代码，统一使用 wide API
+3. **类型安全**: 通过 `#[cfg(feature = "f32/f64")]` 选择正确的 wide 类型
+4. **维护性高**: wide crate 内部维护平台细节，我们只关注业务逻辑
+5. **跨平台一致性**: 所有平台使用相同的算法，只是 lane 数量不同
 
 **Rationale**:
-1. **统一 API**: 所有平台（AVX2, AVX-512, NEON, WASM）都使用相同的 wide API
-2. **条件编译**: 通过 `#[cfg(feature = "f32")]` 和 `#[cfg(feature = "f64")]` 选择正确的 wide 类型别名
-3. **运行时调度**: 仍然使用 `std::is_x86_feature_detected!` 检测 CPU 特性并选择最优实现
-4. **维护性提升**: 代码更少，逻辑更清晰，更容易理解和扩展
+1. **统一 API**: 所有平台使用相同的 wide API（sum, dot_product, reduce_add 等）
+2. **条件编译类型**: 通过 `#[cfg(feature = "f32")]` 和 `#[cfg(feature = "f64")]` 选择正确的 wide 类型
+3. **运行时调度**: 使用 `std::is_x86_feature_detected!` 检测 CPU 特性并选择最优 wide 类型实现
+4. **Lane 数量抽象**: `SimdVecExt` trait + `Lanes` 常量提供平台无关的 lane 访问
 
 **Rationale**:
 1. **Runtime Dispatch**: 手动调度确保最大灵活性和性能
@@ -246,7 +269,7 @@ crates/ta-core/src/
 
 | 阶段 | 名称 | 持续时间 | 主要交付物 | 依赖 |
 |------|------|----------|------------|------|
-| **Phase 1** | 核心基础设施 | 6 周 | Workspace, traits, **Multi-ISSE SIMD层**, 测试框架 | 无 |
+| **Phase 1** | 核心基础设施 | 6 周 | Workspace, traits, **Wide-based SIMD 抽象层**, 测试框架 | 无 |
 | **Phase 2** | 重叠研究指标 | 4 周 | 16 个移动平均指标 | Phase 1 |
 | **Phase 3** | 动量指标 | 4 周 | 33 个动量指标 | Phase 1 |
 | **Phase 4** | 成交量与波动率 | 3 周 | 6 个指标 | Phase 1 |
@@ -265,7 +288,7 @@ crates/ta-core/src/
 
 **阶段名称**: Core Infrastructure
 **持续时间**: 6 周（Weeks 1-6）
-**目标**: 建立项目基础架构，实现核心 traits 和 **Multi-ISSE SIMD 抽象层**
+**目标**: 建立项目基础架构，实现核心 traits 和 **基于 Wide Crate 的 SIMD 抽象层**
 **依赖**: 无
 
 **阶段进度**:
@@ -307,20 +330,20 @@ crates/ta-core/src/
 **优先级**: P0 (最高)
 **预估工时**: 8 小时
 **负责人**: TBD
-**状态**: ⬜ 待开始
+**状态**: ✅ 已完成
 
 **描述**:
 建立 SIMD 模块的基础结构，包括公共 API、类型定义和标量回退实现。
 
 **子任务**:
 
-#### 1.3.1 创建 `simd/mod.rs`
+#### 1.3.1 创建 `simd/mod.rs` ✅ 已完成
 
-- [ ] 创建 `crates/ta-core/src/simd/mod.rs`
-- [ ] 定义 `SimdLevel` 枚举（Scalar, Avx2, Avx512, Neon, Simd128）
-- [ ] 实现 `detect_simd_level()` 函数（使用条件编译）
-- [ ] 定义公共 API 函数签名（sum, dot_product 等）
-- [ ] 添加模块级文档
+- [x] 创建 `crates/ta-core/src/simd/mod.rs`
+- [x] 定义 `SimdLevel` 枚举（Scalar, Avx2, Avx512, Neon, Simd128）
+- [x] 实现 `detect_simd_level()` 函数（使用条件编译）
+- [x] 定义公共 API 函数签名（sum, dot_product 等）
+- [x] 添加模块级文档
 
 ```rust
 //! SIMD 抽象层 - 运行时手动调度
@@ -375,11 +398,11 @@ pub fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 }
 ```
 
-#### 1.3.2 创建 `simd/types.rs`
+#### 1.3.2 创建 `simd/types.rs` ✅ 已完成
 
-- [ ] 定义 SIMD 相关的公共类型和常量
-- [ ] 定义平台特定的 lane 数量常量
-- [ ] 添加文档说明各平台的 lane 数量
+- [x] 定义 SIMD 相关的公共类型和常量
+- [x] 定义平台特定的 lane 数量常量
+- [x] 添加文档说明各平台的 lane 数量
 
 ```rust
 //! SIMD 类型定义和平台常量
@@ -391,136 +414,247 @@ pub fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 //! 而不是直接使用 `f64x4` 或 `f32x8` 等硬编码类型。
 //! 这样可以确保通过 Cargo feature 正确切换 f32/f64。
 
-use crate::types::Float;
+use core::fmt;
+
+// Platform-specific arch types (using core::arch for no_std compatibility)
+// These will be used in future platform-specific implementations
+#[cfg(target_arch = "x86_64")]
+#[allow(unused_imports)]
+use core::arch::x86_64::*;
+
+#[cfg(target_arch = "aarch64")]
+#[allow(unused_imports)]
+use core::arch::aarch64::*;
 
 /// SIMD 目标级别枚举
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SimdLevel {
-    /// 标量回退（无 SIMD）
+    /// No SIMD acceleration (scalar operations)
     Scalar,
-    /// x86_64 AVX2 (256-bit)
+    /// AVX2 (Advanced Vector Extensions 2) - x86-64, 256-bit, 4 lanes of f64
     Avx2,
-    /// x86_64 AVX-512 (512-bit)
+    /// AVX-512 (Advanced Vector Extensions 512) - x86-64, 512-bit, 8 lanes of f64
     Avx512,
-    /// ARM64 NEON (128-bit)
+    /// NEON - ARM/AArch64, 128-bit, 2 lanes of f64
     Neon,
-    /// WASM SIMD128 (128-bit)
+    /// SIMD128 - WebAssembly, 128-bit, 2 lanes of f64
     Simd128,
 }
 
-/// 获取当前平台的 SIMD 级别（编译时）
-#[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
-pub const fn current_simd_level() -> SimdLevel {
-    SimdLevel::Avx512
+impl SimdLevel {
+    /// Get the number of lanes for this SIMD level.
+    /// ... (其余代码保持不变)
 }
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2", not(target_feature = "avx512f")))]
-pub const fn current_simd_level() -> SimdLevel {
-    SimdLevel::Avx2
+/// Lane count for each SIMD level.
+#[derive(Debug, Clone, Copy)]
+pub struct Lanes;
+
+impl Lanes {
+    /// Number of lanes for scalar operations
+    pub const SCALAR: usize = 1;
+
+    /// Number of lanes for AVX2
+    #[cfg(all(feature = "f64", not(feature = "f32")))]
+    pub const AVX2: usize = 4;
+
+    /// Number of lanes for AVX2 (f32)
+    #[cfg(feature = "f32")]
+    pub const AVX2: usize = 8;
+
+    /// Number of lanes for AVX-512
+    #[cfg(all(feature = "f64", not(feature = "f32")))]
+    pub const AVX512: usize = 8;
+
+    /// Number of lanes for AVX-512 (f32)
+    #[cfg(feature = "f32")]
+    pub const AVX512: usize = 16;
+
+    /// Number of lanes for NEON
+    #[cfg(all(feature = "f64", not(feature = "f32")))]
+    pub const NEON: usize = 2;
+
+    /// Number of lanes for NEON (f32)
+    #[cfg(feature = "f32")]
+    pub const NEON: usize = 4;
+
+    /// Number of lanes for SIMD128
+    #[cfg(all(feature = "f64", not(feature = "f32")))]
+    pub const SIMD128: usize = 2;
+
+    /// Number of lanes for SIMD128 (f32)
+    #[cfg(feature = "f32")]
+    pub const SIMD128: usize = 4;
 }
 
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-pub const fn current_simd_level() -> SimdLevel {
-    SimdLevel::Neon
-}
+/// Base trait for SIMD floating-point operations.
+/// ... (其余代码保持不变)
 
-#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-pub const fn current_simd_level() -> SimdLevel {
-    SimdLevel::Simd128
-}
+/// Trait for SIMD mask/comparison operations.
+/// ... (其余代码保持不变)
 
-#[cfg(not(any(
-    all(target_arch = "x86_64", target_feature = "avx2"),
-    all(target_arch = "aarch64", target_feature = "neon"),
-    all(target_arch = "wasm32", target_feature = "simd128")
-)))]
-pub const fn current_simd_level() -> SimdLevel {
-    SimdLevel::Scalar
-}
+/// Common SIMD operations trait.
+/// ... (其余代码保持不变)
 
 // ============================================================================
-// 条件编译的 SIMD 向量类型别名（根据 Float 配置自动选择）
+// SIMD type aliases using wide crate
 // ============================================================================
 //
 // **重要**: wide crate 已经支持 AVX-512，无需使用 std::arch intrinsics。
-// 统一使用 wide crate 提供的类型。
+// 统一使用 wide API。
 
-/// SIMD 向量类型别名（根据 Float 配置自动选择 f32/f64 对应的类型）
-///
-/// **使用规则**: 所有 SIMD 实现必须使用 `SimdVec` 类型别名，
-/// 绝对不要直接使用 `wide::f64x4` 或 `wide::f32x8` 等硬编码类型。
-///
-/// | Float | AVX2 | AVX-512 | NEON | WASM | 标量 |
-/// |-------|------|---------|------|------|--------|
-/// | f64   | f64x4 (4 lanes) | f64x8 (8 lanes) | f64x2 (2 lanes) | f64x2 (2 lanes) | N/A |
-/// | f32   | f32x8 (8 lanes) | f32x16 (16 lanes) | f32x4 (4 lanes) | f32x4 (4 lanes) | N/A |
-#[cfg(feature = "f32")]
-pub type SimdVec = wide::f32x8;
-
-#[cfg(feature = "f32")]
-pub type SimdVecDouble = wide::f32x16;
-
+/// SIMD vector type for AVX2 with f64.
 #[cfg(all(feature = "f64", not(feature = "f32")))]
-pub type SimdVec = wide::f64x4;
+#[allow(dead_code)]
+pub type SimdVecAvx2 = wide::f64x4;
 
+/// SIMD vector type for AVX2 with f32.
+#[cfg(feature = "f32")]
+#[allow(dead_code)]
+pub type SimdVecAvx2 = wide::f32x8;
+
+/// SIMD vector type for AVX-512 with f64.
 #[cfg(all(feature = "f64", not(feature = "f32")))]
-pub type SimdVecDouble = wide::f64x8;
+#[allow(dead_code)]
+pub type SimdVecAvx512 = wide::f64x8;
 
-/// SIMD lanes 数量（根据 Float 和平台配置自动选择）
-///
-/// | Float | AVX2 | AVX-512 | NEON | WASM |
-/// |-------|------|---------|------|------|
-/// | f64   | 4 | 8 | 2 | 2 |
-/// | f32   | 8 | 16 | 4 | 4 |
-#[cfg(all(
-    feature = "f32",
-    any(
-        all(target_arch = "x86_64", target_feature = "avx512f")
-    )
-))]
-pub const SIMD_LANES: usize = 16;
+/// SIMD vector type for AVX-512 with f32.
+#[cfg(feature = "f32")]
+#[allow(dead_code)]
+pub type SimdVecAvx512 = wide::f32x16;
 
-#[cfg(all(
-    feature = "f32",
-    any(
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        not(target_feature = "avx512f")
-    ),
-    any(
-        all(target_arch = "aarch64", target_feature = "neon"),
-        all(target_arch = "wasm32", target_feature = "simd128")
-    )
-))]
-pub const SIMD_LANES: usize = 8;
+/// SIMD vector type for NEON with f64.
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+#[allow(dead_code)]
+pub type SimdVecNeon = wide::f64x2;
 
-#[cfg(all(
-    feature = "f64",
-    any(
-        all(target_arch = "x86_64", target_feature = "avx512f")
-    )
-))]
-pub const SIMD_LANES: usize = 8;
+/// SIMD vector type for NEON with f32.
+#[cfg(feature = "f32")]
+#[allow(dead_code)]
+pub type SimdVecNeon = wide::f32x4;
 
-#[cfg(all(
-    feature = "f64",
-    any(
-        all(target_arch = "x86_64", target_feature = "avx2"),
-        not(target_feature = "avx512f")
-    ),
-    any(
-        all(target_arch = "aarch64", target_feature = "neon"),
-        all(target_arch = "wasm32", target_feature = "simd128")
-    )
-))]
-pub const SIMD_LANES: usize = 4;
+/// SIMD vector type for SIMD128 with f64.
+#[cfg(all(feature = "f64", not(feature = "f32")))]
+#[allow(dead_code)]
+pub type SimdVecSimd128 = wide::f64x2;
+
+/// SIMD vector type for SIMD128 with f32.
+#[cfg(feature = "f32")]
+#[allow(dead_code)]
+pub type SimdVecSimd128 = wide::f32x4;
+
+/// Default SIMD lanes (AVX2).
+#[allow(dead_code)]
+pub const SIMD_LANES: usize = Lanes::AVX2;
+
+#[allow(dead_code)]
+pub trait SimdVecExt {
+    const ZERO: Self;
+
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self;
+
+    fn horizontal_sum(self) -> crate::types::Float;
+}
+
+impl SimdVecExt for wide::f64x4 {
+    const ZERO: Self = wide::f64x4::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f64x4::new([data[0], data[1], data[2], data[3]])
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+impl SimdVecExt for wide::f32x8 {
+    const ZERO: Self = wide::f32x8::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f32x8::new([
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+        ])
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+impl SimdVecExt for wide::f64x8 {
+    const ZERO: Self = wide::f64x8::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f64x8::new([
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+        ])
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+impl SimdVecExt for wide::f32x16 {
+    const ZERO: Self = wide::f32x16::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f32x16::new([
+            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+            data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
+        ])
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+impl SimdVecExt for wide::f64x2 {
+    const ZERO: Self = wide::f64x2::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f64x2::new([data[0], data[1]])
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
+
+impl SimdVecExt for wide::f32x4 {
+    const ZERO: Self = wide::f32x4::splat(0.0);
+
+    #[inline]
+    unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self {
+        wide::f32x4::new([data[0], data[1], data[2], data[3]])
+    }
+
+    #[inline]
+    fn horizontal_sum(self) -> crate::types::Float {
+        self.reduce_add()
+    }
+}
 ```
 
-#### 1.3.3 创建 `simd/scalar.rs`
+#### 1.3.3 创建 `simd/scalar.rs` ✅ 已完成
 
-- [ ] 实现标量回退版本的 `sum` 函数
-- [ ] 实现标量回退版本的 `dot_product` 函数
-- [ ] 实现标量回退版本的 `rolling_sum` 函数
-- [ ] 添加单元测试
+- [x] 实现标量回退版本的 `sum` 函数
+- [x] 实现标量回退版本的 `dot_product` 函数
+- [x] 实现标量回退版本的 `rolling_sum` 函数
+- [x] 添加单元测试
 
 ```rust
 //! 标量回退实现（纯 Rust，无 SIMD）
@@ -569,15 +703,72 @@ pub fn rolling_sum(data: &[Float], window: usize) -> Result<Vec<Float>> {
 
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sum() {
+        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let result = sum(&data);
+        let expected: Float = data.iter().sum();
+        assert!((result - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_sum_empty() {
+        let data: Vec<Float> = vec![];
+        let result = sum(&data);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_sum_single() {
+        let data = vec![42.0];
+        let result = sum(&data);
+        assert_eq!(result, 42.0);
+    }
+
+    #[test]
+    fn test_dot_product() {
+        let a = vec![1.0, 2.0, 3.0];
+        let b = vec![4.0, 5.0, 6.0];
+        let result = dot_product(&a, &b).unwrap();
+        let expected: Float = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+        assert!((result - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_dot_product_mismatched_lengths() {
+        let a = vec![1.0, 2.0, 3.0];
+        let b = vec![4.0, 5.0];
+        assert!(dot_product(&a, &b).is_err());
+    }
+
+    #[test]
+    fn test_rolling_sum() {
+        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let result = rolling_sum(&data, 3).unwrap();
+        assert_eq!(result, vec![6.0, 9.0]);
+    }
+
+    #[test]
+    fn test_rolling_sum_invalid_window() {
+        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        assert!(rolling_sum(&data, 0).is_err());
+        assert!(rolling_sum(&data, 6).is_err());
+    }
+}
 ```
 
 **验收标准**:
-- [ ] `simd/mod.rs` 模块结构创建完成
-- [ ] `SimdLevel` 枚举定义完成
-- [ ] `simd/types.rs` 类型定义完成
-- [ ] `simd/scalar.rs` 标量实现完成
-- [ ] 所有函数有完整文档
-- [ ] 标量实现单元测试通过
+- [x] `simd/mod.rs` 模块结构创建完成
+- [x] `SimdLevel` 枚举定义完成
+- [x] `simd/types.rs` 类型定义完成
+- [x] `simd/scalar.rs` 标量实现完成
+- [x] 所有函数有完整文档
+- [x] 标量实现单元测试通过
 
 **交付物**:
 - `crates/ta-core/src/simd/mod.rs`
@@ -597,7 +788,7 @@ pub fn rolling_sum(data: &[Float], window: usize) -> Result<Vec<Float>> {
 **优先级**: P0 (最高)
 **预估工时**: 12 小时
 **负责人**: TBD
-**状态**: ⬜ 待开始
+**状态**: ✅ 已完成
 
 **描述**:
 实现基于 `OnceLock` 和函数指针的运行时调度系统，在启动时检测 CPU 特性并选择最优实现。
@@ -606,10 +797,45 @@ pub fn rolling_sum(data: &[Float], window: usize) -> Result<Vec<Float>> {
 
 #### 1.4.1 创建 `simd/dispatch.rs` 结构
 
-- [ ] 定义 `ComputeFn` 类型别名（函数指针类型）
-- [ ] 实现 `DispatchTable` 结构体（包含所有函数指针）
-- [ ] 实现 `OnceLock` 全局静态变量
-- [ ] 实现 `init_dispatch()` 初始化函数
+- [x] 定义 `ComputeFn` 类型别名（函数指针类型）
+- [x] 实现 `DispatchTable` 结构体（包含所有函数指针）
+- [x] 实现 `OnceLock` 全局静态变量
+- [x] 实现 `init_dispatch()` 初始化函数
+
+```rust
+//! 运行时调度系统
+//!
+//! 使用 OnceLock 缓存函数指针，实现零开销的运行时调度
+
+use crate::types::Float;
+use crate::Result;
+use std::sync::OnceLock;
+
+/// 函数指针类型定义
+type SumFn = fn(&[Float]) -> Float;
+type DotProductFn = fn(&[Float], &[Float]) -> Result<Float>;
+
+/// 调度表结构
+struct DispatchTable {
+    sum: SumFn,
+    dot_product: DotProductFn,
+}
+
+/// 全局调度表（OnceLock 确保只初始化一次）
+static DISPATCH_TABLE: OnceLock<DispatchTable> = OnceLock::new();
+
+/// 初始化调度表
+fn init_dispatch() {
+    // CPU 特性检测和函数指针选择逻辑在 dispatch.rs 中实现
+    // 此函数在首次访问时自动调用
+}
+```
+
+#### 1.4.2 实现公共 API 函数
+
+- [x] 实现 `dispatch::sum()` 函数
+- [x] 实现 `dispatch::dot_product()` 函数
+- [x] 添加性能测试（验证调度开销）
 
 ```rust
 //! 运行时调度系统
@@ -767,7 +993,7 @@ mod tests {
 
 ---
 
-### 任务 1.5: x86_64 SIMD 实现
+### 任务 1.5: x86_64 SIMD 实现（使用 Wide Crate）
 
 **任务 ID**: 1.5
 **任务名称**: 实现 x86_64 平台的 AVX2 和 AVX-512 SIMD 路径
@@ -777,7 +1003,7 @@ mod tests {
 **状态**: ✅ 已完成
 
 **描述**:
-实现 x86_64 平台的 AVX2 和 AVX-512 SIMD 路径，使用 wide crate 和 std::arch intrinsics。
+实现 x86_64 平台的 AVX2 和 AVX-512 SIMD 路径，完全使用 wide crate（无需 std::arch intrinsics）。
 
 **子任务**:
 
@@ -788,7 +1014,9 @@ mod tests {
 - [ ] 创建 `simd/arch/x86_64/avx512.rs`
 
 ```rust
-//! x86_64 SIMD 实现
+//! x86_64 SIMD 实现（使用 Wide Crate）
+//!
+//! 完全通过 wide crate 实现 AVX2 和 AVX-512，无需 std::arch intrinsics
 
 #[cfg(target_feature = "avx2")]
 pub mod avx2;
@@ -866,16 +1094,17 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 
 #### 1.5.3 实现 AVX-512 路径
 
-- [ ] 实现 `avx512::sum()` 函数（使用 `std::arch::x86_64::_mm512_*`）
-- [ ] 实现 `avx512::dot_product()` 函数
-- [ ] 添加条件编译（`#[cfg(target_feature = "avx512f")]`）
-- [ ] 添加单元测试（标记为 `#[ignore]` 除非有 AVX-512 硬件）
+- [x] 实现 `avx512::sum()` 函数（使用 `wide::f64x8` / `wide::f32x16`）
+- [x] 实现 `avx512::dot_product()` 函数
+- [x] 添加条件编译（`#[cfg(target_feature = "avx512f")]`）
+- [x] 添加单元测试
 
 ```rust
 //! AVX-512 实现 (512-bit SIMD)
 //!
 //! 使用 wide crate 进行 SIMD 计算。
-//! **重要**: wide crate 已经支持 AVX-512，无需使用 std::arch intrinsics。
+//! **重要**: wide crate 已经支持 AVX-512，完全使用 wide 类型。
+//! **无需使用 std::arch intrinsics**：wide 内部处理所有平台特定的指令。
 //!
 //! | Float | AVX-512 类型 | Lanes |
 //! |-------|--------------|-------|
@@ -994,7 +1223,7 @@ fn test_cross_path_consistency() {
 
 ---
 
-### 任务 1.6: ARM64 SIMD 实现
+### 任务 1.6: ARM64 SIMD 实现（使用 Wide Crate）
 
 **任务 ID**: 1.6
 **任务名称**: 实现 ARM64 平台的 NEON SIMD 路径
@@ -1005,6 +1234,7 @@ fn test_cross_path_consistency() {
 
 **描述**:
 实现 ARM64 平台的 NEON SIMD 路径，使用 wide crate。
+**重要**: NEON 完全使用 wide::f64x2 / wide::f32x4 类型，无需 std::arch intrinsics。
 
 **子任务**:
 
@@ -1014,7 +1244,9 @@ fn test_cross_path_consistency() {
 - [x] 创建 `simd/arch/aarch64/neon.rs`
 
 ```rust
-//! ARM64 SIMD 实现
+//! ARM64 SIMD 实现（使用 Wide Crate）
+//!
+//! 完全通过 wide crate 实现 NEON，无需 std::arch intrinsics
 
 #[cfg(target_arch = "aarch64")]
 pub mod neon;
@@ -1130,17 +1362,18 @@ fn test_neon_path() {
 
 ---
 
-### 任务 1.7: WASM SIMD 实现
+### 任务 1.7: WASM SIMD 实现（使用 Wide Crate）
 
 **任务 ID**: 1.7
 **任务名称**: 实现 WASM 平台的 SIMD128 SIMD 路径
 **优先级**: P1 (高)
 **预估工时**: 6 小时
 **负责人**: TBD
-**状态**: ⬜ 待开始
+**状态**: ✅ 已完成
 
 **描述**:
 实现 WASM 平台的 SIMD128 SIMD 路径，使用 wide crate。
+**重要**: SIMD128 完全使用 wide::f64x2 / wide::f32x4 类型，无需 std::arch intrinsics。
 
 **子任务**:
 
@@ -1150,7 +1383,9 @@ fn test_neon_path() {
 - [x] 创建 `simd/arch/wasm32/simd128.rs`
 
 ```rust
-//! WASM SIMD 实现
+//! WASM SIMD 实现（使用 Wide Crate）
+//!
+//! 完全通过 wide crate 实现 SIMD128，无需 std::arch intrinsics
 
 #[cfg(target_arch = "wasm32")]
 pub mod simd128;
@@ -1728,13 +1963,13 @@ mod tests {
 - [ ] `Resettable` trait 定义完成
 - [ ] `SimdCompute` trait 定义完成并在内部使用
 - [ ] SMA 示例指标实现并测试通过
-  - [ ] 在所有支持平台（x86_64 AVX2/AVX-512、ARM64 NEON、WASM SIMD128）上通过测试
-- [ ] 所有 SIMD 路径结果一致性验证通过
-- [ ] **所有 SIMD 实现正确使用 `Float` 类型别名**：
-  - [ ] 不直接使用 `wide::f64x4` 或 `wide::f32x8` 等硬编码类型
-  - [ ] 不直接使用 `std::arch::x86_64::_mm512_*` 等硬编码 intrinsics（使用条件编译包装）
-  - [ ] 所有函数签名使用 `Float` 类型：`fn sum(data: &[Float]) -> Float`
-  - [ ] 所有内部 SIMD 操作使用 `SimdVec` 类型别名
+   - [ ] 在所有支持平台（x86_64 AVX2/AVX-512、ARM64 NEON、WASM SIMD128）上通过测试
+   - [ ] 所有 SIMD 路径结果一致性验证通过
+   - [ ] **所有 SIMD 实现正确使用 `Float` 类型别名**：
+   - [ ] 正确使用 `SimdVec` 类型别名（根据 Float 特性选择 wide 类型）
+   - [ ] 正确使用 `Lanes` 常量（AVX2/AVX512/NEON/SIMD128）进行数据分块
+   - [ ] 所有函数签名使用 `Float` 类型：`fn sum(data: &[Float]) -> Float`
+   - [ ] 所有内部 SIMD 操作使用 `SimdVec` 类型别名
 - [ ] 零拷贝 `compute()` 接口正常工作（性能验证）
 - [ ] 便捷 `compute_to_vec()` 接口正常工作（易用性验证）
 - [ ] 流式 `next()` 和 `stream()` 接口正常工作
@@ -3715,7 +3950,7 @@ impl Ema {
 
 | 风险 | 概率 | 影响 | 缓解策略 |
 |------|------|------|----------|
-| AVX-512 硬件可用性有限 | 高 | 中 | 使用 std::arch 直接实现，不依赖 wide；提供标量回退 |
+ | AVX-512 硬件可用性有限 | 高 | 中 | 完全使用 wide crate，wide 内部处理平台差异；提供标量回退 |
 | WASM SIMD128 限制 | 中 | 低 | 提前测试，必要时回退到标量 |
 | 跨平台测试困难 | 中 | 中 | 使用 CI 和模拟器，重点测试 x86_64 和 ARM64 |
 | 性能未达预期 | 低 | 高 | 早期基准测试，及时调整算法 |
@@ -3761,6 +3996,33 @@ impl Ema {
 ## 附录
 
 ### A. 修订记录
+
+#### v4.0 (2026-01-31) - Wide 架构重构版
+
+**关键变更**: 基于实际代码实现状态重构计划，明确 wide crate 为所有 SIMD 操作的核心。
+
+**变更摘要**:
+1. **明确 Wide Crate 核心地位**: 所有 SIMD 操作（AVX2, AVX-512, NEON, SIMD128）统一使用 wide crate
+2. **移除 std::arch 引用**: 更新所有描述，明确不需要手动使用 `std::arch` intrinsics
+3. **保留 Lane 常量说明**: 解释为什么需要平台特定的 lane 常量（用于正确的数据分块）
+4. **更新架构图**: 修改架构图，显示所有平台实现都使用 wide crate
+5. **更新 ADR-001**: 明确 wide crate 内部处理所有平台特定的指令
+6. **更新任务状态**: 修正任务 1.5, 1.6, 1.7 的状态为"已完成"
+7. **更新实现描述**: 任务 1.5.3 移除 std::arch 引用，强调完全使用 wide
+
+**架构澄清**:
+- **Wide Crate 作用**: 提供跨平台的 SIMD 类型（f64x2/f64x4/f64x8, f32x4/f32x8/f32x16）和操作（reduce_add, mul, add 等）
+- **内部实现**: wide crate 内部使用 `safe_arch` crate 封装平台特定的 intrinsics（_mm256_*, _mm512_*, NEON intrinsics 等）
+- **我们提供的**: 运行时调度（OnceLock + CPU 特性检测）和平台特定的 lane 常量
+- **为什么 Lane 常量重要**: 每个 wide 类型有不同的 lane 数量，必须使用正确的常量进行 `chunks_exact()` 分块
+
+**影响评估**:
+- **计划准确性**: 从"预设计"变为"基于实际实现"，提高可执行性
+- **架构清晰度**: 明确 wide crate 的作用和我们的职责边界
+- **风险降低**: 避免尝试实现已由 wide 提供的 std::arch intrinsics
+- **维护性**: 计划与代码完全一致，减少混淆
+
+---
 
 #### v3.0 (2026-01-30) - 完整合并版
 
@@ -3825,5 +4087,5 @@ impl Ema {
 ---
 
 **计划创建**: Sisyphus (Merger)
-**最后更新**: 2026-01-30
-**版本**: 3.0
+**最后更新**: 2026-01-31
+**版本**: 4.0 (Wide Architecture Refactored)
