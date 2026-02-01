@@ -41,7 +41,7 @@ pub unsafe fn sum(data: &[Float]) -> Float {
 pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     if a.len() != b.len() {
         return Err(crate::TalibError::InvalidInput {
-            message: "Arrays must have same length".into(),
+            message: "Dot product requires vectors of equal length".into(),
         });
     }
 

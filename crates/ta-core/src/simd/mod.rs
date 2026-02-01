@@ -31,7 +31,7 @@
 //! - For very small arrays, scalar operations may be faster due to SIMD overhead
 //! - Consider using [`rolling_sum`] for sliding window calculations
 
-mod scalar;
+pub mod scalar;
 mod types;
 
 #[cfg(all(target_arch = "x86_64", feature = "std"))]
@@ -43,7 +43,12 @@ pub use types::{Lanes, SimdFloat, SimdLevel, SimdMask, SimdOps};
 
 pub mod dispatch;
 
-/// Calculate the sum of all elements in a slice.
+// Re-export dispatch functions as public API
+pub use dispatch::{dot_product, sum};
+
+/// Calculate of sum of all elements in a slice (deprecated - use dispatch::sum instead).
+///
+/// This function is deprecated. Use `simd::sum` or `simd::dispatch::sum` instead.
 ///
 /// # Arguments
 ///
@@ -52,19 +57,13 @@ pub mod dispatch;
 ///
 /// # Returns
 ///
-/// The sum of all elements in the slice.
-///
-/// # Examples
-///
-/// ```rust
-/// use ta_core::simd::{sum, SimdLevel};
-///
-/// let data = vec![1.0_f64, 2.0, 3.0];
-/// let result = sum(&data, SimdLevel::detect());
-/// assert_eq!(result, 6.0);
-/// ```
+/// The sum of all elements in slice.
 #[inline]
-pub fn sum(data: &[f64], _level: SimdLevel) -> f64 {
+#[deprecated(
+    since = "0.1.0",
+    note = "Use `simd::sum` or `simd::dispatch::sum` instead"
+)]
+pub fn sum_with_level(data: &[f64], _level: SimdLevel) -> f64 {
     scalar::sum(data)
 }
 
@@ -96,7 +95,11 @@ pub fn sum(data: &[f64], _level: SimdLevel) -> f64 {
 /// assert_eq!(result, 32.0);
 /// ```
 #[inline]
-pub fn dot_product(a: &[f64], b: &[f64], _level: SimdLevel) -> f64 {
+#[deprecated(
+    since = "0.1.0",
+    note = "Use `simd::dot_product` or `simd::dispatch::dot_product` instead"
+)]
+pub fn dot_product_with_level(a: &[f64], b: &[f64], _level: SimdLevel) -> f64 {
     scalar::dot_product(a, b)
 }
 
@@ -142,14 +145,14 @@ mod tests {
     #[test]
     fn test_sum() {
         let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        assert_eq!(sum(&data, SimdLevel::Scalar), 15.0);
+        assert_eq!(sum(&data), 15.0);
     }
 
     #[test]
     fn test_dot_product() {
         let a = vec![1.0, 2.0, 3.0];
         let b = vec![4.0, 5.0, 6.0];
-        assert_eq!(dot_product(&a, &b, SimdLevel::Scalar), 32.0);
+        assert_eq!(dot_product(&a, &b), 32.0);
     }
 
     #[test]
