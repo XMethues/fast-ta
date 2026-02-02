@@ -22,7 +22,9 @@ wide = { workspace = true, features = ["std"] }
 once_cell = { version = "1.21", default-features = false, optional = true }
 
 [dev-dependencies]
-criterion = "0.8"
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.4"
+quickcheck = "1.0"
 
 [package.metadata.docs.rs]
 all-features = true

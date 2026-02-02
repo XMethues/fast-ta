@@ -98,7 +98,7 @@ fn init_dispatch() -> DispatchTable {
     #[cfg(all(target_arch = "x86_64", feature = "std"))]
     {
         // Runtime feature detection for AVX-512F
-        let has_avx512 = unsafe { std::is_x86_feature_detected!("avx512f") };
+        let has_avx512 = { std::is_x86_feature_detected!("avx512f") };
         if has_avx512 {
             unsafe {
                 return DispatchTable::new(
@@ -111,7 +111,7 @@ fn init_dispatch() -> DispatchTable {
             }
         }
         // Runtime feature detection for AVX2
-        let has_avx2 = unsafe { std::is_x86_feature_detected!("avx2") };
+        let has_avx2 = { std::is_x86_feature_detected!("avx2") };
         if has_avx2 {
             unsafe {
                 return DispatchTable::new(

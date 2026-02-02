@@ -1,0 +1,12 @@
+# Clippy configuration for ta-core project
+# See https://github.com/rust-lang/rust-clippy#configuration for more options
+
+# Allow certain lints that are not applicable
+array-size-threshold = 512000
+too-many-arguments-threshold = 7
+type-complexity-threshold = 250
+
+# Pedantic lints
+#too_long_first_doc_paragraph = "allow"
+# Allow unused imports in test code to simplify test setup
+#unused-imports = "allow"

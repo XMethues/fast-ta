@@ -14,9 +14,6 @@ categories = ["development-tools::profiling", "development-tools::testing"]
 name = "basic"
 harness = false
 
-[[bench]]
-name = "sma"
-harness = false
 
 [dependencies]
 ta-core = { path = "../ta-core" }

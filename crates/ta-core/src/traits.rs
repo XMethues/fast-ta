@@ -17,17 +17,15 @@ use alloc::vec::Vec;
 /// # SIMD Acceleration Requirement
 ///
 /// **All indicator implementations MUST use SIMD acceleration** for the `compute` method.
-/// - When processing >1000 data points, SIMD implementations must achieve >2x speedup
-///  over scalar implementations
+/// - When processing >1000 data points, SIMD implementations must achieve >2x speedup over scalar implementations
+///
 /// - Use the `wide` crate for portable SIMD operations
-/// - Implement SIMD for the main computation path, with scalar fallback for remainder
-///  elements if necessary
+/// - Implement SIMD for the main computation path, with scalar fallback for remainder elements if necessary
 /// - Performance benchmarks are required to verify SIMD acceleration effectiveness
 ///
 /// # Generic Parameters
 ///
-/// - `N`: Number of output values per input (default: 1). Multi-output indicators
-///        can specify a different value (e.g., Bollinger Bands might use `N=3`).
+/// - `N`: Number of output values per input (default: 1). Multi-output indicators can specify a different value (e.g., Bollinger Bands might use `N=3`).
 ///
 /// # Example
 ///
@@ -56,6 +54,7 @@ use alloc::vec::Vec;
 ///     Ok(())
 /// }
 /// ```
+#[allow(unused_variables)]
 pub trait Indicator<const N: usize = 1> {
     /// Input type for this indicator
     ///
@@ -146,7 +145,7 @@ pub trait Indicator<const N: usize = 1> {
     ///     Ok(outputs)
     /// }
     /// ```
-    fn compute(&self, inputs: &[Self::Input], outputs: &mut [Self::Output]) -> Result<usize>;
+    fn compute(&self, inputs: &[Self::Input], _outputs: &mut [Self::Output]) -> Result<usize>;
 
     /// Convenient batch computation with automatic memory management
     ///
@@ -298,12 +297,16 @@ mod tests {
             self.lookback
         }
 
-        fn compute(&self, _inputs: &[Self::Input], outputs: &mut [Self::Output]) -> Result<usize> {
-            // Simply fill outputs with zeros
-            for out in outputs.iter_mut() {
+        fn compute(
+            &self,
+            _inputs: &[Self::Input],
+            result_buffer: &mut [Self::Output],
+        ) -> Result<usize> {
+            // Simply fill result_buffer with zeros
+            for out in result_buffer.iter_mut() {
                 *out = 0.0;
             }
-            Ok(outputs.len())
+            Ok(result_buffer.len())
         }
 
         fn next(&mut self, _input: Self::Input) -> Option<Self::Output> {
@@ -362,7 +365,7 @@ mod tests {
             fn compute(
                 &self,
                 inputs: &[Self::Input],
-                _outputs: &mut [Self::Output],
+                __outputs: &mut [Self::Output],
             ) -> Result<usize> {
                 Ok(inputs.len())
             }
@@ -402,7 +405,7 @@ mod tests {
             fn compute(
                 &self,
                 inputs: &[Self::Input],
-                outputs: &mut [Self::Output],
+                _outputs: &mut [Self::Output],
             ) -> Result<usize> {
                 Ok(inputs.len())
             }
