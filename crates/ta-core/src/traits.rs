@@ -375,7 +375,7 @@ mod tests {
             }
 
             fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
-                Ok(inputs.iter().copied().collect())
+                Ok(inputs.to_vec())
             }
 
             fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
