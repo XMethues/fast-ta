@@ -1,4 +1,4 @@
 //! ARM64 SIMD implementation
 
-#[cfg(all(target_arch = "aarch64", feature = "std"))]
+#[cfg(target_arch = "aarch64")]
 pub mod neon;

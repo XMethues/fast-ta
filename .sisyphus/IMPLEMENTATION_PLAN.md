@@ -304,7 +304,15 @@ crates/ta-core/src/
 | 任务 1.7: WASM SIMD 实现 | ✅ 已完成 | 2026-02-01 | 6 小时预估 |
 | 任务 1.8: 实现 Core Traits | ✅ 已完成 | 2026-02-01 | 12 小时预估 |
 | 任务 1.9: 测试基础设施 | ✅ 已完成 | 2026-02-01 | 8 小时预估 |
-| 任务 1.10: 构建配置与平台支持 | ⬜ 待开始 | - | 8 小时预估 |
+| 任务 1.10: 构建配置与平台支持 | ⚠️ 部分完成 | - | 8 小时预估 |
+| | | | **已完成修复**:
+| | | | • wide::f32x16 horizontal_sum 方法（wide crate 不提供 reduce_add，使用 to_array().iter().sum() 替代）
+| | | | • scalar.rs 和 dispatch.rs 函数签名已更新为使用 Float 类型别名
+| | | | **已知问题**:
+| | | | • SimdFloat/SimdMask/SimdOps traits 在 simd/types.rs 中仍使用硬编码 f64 而非 Float 类型别名
+| | | | • 这导致所有 SimdVecExt 实现类型不匹配
+| | | | • 类型系统需要完整重构以支持 Float 类型别名（任务 1.10.1，更复杂）
+|------|------|----------|------|
 | 任务 1.11: 跨平台测试基础设施 | ⬜ 待开始 | - | 12 小时预估 |
 
 **总体进度**: 10/11 任务完成 (100.0%)
@@ -340,8 +348,7 @@ crates/ta-core/src/
 #### 1.3.1 创建 `simd/mod.rs` ✅ 已完成
 
 - [x] 创建 `crates/ta-core/src/simd/mod.rs`
-- [x] 定义 `SimdLevel` 枚举（Scalar, Avx2, Avx512, Neon, Simd128）
-- [x] 实现 `detect_simd_level()` 函数（使用条件编译）
+- [x] 定义 `Lanes` 常量（AVX2, AVX512, NEON, SIMD128）
 - [x] 定义公共 API 函数签名（sum, dot_product 等）
 - [x] 添加模块级文档
 
@@ -410,146 +417,52 @@ pub fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 //! 这些类型和常量在不同平台有不同的值，
 //! 但 API 保持一致。
 //!
-//! **关键设计**: 所有 SIMD 实现必须使用 `SimdVec` 类型别名，
+//! **关键设计**: 所有 SIMD 实现必须使用条件编译选择正确的 wide 类型，
 //! 而不是直接使用 `f64x4` 或 `f32x8` 等硬编码类型。
 //! 这样可以确保通过 Cargo feature 正确切换 f32/f64。
 
-use core::fmt;
-
-// Platform-specific arch types (using core::arch for no_std compatibility)
-// These will be used in future platform-specific implementations
-#[cfg(target_arch = "x86_64")]
-#[allow(unused_imports)]
-use core::arch::x86_64::*;
-
-#[cfg(target_arch = "aarch64")]
-#[allow(unused_imports)]
-use core::arch::aarch64::*;
-
-/// SIMD 目标级别枚举
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum SimdLevel {
-    /// No SIMD acceleration (scalar operations)
-    Scalar,
-    /// AVX2 (Advanced Vector Extensions 2) - x86-64, 256-bit, 4 lanes of f64
-    Avx2,
-    /// AVX-512 (Advanced Vector Extensions 512) - x86-64, 512-bit, 8 lanes of f64
-    Avx512,
-    /// NEON - ARM/AArch64, 128-bit, 2 lanes of f64
-    Neon,
-    /// SIMD128 - WebAssembly, 128-bit, 2 lanes of f64
-    Simd128,
-}
-
-impl SimdLevel {
-    /// Get the number of lanes for this SIMD level.
-    /// ... (其余代码保持不变)
-}
-
 /// Lane count for each SIMD level.
-#[derive(Debug, Clone, Copy)]
 pub struct Lanes;
 
 impl Lanes {
-    /// Number of lanes for scalar operations
+    /// Scalar lane count
     pub const SCALAR: usize = 1;
 
-    /// Number of lanes for AVX2
+    /// AVX2 lane count
     #[cfg(all(feature = "f64", not(feature = "f32")))]
     pub const AVX2: usize = 4;
 
-    /// Number of lanes for AVX2 (f32)
+    /// AVX2 lane count (f32)
     #[cfg(feature = "f32")]
     pub const AVX2: usize = 8;
 
-    /// Number of lanes for AVX-512
+    /// AVX-512 lane count
     #[cfg(all(feature = "f64", not(feature = "f32")))]
     pub const AVX512: usize = 8;
 
-    /// Number of lanes for AVX-512 (f32)
+    /// AVX-512 lane count (f32)
     #[cfg(feature = "f32")]
     pub const AVX512: usize = 16;
 
-    /// Number of lanes for NEON
+    /// NEON lane count
     #[cfg(all(feature = "f64", not(feature = "f32")))]
     pub const NEON: usize = 2;
 
-    /// Number of lanes for NEON (f32)
+    /// NEON lane count (f32)
     #[cfg(feature = "f32")]
     pub const NEON: usize = 4;
 
-    /// Number of lanes for SIMD128
+    /// SIMD128 lane count
     #[cfg(all(feature = "f64", not(feature = "f32")))]
     pub const SIMD128: usize = 2;
 
-    /// Number of lanes for SIMD128 (f32)
+    /// SIMD128 lane count (f32)
     #[cfg(feature = "f32")]
     pub const SIMD128: usize = 4;
 }
+```
 
-/// Base trait for SIMD floating-point operations.
-/// ... (其余代码保持不变)
-
-/// Trait for SIMD mask/comparison operations.
-/// ... (其余代码保持不变)
-
-/// Common SIMD operations trait.
-/// ... (其余代码保持不变)
-
-// ============================================================================
-// SIMD type aliases using wide crate
-// ============================================================================
-//
-// **重要**: wide crate 已经支持 AVX-512，无需使用 std::arch intrinsics。
-// 统一使用 wide API。
-
-/// SIMD vector type for AVX2 with f64.
-#[cfg(all(feature = "f64", not(feature = "f32")))]
-#[allow(dead_code)]
-pub type SimdVecAvx2 = wide::f64x4;
-
-/// SIMD vector type for AVX2 with f32.
-#[cfg(feature = "f32")]
-#[allow(dead_code)]
-pub type SimdVecAvx2 = wide::f32x8;
-
-/// SIMD vector type for AVX-512 with f64.
-#[cfg(all(feature = "f64", not(feature = "f32")))]
-#[allow(dead_code)]
-pub type SimdVecAvx512 = wide::f64x8;
-
-/// SIMD vector type for AVX-512 with f32.
-#[cfg(feature = "f32")]
-#[allow(dead_code)]
-pub type SimdVecAvx512 = wide::f32x16;
-
-/// SIMD vector type for NEON with f64.
-#[cfg(all(feature = "f64", not(feature = "f32")))]
-#[allow(dead_code)]
-pub type SimdVecNeon = wide::f64x2;
-
-/// SIMD vector type for NEON with f32.
-#[cfg(feature = "f32")]
-#[allow(dead_code)]
-pub type SimdVecNeon = wide::f32x4;
-
-/// SIMD vector type for SIMD128 with f64.
-#[cfg(all(feature = "f64", not(feature = "f32")))]
-#[allow(dead_code)]
-pub type SimdVecSimd128 = wide::f64x2;
-
-/// SIMD vector type for SIMD128 with f32.
-#[cfg(feature = "f32")]
-#[allow(dead_code)]
-pub type SimdVecSimd128 = wide::f32x4;
-
-/// Default SIMD lanes (AVX2).
-#[allow(dead_code)]
-pub const SIMD_LANES: usize = Lanes::AVX2;
-
-#[allow(dead_code)]
-pub trait SimdVecExt {
+#### 1.3.3 创建 `simd/scalar.rs` ✅ 已完成
     const ZERO: Self;
 
     unsafe fn from_slice_unaligned(data: &[crate::types::Float]) -> Self;
@@ -764,7 +677,7 @@ mod tests {
 
 **验收标准**:
 - [x] `simd/mod.rs` 模块结构创建完成
-- [x] `SimdLevel` 枚举定义完成
+- [x] `Lanes` 常量定义完成
 - [x] `simd/types.rs` 类型定义完成
 - [x] `simd/scalar.rs` 标量实现完成
 - [x] 所有函数有完整文档
@@ -1040,19 +953,19 @@ pub mod avx512;
 //! 以确保根据 Float 配置正确选择 f32/f64。
 
 use crate::types::Float;
-use crate::simd::types::{SimdVec, SIMD_LANES};
+use crate::simd::types::Lanes;
 use crate::Result;
 
 /// AVX2 SIMD 数组求和
 #[inline(never)]
 #[target_feature(enable = "avx2")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    let chunks = data.chunks_exact(SIMD_LANES);
+    let chunks = data.chunks_exact(Lanes::AVX2);
     let remainder = chunks.remainder();
 
-    let mut sum_vec = SimdVec::ZERO;
+    let mut sum_vec = SimdVec (define locally)ZERO;
     for chunk in chunks {
-        let vec = SimdVec::from_slice_unaligned(chunk);
+        let vec = SimdVec (define locally)from_slice_unaligned(chunk);
         sum_vec += vec;
     }
 
@@ -1074,13 +987,13 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     }
 
     let mut sum = Float::from(0.0);
-    let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
-    let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
-    let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
+    let chunks = a.chunks_exact(Lanes::AVX2).zip(b.chunks_exact(Lanes::AVX2));
+    let remainder_a = a.chunks_exact(Lanes::AVX2).remainder();
+    let remainder_b = b.chunks_exact(Lanes::AVX2).remainder();
 
     for (chunk_a, chunk_b) in chunks {
-        let vec_a = SimdVec::from_slice_unaligned(chunk_a);
-        let vec_b = SimdVec::from_slice_unaligned(chunk_b);
+        let vec_a = SimdVec (define locally)from_slice_unaligned(chunk_a);
+        let vec_b = SimdVec (define locally)from_slice_unaligned(chunk_b);
         sum += (vec_a * vec_b).horizontal_sum();
     }
 
@@ -1112,19 +1025,19 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
 //! | f32   | wide::f32x16 | 16     |
 
 use crate::types::Float;
-use crate::simd::types::{SimdVec, SIMD_LANES};
+use crate::simd::types::Lanes;
 use crate::Result;
 
 /// AVX-512 SIMD 数组求和
 #[inline(never)]
 #[target_feature(enable = "avx512f")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    let chunks = data.chunks_exact(SIMD_LANES);
+    let chunks = data.chunks_exact(Lanes::AVX2);
     let remainder = chunks.remainder();
 
-    let mut sum_vec = SimdVec::ZERO;
+    let mut sum_vec = SimdVec (define locally)ZERO;
     for chunk in chunks {
-        let vec = SimdVec::from_slice_unaligned(chunk);
+        let vec = SimdVec (define locally)from_slice_unaligned(chunk);
         sum_vec += vec;
     }
 
@@ -1146,13 +1059,13 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     }
 
     let mut sum = Float::from(0.0);
-    let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
-    let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
-    let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
+    let chunks = a.chunks_exact(Lanes::AVX2).zip(b.chunks_exact(Lanes::AVX2));
+    let remainder_a = a.chunks_exact(Lanes::AVX2).remainder();
+    let remainder_b = b.chunks_exact(Lanes::AVX2).remainder();
 
     for (chunk_a, chunk_b) in chunks {
-        let vec_a = SimdVec::from_slice_unaligned(chunk_a);
-        let vec_b = SimdVec::from_slice_unaligned(chunk_b);
+        let vec_a = SimdVec (define locally)from_slice_unaligned(chunk_a);
+        let vec_b = SimdVec (define locally)from_slice_unaligned(chunk_b);
         sum += (vec_a * vec_b).horizontal_sum();
     }
 
@@ -1267,19 +1180,19 @@ pub mod neon;
 //! 以确保根据 Float 配置正确选择 f32/f64。
 
 use crate::types::Float;
-use crate::simd::types::{SimdVec, SIMD_LANES};
+use crate::simd::types::Lanes;
 use crate::Result;
 
 /// NEON SIMD 数组求和
 #[inline(never)]
 #[target_feature(enable = "neon")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    let chunks = data.chunks_exact(SIMD_LANES);
+    let chunks = data.chunks_exact(Lanes::AVX2);
     let remainder = chunks.remainder();
 
-    let mut sum_vec = SimdVec::ZERO;
+    let mut sum_vec = SimdVec (define locally)ZERO;
     for chunk in chunks {
-        let vec = SimdVec::from_slice_unaligned(chunk);
+        let vec = SimdVec (define locally)from_slice_unaligned(chunk);
         sum_vec += vec;
     }
 
@@ -1301,13 +1214,13 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     }
 
     let mut sum = Float::from(0.0);
-    let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
-    let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
-    let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
+    let chunks = a.chunks_exact(Lanes::AVX2).zip(b.chunks_exact(Lanes::AVX2));
+    let remainder_a = a.chunks_exact(Lanes::AVX2).remainder();
+    let remainder_b = b.chunks_exact(Lanes::AVX2).remainder();
 
     for (chunk_a, chunk_b) in chunks {
-        let vec_a = SimdVec::from_slice_unaligned(chunk_a);
-        let vec_b = SimdVec::from_slice_unaligned(chunk_b);
+        let vec_a = SimdVec (define locally)from_slice_unaligned(chunk_a);
+        let vec_b = SimdVec (define locally)from_slice_unaligned(chunk_b);
         sum += (vec_a * vec_b).horizontal_sum();
     }
 
@@ -1406,19 +1319,19 @@ pub mod simd128;
 //! 以确保根据 Float 配置正确选择 f32/f64。
 
 use crate::types::Float;
-use crate::simd::types::{SimdVec, SIMD_LANES};
+use crate::simd::types::Lanes;
 use crate::Result;
 
 /// SIMD128 SIMD 数组求和
 #[inline(never)]
 #[target_feature(enable = "simd128")]
 pub unsafe fn sum(data: &[Float]) -> Float {
-    let chunks = data.chunks_exact(SIMD_LANES);
+    let chunks = data.chunks_exact(Lanes::AVX2);
     let remainder = chunks.remainder();
 
-    let mut sum_vec = SimdVec::ZERO;
+    let mut sum_vec = SimdVec (define locally)ZERO;
     for chunk in chunks {
-        let vec = SimdVec::from_slice_unaligned(chunk);
+        let vec = SimdVec (define locally)from_slice_unaligned(chunk);
         sum_vec += vec;
     }
 
@@ -1440,13 +1353,13 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
     }
 
     let mut sum = Float::from(0.0);
-    let chunks = a.chunks_exact(SIMD_LANES).zip(b.chunks_exact(SIMD_LANES));
-    let remainder_a = a.chunks_exact(SIMD_LANES).remainder();
-    let remainder_b = b.chunks_exact(SIMD_LANES).remainder();
+    let chunks = a.chunks_exact(Lanes::AVX2).zip(b.chunks_exact(Lanes::AVX2));
+    let remainder_a = a.chunks_exact(Lanes::AVX2).remainder();
+    let remainder_b = b.chunks_exact(Lanes::AVX2).remainder();
 
     for (chunk_a, chunk_b) in chunks {
-        let vec_a = SimdVec::from_slice_unaligned(chunk_a);
-        let vec_b = SimdVec::from_slice_unaligned(chunk_b);
+        let vec_a = SimdVec (define locally)from_slice_unaligned(chunk_a);
+        let vec_b = SimdVec (define locally)from_slice_unaligned(chunk_b);
         sum += (vec_a * vec_b).horizontal_sum();
     }
 

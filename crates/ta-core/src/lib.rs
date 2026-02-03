@@ -14,12 +14,20 @@
 //!
 //! - [`types`]: Floating-point type configuration
 //! - [`error`]: Error types and handling
-
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
+#[cfg(not(feature = "std"))]
 extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
+use alloc::{format, string::String, vec::Vec};
+
+#[cfg(feature = "std")]
+#[allow(unused_imports)]
+use std::{format, string::String, vec::Vec};
 
 pub mod error;
 /// Overlap studies: Moving averages and other price overlay indicators

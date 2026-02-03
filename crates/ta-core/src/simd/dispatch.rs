@@ -21,14 +21,11 @@ use crate::types::Float;
 #[allow(unused_imports)]
 use super::arch::x86_64;
 
-#[cfg(all(target_arch = "x86_64", feature = "std"))]
-use std::println as debug_println;
-
-#[cfg(all(target_arch = "aarch64", feature = "std"))]
+#[cfg(target_arch = "aarch64")]
 #[allow(unused_imports)]
 use super::arch::aarch64;
 
-#[cfg(all(target_arch = "wasm32", feature = "std"))]
+#[cfg(target_arch = "wasm32")]
 #[allow(unused_imports)]
 use super::arch::wasm32;
 
@@ -100,57 +97,57 @@ fn init_dispatch() -> DispatchTable {
         // Runtime feature detection for AVX-512F
         let has_avx512 = { std::is_x86_feature_detected!("avx512f") };
         if has_avx512 {
-            unsafe {
-                return DispatchTable::new(
-                    |data: &[Float]| x86_64::avx512::sum(data),
-                    |a: &[Float], b: &[Float]| match x86_64::avx512::dot_product(a, b) {
+            return DispatchTable::new(
+                |data| unsafe { x86_64::avx512::sum(data) },
+                |a, b| unsafe {
+                    match x86_64::avx512::dot_product(a, b) {
                         Ok(result) => result,
                         Err(e) => panic!("dot_product error: {}", e),
-                    },
-                );
-            }
+                    }
+                },
+            );
         }
         // Runtime feature detection for AVX2
         let has_avx2 = { std::is_x86_feature_detected!("avx2") };
         if has_avx2 {
-            unsafe {
-                return DispatchTable::new(
-                    |data: &[Float]| x86_64::avx2::sum(data),
-                    |a: &[Float], b: &[Float]| match x86_64::avx2::dot_product(a, b) {
+            return DispatchTable::new(
+                |data| unsafe { x86_64::avx2::sum(data) },
+                |a, b| unsafe {
+                    match x86_64::avx2::dot_product(a, b) {
                         Ok(result) => result,
                         Err(e) => panic!("dot_product error: {}", e),
-                    },
-                );
-            }
+                    }
+                },
+            );
         }
     }
 
-    #[cfg(all(target_arch = "aarch64", feature = "std"))]
+    #[cfg(target_arch = "aarch64")]
     {
         // NEON is always available on AArch64
-        unsafe {
-            return DispatchTable::new(
-                |data: &[Float]| aarch64::neon::sum(data),
-                |a: &[Float], b: &[Float]| match aarch64::neon::dot_product(a, b) {
+        return DispatchTable::new(
+            |data| unsafe { aarch64::neon::sum(data) },
+            |a, b| unsafe {
+                match aarch64::neon::dot_product(a, b) {
                     Ok(result) => result,
                     Err(e) => panic!("dot_product error: {}", e),
-                },
-            );
-        }
+                }
+            },
+        );
     }
 
-    #[cfg(all(target_arch = "wasm32", feature = "std"))]
+    #[cfg(target_arch = "wasm32")]
     {
         // SIMD128 is enabled at compile-time
-        unsafe {
-            return DispatchTable::new(
-                |data: &[Float]| wasm32::simd128::sum(data),
-                |a: &[Float], b: &[Float]| match wasm32::simd128::dot_product(a, b) {
+        return DispatchTable::new(
+            |data| unsafe { wasm32::simd128::sum(data) },
+            |a, b| unsafe {
+                match wasm32::simd128::dot_product(a, b) {
                     Ok(result) => result,
                     Err(e) => panic!("dot_product error: {}", e),
-                },
-            );
-        }
+                }
+            },
+        );
     }
 
     // Fall back to scalar implementation
@@ -173,10 +170,6 @@ fn init_dispatch() -> DispatchTable {
 /// A reference to the dispatch table.
 #[inline]
 pub fn get_dispatch() -> &'static DispatchTable {
-    #[cfg(all(target_arch = "x86_64", feature = "std"))]
-    {
-        debug_println!("SIMD DEBUG: get_dispatch called");
-    }
     DISPATCH.get_or_init(init_dispatch)
 }
 
@@ -248,8 +241,6 @@ pub fn dot_product(a: &[Float], b: &[Float]) -> Float {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec;
-    use alloc::vec::Vec;
 
     #[test]
     fn test_dispatch_initialization() {
@@ -277,103 +268,106 @@ mod tests {
 
     #[test]
     fn test_sum_dispatch() {
-        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let data: Vec<Float> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         let result = sum(&data);
-        assert_eq!(result, 15.0);
+        assert!((result - Float::from(15.0)).abs() < Float::from(1e-10));
     }
 
     #[test]
     fn test_sum_empty() {
-        let data: Vec<f64> = vec![];
+        let data: Vec<Float> = vec![];
         let result = sum(&data);
-        assert_eq!(result, 0.0);
+        assert_eq!(result, Float::from(0.0));
     }
 
     #[test]
     fn test_sum_single() {
-        let data = vec![42.0];
+        let data: Vec<Float> = vec![Float::from(42.0)];
         let result = sum(&data);
-        assert_eq!(result, 42.0);
+        assert_eq!(result, Float::from(42.0));
     }
 
     #[test]
     fn test_sum_with_negatives() {
-        let data = vec![1.0, -2.0, 3.0, -4.0, 5.0];
+        let data: Vec<Float> = vec![1.0, -2.0, 3.0, -4.0, 5.0];
         let result = sum(&data);
-        assert_eq!(result, 3.0);
+        assert!((result - Float::from(3.0)).abs() < Float::from(1e-10));
     }
 
     #[test]
     fn test_dot_product_dispatch() {
-        let a = vec![1.0, 2.0, 3.0];
-        let b = vec![4.0, 5.0, 6.0];
+        let a: Vec<Float> = vec![1.0, 2.0, 3.0];
+        let b: Vec<Float> = vec![4.0, 5.0, 6.0];
         let result = dot_product(&a, &b);
         // (1*4) + (2*5) + (3*6) = 4 + 10 + 18 = 32
-        assert_eq!(result, 32.0);
+        assert!((result - Float::from(32.0)).abs() < Float::from(1e-10));
     }
 
     #[test]
     fn test_dot_product_empty() {
-        let a: Vec<f64> = vec![];
-        let b: Vec<f64> = vec![];
+        let a: Vec<Float> = vec![];
+        let b: Vec<Float> = vec![];
         let result = dot_product(&a, &b);
-        assert_eq!(result, 0.0);
+        assert_eq!(result, Float::from(0.0));
     }
 
     #[test]
     fn test_dot_product_single() {
-        let a = vec![5.0];
-        let b = vec![3.0];
+        let a: Vec<Float> = vec![Float::from(5.0)];
+        let b: Vec<Float> = vec![Float::from(3.0)];
         let result = dot_product(&a, &b);
-        assert_eq!(result, 15.0);
+        assert_eq!(result, Float::from(15.0));
     }
 
     #[test]
     fn test_dot_product_with_negatives() {
-        let a = vec![1.0, -2.0, 3.0];
-        let b = vec![4.0, 5.0, -6.0];
+        let a: Vec<Float> = vec![1.0, -2.0, 3.0];
+        let b: Vec<Float> = vec![4.0, 5.0, -6.0];
         let result = dot_product(&a, &b);
         // (1*4) + (-2*5) + (3*-6) = 4 - 10 - 18 = -24
-        assert_eq!(result, -24.0);
+        assert!((result - Float::from(-24.0)).abs() < Float::from(1e-10));
     }
 
     #[test]
     #[should_panic(expected = "equal length")]
     fn test_dot_product_unequal_lengths() {
-        let a = vec![1.0, 2.0];
-        let b = vec![3.0];
+        let a: Vec<Float> = vec![Float::from(1.0), Float::from(2.0)];
+        let b: Vec<Float> = vec![Float::from(3.0)];
         dot_product(&a, &b);
     }
 
     #[test]
     fn test_dispatch_table_scalar() {
         let table = DispatchTable::scalar();
-        assert_eq!((table.sum)(&[1.0, 2.0, 3.0]), 6.0);
-        assert_eq!((table.dot_product)(&[1.0, 2.0], &[3.0, 4.0]), 11.0);
+        let sum_result = (table.sum)(&[1.0 as Float, 2.0 as Float, 3.0 as Float]);
+        assert!((sum_result - 6.0 as Float).abs() < Float::from(1e-10));
+        let dot_result =
+            (table.dot_product)(&[1.0 as Float, 2.0 as Float], &[3.0 as Float, 4.0 as Float]);
+        assert!((dot_result - 11.0 as Float).abs() < Float::from(1e-10));
     }
 
     #[test]
     fn test_dispatch_table_new() {
         let table = DispatchTable::new(
-            |data: &[f64]| data.iter().sum(),
-            |a: &[f64], b: &[f64]| a.iter().zip(b.iter()).map(|(x, y)| x * y).sum(),
+            |data: &[Float]| data.iter().copied().sum(),
+            |a: &[Float], b: &[Float]| a.iter().zip(b.iter()).map(|(x, y)| x * y).sum(),
         );
-        assert_eq!((table.sum)(&[1.0, 2.0, 3.0]), 6.0);
-        assert_eq!((table.dot_product)(&[1.0, 2.0], &[3.0, 4.0]), 11.0);
+        let sum_result = (table.sum)(&[1.0 as Float, 2.0 as Float, 3.0 as Float]);
+        assert!((sum_result - 6.0 as Float).abs() < Float::from(1e-10));
+        let dot_result =
+            (table.dot_product)(&[1.0 as Float, 2.0 as Float], &[3.0 as Float, 4.0 as Float]);
+        assert!((dot_result - 11.0 as Float).abs() < Float::from(1e-10));
     }
 }
 
 #[cfg(all(test, feature = "std"))]
 mod benchmarks {
     use super::*;
-    use alloc::vec;
-    extern crate std;
-
     #[test]
     fn benchmark_dispatch_overhead() {
         let _ = get_dispatch();
 
-        let data = vec![1.0_f64; 1000];
+        let data: Vec<Float> = vec![Float::from(1.0); 1000];
         let _ = sum(&data);
 
         let iterations = 100_000;

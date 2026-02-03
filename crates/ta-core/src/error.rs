@@ -4,12 +4,6 @@
 //! that can occur in the TA library operations. The error type implements the
 //! standard `Error` trait for proper error handling and propagation.
 
-use alloc::format;
-use alloc::string::String;
-
-#[cfg(feature = "std")]
-extern crate std;
-
 /// Error type for TA library operations
 ///
 /// All operations in the TA library that can fail will return a `Result<T, TalibError>`.
@@ -283,9 +277,6 @@ pub type Result<T> = core::result::Result<T, TalibError>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::string::ToString;
-    use alloc::vec;
-    use alloc::vec::Vec;
 
     #[test]
     fn test_invalid_input_creation() {

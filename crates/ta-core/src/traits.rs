@@ -5,8 +5,6 @@
 //! high performance through zero-copy operations.
 
 use crate::error::Result;
-use alloc::vec::Vec;
-
 /// Unified trait for technical analysis indicators
 ///
 /// This trait provides a unified interface that supports three usage modes:
@@ -279,8 +277,6 @@ pub trait Resettable {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
-
     use super::*;
     use crate::Float;
 
