@@ -23,10 +23,24 @@
 //! - For very small arrays, scalar operations may be faster due to SIMD overhead
 //! - Use the `dispatch` module for runtime-dispatched operations (recommended)
 //! - Direct platform-specific modules are available via `arch` submodule
+use crate::Float;
+use wide;
 pub mod scalar;
-mod types;
 // Include arch module for all platforms with std support
 #[cfg(feature = "std")]
 mod arch;
+#[cfg(not(feature = "std"))]
+use core::mem;
+#[cfg(feature = "std")]
+use std::mem;
+
 pub mod dispatch;
-pub use types::Lanes;
+
+#[cfg(feature = "f32")]
+/// wide f32 Float
+pub type FastFloat = wide::f32x16;
+#[cfg(not(feature = "f32"))]
+/// wide f64 Float
+pub type FastFloat = wide::f64x8;
+/// Number of lanes in a SIMD vector
+pub const LANES: usize = mem::size_of::<FastFloat>() / mem::size_of::<Float>();

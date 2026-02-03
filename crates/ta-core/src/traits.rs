@@ -143,7 +143,7 @@ pub trait Indicator<const N: usize = 1> {
     ///     Ok(outputs)
     /// }
     /// ```
-    fn compute(&self, inputs: &[Self::Input], _outputs: &mut [Self::Output]) -> Result<usize>;
+    fn compute(&self, inputs: &[Self::Input], outputs: &mut [Self::Output]);
 
     /// Convenient batch computation with automatic memory management
     ///
@@ -293,16 +293,11 @@ mod tests {
             self.lookback
         }
 
-        fn compute(
-            &self,
-            _inputs: &[Self::Input],
-            result_buffer: &mut [Self::Output],
-        ) -> Result<usize> {
+        fn compute(&self, _inputs: &[Self::Input], result_buffer: &mut [Self::Output]) {
             // Simply fill result_buffer with zeros
             for out in result_buffer.iter_mut() {
                 *out = 0.0;
             }
-            Ok(result_buffer.len())
         }
 
         fn next(&mut self, _input: Self::Input) -> Option<Self::Output> {
@@ -316,7 +311,7 @@ mod tests {
             }
 
             let mut outputs = Vec::with_capacity(inputs.len() - lookback);
-            self.compute(inputs, &mut outputs)?;
+            self.compute(inputs, &mut outputs);
             Ok(outputs)
         }
 
@@ -358,13 +353,7 @@ mod tests {
                 0
             }
 
-            fn compute(
-                &self,
-                inputs: &[Self::Input],
-                __outputs: &mut [Self::Output],
-            ) -> Result<usize> {
-                Ok(inputs.len())
-            }
+            fn compute(&self, _inputs: &[Self::Input], _outputs: &mut [Self::Output]) {}
 
             fn next(&mut self, input: Self::Input) -> Option<Self::Output> {
                 Some(input)
@@ -398,13 +387,7 @@ mod tests {
                 0
             }
 
-            fn compute(
-                &self,
-                inputs: &[Self::Input],
-                _outputs: &mut [Self::Output],
-            ) -> Result<usize> {
-                Ok(inputs.len())
-            }
+            fn compute(&self, _inputs: &[Self::Input], _outputs: &mut [Self::Output]) {}
 
             fn next(&mut self, input: Self::Input) -> Option<Self::Output> {
                 self.sum += input;
