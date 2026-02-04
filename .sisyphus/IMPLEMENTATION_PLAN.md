@@ -1433,9 +1433,15 @@ wasm-bindgen-test = "0.3"
 
 - [x] 检查并确认 `Indicator` trait 定义（保持现有设计）
 - [x] 检查并确认 `Resettable` trait 定义
-- [x] 检查并确认 `SimdCompute` trait 定义
-- [x] 更新文档说明 trait 与 SIMD 的集成方式
-- [x] 更新 SMA 实现文档（包含 SIMD 使用说明）
+ - [x] 检查并确认 `SimdCompute` trait 定义
+        - [x] 检查并确认 `Resettable` trait 定义
+        - [x] 更新文档说明 trait 与 SIMD 的集成方式
+        - [x] **添加 NaN 值语义说明**
+        - [x] 添加模块级文档，明确 `Float::NAN` 在三种不同上下文中的含义
+        - [x] 添加 NaN 值语义说明
+        - [x] 更新文档说明 compute 方法中的 SIMD 使用（period <= 4）
+        - [x] 更新 SMA 实现文档（包含 SIMD 使用说明）
+        - [x] 更新 SMA 实现文档（包含 SIMD 使用说明）
 
 #### 1.8.2 更新 SMA 实现
 

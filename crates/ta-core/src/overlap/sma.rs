@@ -128,9 +128,17 @@ impl Indicator for SMA {
         result
     }
 
-    fn stream(&mut self, _inputs: &[Self::Input]) -> Vec<Option<Self::Output>> {
+    fn stream(&mut self, _inputs: &[Self::Input]) -> Vec<Self::Output> {
         // For streaming computation, we would need to maintain internal state
         // This is a simplified implementation that returns empty vector
         Vec::new()
+    }
+
+    fn compute(
+        &self,
+        _inputs: &[Self::Input],
+        _outputs: &mut [Self::Output],
+    ) -> crate::Result<usize> {
+        todo!()
     }
 }

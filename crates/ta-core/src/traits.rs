@@ -218,20 +218,65 @@ pub trait Indicator<const N: usize = 1> {
     /// - `stream()`: Batch processing, `Option<Float>` for clear semantics
     fn next(&mut self, input: Self::Input) -> Self::Output;
     ///
-    /// This is a convenience method that processes a slice of inputs using `next`,
-    /// returning `Vec<Option<Output>>` where each element corresponds to the result
-    /// of processing that input.
+    /// Zero-copy batch computation with maximum performance
+    ///
+    /// This method writes results directly to a pre-allocated output buffer,
+    /// avoiding any heap allocation. This is the highest-performance method
+    /// for batch computation.
+    ///
+    /// # NaN Handling
+    ///
+    /// Output array uses `Float::NAN` for warm-up phase (first `lookback()` elements).
+    /// The remaining elements contain valid indicator values.
+    ///
+    /// # Performance
+    ///
+    /// - **Zero allocation**: User provides output buffer
+    /// - **SIMD-accelerated**: Implementations MUST use wide crate SIMD operations
+    /// - **Ideal for**: Hot paths, real-time systems, high-frequency trading
+    ///
+    /// # Arguments
+    ///
+    /// * `inputs` - Input data slice
+    /// * `outputs` - Pre-allocated output buffer (must have capacity ≥ inputs.len())
+    ///
+    /// # Returns
+    ///
+    /// Number of valid values written to outputs (excluding warm-up NaN placeholders)
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let mut sma = Sma::new(20)?;
+    /// let prices = &[1.0, 2.0, 3.0, 4.0, 5.0];
+    /// let mut outputs = vec![0.0; prices.len()];
+    ///
+    /// let count = sma.compute(prices, &mut outputs)?;
+    /// assert_eq!(count, prices.len() - sma.lookback());
+    ///
+    /// // First lookback() elements are NaN
+    /// assert!(outputs[0..sma.lookback()].iter().all(|x| x.is_nan()));
+    ///
+    /// // Remaining elements are valid
+    /// assert!(!outputs[sma.lookback()..].iter().any(|x| x.is_nan()));
+    /// ```
+    fn compute(&self, inputs: &[Self::Input], outputs: &mut [Self::Output]) -> Result<usize>;
+
+    /// Batch streaming computation using next() semantics
+    ///
+    /// This method processes a slice of inputs using `next()`, returning
+    /// a vector where warm-up elements contain `Float::NAN`.
     ///
     /// # Returns
     ///
     /// A vector where each element is:
-    /// - `Some(output)` - Valid output for that input
-    /// - `None` - Insufficient data at that point (warm-up phase)
+    /// - `Float::NAN`: Insufficient data at that point (warm-up phase)
+    /// - Valid `Output`: Computed indicator value
     ///
     /// # NaN Handling
     ///
-    /// Unlike `next()` which returns `Float::NAN` for warm-up, this method
-    /// uses `Option<Float>` where `None` indicates warm-up phase.
+    /// This method uses `Float::NAN` for warm-up, maintaining consistency
+    /// with `next()` and `compute_to_vec()`. Use `is_nan()` to filter:
     ///
     /// # Example
     ///
@@ -239,14 +284,14 @@ pub trait Indicator<const N: usize = 1> {
     /// let mut sma = Sma::new(3)?;
     /// let prices = &[1.0, 2.0, 3.0, 4.0, 5.0];
     ///
-    /// let results: Vec<_> = sma.stream(prices);
-    /// // results: [None, None, Some(2.0), Some(3.0), Some(4.0)]
+    /// let results = sma.stream(prices);
+    /// // results: [nan, nan, 2.0, 3.0, 4.0]
     ///
     /// // Filter only valid results
-    /// let valid: Vec<_> = results.into_iter().filter_map(|x| x).collect();
+    /// let valid: Vec<_> = results.into_iter().filter(|x| !x.is_nan()).collect();
     /// // valid: [2.0, 3.0, 4.0]
     /// ```
-    fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Option<Self::Output>>;
+    fn stream(&mut self, inputs: &[Self::Input]) -> Vec<Self::Output>;
 }
 
 /// Trait for indicators that can reset their internal state
