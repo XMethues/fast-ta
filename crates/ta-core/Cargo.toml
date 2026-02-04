@@ -20,6 +20,7 @@ core_error = []
 [dependencies]
 wide = { workspace = true, features = ["std"] }
 once_cell = { version = "1.21", default-features = false, optional = true }
+aligned-vec = "0.6.4"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
