@@ -72,7 +72,6 @@ use crate::error::Result;
 ///     Ok(())
 /// }
 /// ```
-
 #[allow(unused_variables)]
 pub trait Indicator<const N: usize = 1> {
     /// Input type for this indicator
