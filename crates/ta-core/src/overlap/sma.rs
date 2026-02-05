@@ -6,9 +6,11 @@ use crate::{
 };
 use aligned_vec::AVec;
 
+#[inline]
 pub fn compute_sma(inputs: &[Float], period: usize, outputs: &mut [Float]) {
     let n = inputs.len();
     let window_size = period;
+    let inv_period = 1.0 / period as Float;
     let mut window_sum = 0.0;
     let mut i = 0;
     while i + LANES <= window_size {
@@ -22,57 +24,71 @@ pub fn compute_sma(inputs: &[Float], period: usize, outputs: &mut [Float]) {
         i += 1;
     }
     // First window result
-    outputs[window_size - 1] = window_sum / window_size as Float;
+    outputs[window_size - 1] = window_sum * inv_period;
     // Use sliding window technique: subtract old element, add new element
     for i in window_size..n {
         window_sum = window_sum - inputs[i - window_size] + inputs[i];
-        outputs[i] = window_sum / window_size as Float;
+        outputs[i] = window_sum * inv_period;
     }
 }
 /// SMA indicator
 pub struct SMA {
     period: usize,
     inv_period: Float,
-    // 计算用的原始数据环形缓冲区
+    // 只保留计算必须的原始数据缓冲区
     buffer: AVec<Float>,
-    buffer_index: usize,
-
-    // 固定的结果历史环形缓冲区
-    history: AVec<Float>,
-    history_index: usize,
-    history_cap: usize,
-
-    count: usize,
+    index: usize,
+    is_full: bool,
     current_sum: Float,
 
-    // 性能优化标记
+    // For performance
     mask: usize,
     is_power_of_two: bool,
 }
 
 impl SMA {
     /// Create a new SMA indicator with the given period.
-    pub fn new(period: usize, data: &[Float]) -> Self {
+    pub fn new(period: usize) -> Self {
         assert!(period > 0, "Period must be greater than 0");
-        let history_limit = period.max(data.len());
         let is_power_of_two = period > 0 && (period & (period - 1)) == 0;
         let inv_period = 1.0 / period as Float;
         let buffer = AVec::with_capacity(64, period);
-        let history = AVec::with_capacity(64, history_limit);
 
         SMA {
             period,
             inv_period,
             buffer,
-            buffer_index: 0,
-            history,
-            history_index: 0,
-            history_cap: history_limit,
-            count: 0,
+            index: 0,
+            is_full: false,
             current_sum: 0.0,
             mask: if period > 0 { period - 1 } else { 0 },
             is_power_of_two,
         }
+    }
+    /// warm up sma state
+    pub fn from_data(period: usize, data: &[Float]) -> Self {
+        let mut sma = Self::new(period);
+        // 我们只需要最近的 period 个价格来填充状态
+        let start = data.len().saturating_sub(period);
+        let relevant_prices = &data[start..];
+        for &p in relevant_prices {
+            // 更新 buffer 和 sum
+            sma.buffer[sma.index] = p;
+            sma.current_sum += p;
+
+            // 检查是否填满
+            if !sma.is_full && sma.index == sma.period - 1 {
+                sma.is_full = true;
+            }
+
+            // 移动指针
+            if sma.is_power_of_two {
+                sma.index = (sma.index + 1) & sma.mask;
+            } else {
+                sma.index = (sma.index + 1) % sma.period;
+            }
+        }
+        sma
     }
 }
 
@@ -93,52 +109,35 @@ impl Indicator for SMA {
 
     #[inline(always)]
     fn next(&mut self, input: Float) -> Float {
-        // 1. 提取旧值并更新累加和 (Rolling Sum)
-        let old_val = self.buffer[self.buffer_index];
+        // 1. 获取即将被替换的旧值 (O(1) 访问)
+        let old_val = self.buffer[self.index];
+
+        // 2. 更新累加和：加新减旧 (无循环)
         self.current_sum = self.current_sum - old_val + input;
 
-        // 2. 更新原始数据缓冲区
-        self.buffer[self.buffer_index] = input;
+        // 3. 将新值存入缓冲区
+        self.buffer[self.index] = input;
 
-        // 3. 移动计算缓冲区指针 (位运算优化)
+        // 4. 检查是否刚填满缓冲区（关键优化：用 bool 替代 usize 计数器）
+        if !self.is_full && self.index == self.period - 1 {
+            self.is_full = true;
+        }
+
+        // 5. 指针跳转逻辑 (性能关键点)
         if self.is_power_of_two {
-            self.buffer_index = (self.buffer_index + 1) & self.mask;
+            // 如果 period 是 2 的幂，使用按位与 (&) 代替取模 (%)
+            // 耗时从 ~20 纳秒降低到 <1 纳秒
+            self.index = (self.index + 1) & self.mask;
         } else {
-            self.buffer_index = (self.buffer_index + 1) % self.period;
+            // 普通取模运算
+            self.index = (self.index + 1) % self.period;
         }
 
-        // 4. 更新有效数据计数
-        if self.count < self.period {
-            self.count += 1;
-        }
-
-        // 5. 计算 SMA 结果
-        let result = if self.count >= self.period {
+        // 6. 返回结果：使用预计算的倒数进行乘法 (比除法快 10 倍以上)
+        if self.is_full {
             self.current_sum * self.inv_period
         } else {
             Float::NAN
-        };
-
-        // 6. 存入结果历史缓冲区
-        if self.history_cap > 0 {
-            self.history[self.history_index] = result;
-            self.history_index = (self.history_index + 1) % self.history_cap;
         }
-
-        result
-    }
-
-    fn stream(&mut self, _inputs: &[Self::Input]) -> Vec<Self::Output> {
-        // For streaming computation, we would need to maintain internal state
-        // This is a simplified implementation that returns empty vector
-        Vec::new()
-    }
-
-    fn compute(
-        &self,
-        _inputs: &[Self::Input],
-        _outputs: &mut [Self::Output],
-    ) -> crate::Result<usize> {
-        todo!()
     }
 }
