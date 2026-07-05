@@ -1,6 +1,5 @@
-//! Contains various technical indicators.
-//! This module groups together different indicator implementations like SMA, EMA, etc.
+//! Overlap Studies: moving averages and other price overlay indicators.
 
 mod sma;
 
-pub use sma::SMA;
+pub use sma::{SMA_vec, SMA};

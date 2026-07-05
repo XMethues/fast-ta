@@ -1,143 +1,177 @@
-//! Implementation of the Simple Moving Average (SMA) indicator.
+//! Simple Moving Average (SMA).
+//!
+//! This module exposes both the TA-Lib-style zero-copy function [`SMA`] and the
+//! stateful [`SMA`] struct. The free function writes compact valid outputs and
+//! returns an [`OutputRange`](crate::OutputRange); [`SMA_vec`] returns a
+//! full-length padded vector for convenience.
 
 use crate::{
-    simd::{FastFloat, LANES},
-    Float, Indicator,
+    compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
+    validate_input_len, validate_output_len, Float, Indicator, OutputRange, Resettable, Result,
+    TalibError,
 };
-use aligned_vec::AVec;
 
-#[inline]
-pub fn compute_sma(inputs: &[Float], period: usize, outputs: &mut [Float]) {
-    let n = inputs.len();
-    let window_size = period;
-    let inv_period = 1.0 / period as Float;
-    let mut window_sum = 0.0;
-    let mut i = 0;
-    while i + LANES <= window_size {
-        let slice = &inputs[i..i + LANES];
-        let chunk = FastFloat::from(slice);
-        window_sum += chunk.reduce_add();
-        i += LANES;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
+/// TA-Lib-style Simple Moving Average batch function.
+///
+/// Valid outputs are written compactly starting at `out_real[0]`. The returned
+/// range maps those compact values back to their original input positions.
+#[allow(non_snake_case)]
+pub fn SMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
+    let lookback = period_lookback("timeperiod", timeperiod)?;
+    validate_finite_slice("real", real)?;
+    let count = validate_input_len(real.len(), lookback)?;
+    validate_output_len("SMA", out_real.len(), count)?;
+
+    if count == 0 {
+        return Ok(OutputRange::empty());
     }
-    while i < window_size {
-        window_sum += inputs[i];
-        i += 1;
+
+    let inv_period = 1.0 as Float / timeperiod as Float;
+    let mut window_sum: Float = real[..timeperiod].iter().copied().sum();
+    out_real[0] = window_sum * inv_period;
+
+    for output_idx in 1..count {
+        let new_idx = output_idx + timeperiod - 1;
+        let old_idx = output_idx - 1;
+        window_sum += real[new_idx] - real[old_idx];
+        out_real[output_idx] = window_sum * inv_period;
     }
-    // First window result
-    outputs[window_size - 1] = window_sum * inv_period;
-    // Use sliding window technique: subtract old element, add new element
-    for i in window_size..n {
-        window_sum = window_sum - inputs[i - window_size] + inputs[i];
-        outputs[i] = window_sum * inv_period;
-    }
+
+    Ok(OutputRange::new(lookback, count))
 }
-/// SMA indicator
+
+/// Computes SMA into a full-length vector padded with `Float::NAN` before the lookback.
+#[allow(non_snake_case)]
+pub fn SMA_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
+    let mut compact = compact_buffer::<Float>(real.len());
+    let range = SMA(real, timeperiod, &mut compact)?;
+    Ok(padded_from_compact(
+        real.len(),
+        range,
+        &compact[..range.nb_element],
+    ))
+}
+
+/// Simple Moving Average indicator.
+#[derive(Debug, Clone)]
 pub struct SMA {
     period: usize,
     inv_period: Float,
-    // 只保留计算必须的原始数据缓冲区
-    buffer: AVec<Float>,
+    buffer: Vec<Float>,
     index: usize,
-    is_full: bool,
-    current_sum: Float,
-
-    // For performance
-    mask: usize,
-    is_power_of_two: bool,
+    count: usize,
+    sum: Float,
 }
 
 impl SMA {
-    /// Create a new SMA indicator with the given period.
-    pub fn new(period: usize) -> Self {
-        assert!(period > 0, "Period must be greater than 0");
-        let is_power_of_two = period > 0 && (period & (period - 1)) == 0;
-        let inv_period = 1.0 / period as Float;
-        let buffer = AVec::with_capacity(64, period);
+    /// Creates a new SMA indicator.
+    pub fn new(timeperiod: usize) -> Result<Self> {
+        period_lookback("timeperiod", timeperiod)?;
+        let mut buffer = Vec::new();
+        buffer.resize(timeperiod, 0.0 as Float);
 
-        SMA {
-            period,
-            inv_period,
+        Ok(Self {
+            period: timeperiod,
+            inv_period: 1.0 as Float / timeperiod as Float,
             buffer,
             index: 0,
-            is_full: false,
-            current_sum: 0.0,
-            mask: if period > 0 { period - 1 } else { 0 },
-            is_power_of_two,
-        }
+            count: 0,
+            sum: 0.0 as Float,
+        })
     }
-    /// warm up sma state
-    pub fn from_data(period: usize, data: &[Float]) -> Self {
-        let mut sma = Self::new(period);
-        // 我们只需要最近的 period 个价格来填充状态
-        let start = data.len().saturating_sub(period);
-        let relevant_prices = &data[start..];
-        for &p in relevant_prices {
-            // 更新 buffer 和 sum
-            sma.buffer[sma.index] = p;
-            sma.current_sum += p;
 
-            // 检查是否填满
-            if !sma.is_full && sma.index == sma.period - 1 {
-                sma.is_full = true;
-            }
-
-            // 移动指针
-            if sma.is_power_of_two {
-                sma.index = (sma.index + 1) & sma.mask;
-            } else {
-                sma.index = (sma.index + 1) % sma.period;
-            }
+    /// Creates a new SMA indicator seeded from the most recent `timeperiod` values.
+    pub fn from_data(timeperiod: usize, real: &[Float]) -> Result<Self> {
+        validate_finite_slice("real", real)?;
+        let mut sma = Self::new(timeperiod)?;
+        let start = real.len().saturating_sub(timeperiod);
+        for &value in &real[start..] {
+            sma.next(value);
         }
-        sma
+        Ok(sma)
+    }
+
+    /// Returns the configured period.
+    #[inline]
+    pub const fn period(&self) -> usize {
+        self.period
+    }
+
+    /// Computes compact SMA outputs using this indicator's period.
+    #[inline]
+    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
+        SMA(real, self.period, out_real)
+    }
+
+    /// Computes full-length padded SMA outputs using this indicator's period.
+    #[inline]
+    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
+        SMA_vec(real, self.period)
+    }
+
+    /// Checked streaming update that rejects non-finite inputs.
+    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
+        if !input.is_finite() {
+            return Err(TalibError::invalid_input("SMA input must be finite"));
+        }
+        Ok(self.next(input))
     }
 }
 
 impl Indicator for SMA {
     type Input = Float;
-
     type Output = Float;
 
+    #[inline]
     fn lookback(&self) -> usize {
-        self.period.saturating_sub(1)
+        self.period - 1
     }
 
-    fn compute_to_vec(&self, inputs: &[Self::Input]) -> crate::Result<Vec<Self::Output>> {
-        let mut result = vec![Float::NAN; inputs.len()];
-        compute_sma(inputs, self.period, &mut result);
-        Ok(result)
+    #[inline]
+    fn compute(&self, inputs: &[Self::Input], outputs: &mut [Self::Output]) -> Result<OutputRange> {
+        SMA(inputs, self.period, outputs)
     }
 
-    #[inline(always)]
+    #[inline]
+    fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
+        SMA_vec(inputs, self.period)
+    }
+
+    #[inline]
     fn next(&mut self, input: Float) -> Float {
-        // 1. 获取即将被替换的旧值 (O(1) 访问)
-        let old_val = self.buffer[self.index];
-
-        // 2. 更新累加和：加新减旧 (无循环)
-        self.current_sum = self.current_sum - old_val + input;
-
-        // 3. 将新值存入缓冲区
-        self.buffer[self.index] = input;
-
-        // 4. 检查是否刚填满缓冲区（关键优化：用 bool 替代 usize 计数器）
-        if !self.is_full && self.index == self.period - 1 {
-            self.is_full = true;
-        }
-
-        // 5. 指针跳转逻辑 (性能关键点)
-        if self.is_power_of_two {
-            // 如果 period 是 2 的幂，使用按位与 (&) 代替取模 (%)
-            // 耗时从 ~20 纳秒降低到 <1 纳秒
-            self.index = (self.index + 1) & self.mask;
-        } else {
-            // 普通取模运算
+        if self.count < self.period {
+            self.buffer[self.index] = input;
+            self.sum += input;
+            self.count += 1;
             self.index = (self.index + 1) % self.period;
+
+            if self.count < self.period {
+                return Float::NAN;
+            }
+
+            return self.sum * self.inv_period;
         }
 
-        // 6. 返回结果：使用预计算的倒数进行乘法 (比除法快 10 倍以上)
-        if self.is_full {
-            self.current_sum * self.inv_period
-        } else {
-            Float::NAN
+        let old = self.buffer[self.index];
+        self.buffer[self.index] = input;
+        self.sum += input - old;
+        self.index = (self.index + 1) % self.period;
+        self.sum * self.inv_period
+    }
+}
+
+impl Resettable for SMA {
+    fn reset(&mut self) {
+        for value in &mut self.buffer {
+            *value = 0.0 as Float;
         }
+        self.index = 0;
+        self.count = 0;
+        self.sum = 0.0 as Float;
     }
 }

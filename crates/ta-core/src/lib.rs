@@ -29,13 +29,27 @@ use alloc::{format, string::String, vec::Vec};
 #[allow(unused_imports)]
 use std::{format, string::String, vec::Vec};
 
+pub mod common;
 pub mod error;
-/// Overlap studies: Moving averages and other price overlay indicators
+/// Official TA-Lib function inventory and implementation status.
+pub mod inventory;
+/// Math Operators functions.
+pub mod math_operators;
+/// Math Transform functions.
+pub mod math_transform;
+/// Overlap studies: Moving averages and other price overlay indicators.
 pub mod overlap;
+/// Price Transform functions.
+pub mod price_transform;
 pub mod simd;
 pub mod traits;
 pub mod types;
 
+pub use common::{
+    compact_buffer, copy_compact_to_padded, output_count, padded_from_compact, period_lookback,
+    validate_all_same_len, validate_finite_slice, validate_finite_slices, validate_input_len,
+    validate_output_len, validate_period, validate_same_len, OutputRange, PadValue,
+};
 pub use error::{Result, TalibError};
 pub use traits::{Indicator, Resettable};
 pub use types::Float;
