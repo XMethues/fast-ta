@@ -61,6 +61,7 @@ impl DispatchTable {
 
     /// Create a scalar dispatch table (no SIMD acceleration).
     #[inline]
+    #[allow(dead_code)]
     const fn scalar() -> Self {
         Self {
             sum: scalar::sum,
@@ -151,6 +152,7 @@ fn init_dispatch() -> DispatchTable {
     }
 
     // Fall back to scalar implementation
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "wasm32")))]
     DispatchTable::scalar()
 }
 
@@ -190,11 +192,11 @@ pub fn get_dispatch() -> &'static DispatchTable {
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::simd::dispatch;
+/// use ta_core::{simd::dispatch, Float};
 ///
-/// let data = vec![1.0_f64, 2.0, 3.0];
+/// let data: Vec<Float> = vec![1.0 as Float, 2.0 as Float, 3.0 as Float];
 /// let result = dispatch::sum(&data);
-/// assert_eq!(result, 6.0);
+/// assert_eq!(result, 6.0 as Float);
 /// ```
 #[inline]
 pub fn sum(data: &[Float]) -> Float {
@@ -224,13 +226,13 @@ pub fn sum(data: &[Float]) -> Float {
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::simd::dispatch;
+/// use ta_core::{simd::dispatch, Float};
 ///
-/// let a = vec![1.0_f64, 2.0, 3.0];
-/// let b = vec![4.0_f64, 5.0, 6.0];
+/// let a: Vec<Float> = vec![1.0 as Float, 2.0 as Float, 3.0 as Float];
+/// let b: Vec<Float> = vec![4.0 as Float, 5.0 as Float, 6.0 as Float];
 /// let result = dispatch::dot_product(&a, &b);
 /// // (1*4) + (2*5) + (3*6) = 32
-/// assert_eq!(result, 32.0);
+/// assert_eq!(result, 32.0 as Float);
 /// ```
 #[inline]
 pub fn dot_product(a: &[Float], b: &[Float]) -> Float {

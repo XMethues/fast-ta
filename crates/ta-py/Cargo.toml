@@ -2,7 +2,7 @@
 name = "ta-py"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.78"
+rust-version = "1.89"
 authors = ["TA-Lib Rust Contributors"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/yourusername/rs-indicators"
@@ -13,11 +13,15 @@ categories = ["api-bindings", "wasm"]
 [lib]
 name = "ta_py"
 crate-type = ["cdylib"]
+test = false
 
 [dependencies]
 ta-core = { path = "../ta-core" }
-pyo3 = { version = "0.22", features = ["extension-module"] }
-numpy = "0.22"
+pyo3 = { version = "0.29.0", features = ["extension-module"] }
+numpy = "0.29.0"
+
+[build-dependencies]
+pyo3-build-config = "0.29.0"
 
 [package.metadata.maturin]
 name = "ta_py"

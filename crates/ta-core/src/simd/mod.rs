@@ -10,11 +10,11 @@
 //! dispatched to the best available implementation at runtime (x86_64) or compile-time.
 //!
 //! ```rust
-//! use ta_core::simd;
+//! use ta_core::{simd, Float};
 //!
-//! let data = vec![1.0_f64, 2.0, 3.0, 4.0];
+//! let data: Vec<Float> = vec![1.0 as Float, 2.0 as Float, 3.0 as Float, 4.0 as Float];
 //! let result = simd::sum(&data);  // Auto-dispatched to AVX2/AVX-512/NEON/SIMD128/Scalar
-//! assert_eq!(result, 10.0);
+//! assert_eq!(result, 10.0 as Float);
 //! ```
 //!
 //! ## Performance Considerations
@@ -35,6 +35,7 @@ use core::mem;
 use std::mem;
 
 pub mod dispatch;
+pub use dispatch::{dot_product, sum};
 
 #[cfg(feature = "f32")]
 /// wide f32 Float

@@ -2,12 +2,15 @@
 resolver = "3"
 members = [
     "crates/ta-core",
+    "crates/ta-py",
+    "crates/ta-wasm",
     "crates/ta-benchmarks",
 ]
 default-members = [
     "crates/ta-core",
+    "crates/ta-wasm",
     "crates/ta-benchmarks",
 ]
 
 [workspace.dependencies]
-wide = { version = "1.1", features = ["std"] }
+wide = { version = "1.5.0", features = ["std"] }

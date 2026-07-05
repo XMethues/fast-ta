@@ -2,7 +2,7 @@
 name = "ta-wasm"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.78"
+rust-version = "1.89"
 authors = ["TA-Lib Rust Contributors"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/yourusername/rs-indicators"
@@ -20,12 +20,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 ta-core = { path = "../ta-core", features = ["std"] }
-wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["console"] }
-console_error_panic_hook = { version = "0.1", optional = true }
+wasm-bindgen = "0.2.126"
+web-sys = { version = "0.3.103", features = ["console"] }
+console_error_panic_hook = { version = "0.1.7", optional = true }
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = "0.3.76"
 
 [package.metadata.docs.rs]
 all-features = true

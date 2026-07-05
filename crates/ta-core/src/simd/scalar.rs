@@ -21,9 +21,9 @@ use crate::types::Float;
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::simd::scalar::sum;
+/// use ta_core::{simd::scalar::sum, Float};
 ///
-/// let data = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0];
+/// let data: Vec<Float> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
 /// assert_eq!(sum(&data), 15.0);
 /// ```
 #[inline]
@@ -52,10 +52,10 @@ pub fn sum(data: &[Float]) -> Float {
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::simd::scalar::dot_product;
+/// use ta_core::{simd::scalar::dot_product, Float};
 ///
-/// let a = vec![1.0_f32, 2.0, 3.0];
-/// let b = vec![4.0_f32, 5.0, 6.0];
+/// let a: Vec<Float> = vec![1.0, 2.0, 3.0];
+/// let b: Vec<Float> = vec![4.0, 5.0, 6.0];
 /// // (1*4) + (2*5) + (3*6) = 32
 /// assert_eq!(dot_product(&a, &b), 32.0);
 /// ```
@@ -95,9 +95,9 @@ pub fn dot_product(a: &[Float], b: &[Float]) -> Float {
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::simd::scalar::rolling_sum;
+/// use ta_core::{simd::scalar::rolling_sum, Float};
 ///
-/// let data = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0];
+/// let data: Vec<Float> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
 /// let result = rolling_sum(&data, 3);
 /// // Windows: [1,2,3]=6, [2,3,4]=9, [3,4,5]=12
 /// assert_eq!(result, vec![6.0, 9.0, 12.0]);
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_rolling_sum_large_window() {
-        let data: Vec<Float> = (1..=100).map(|i| Float::from(i as f64)).collect();
+        let data: Vec<Float> = (1..=100).map(|i| i as Float).collect();
         let result = rolling_sum(&data, 10);
         assert_eq!(result.len(), 91);
         // First window: 1+2+...+10 = 55, Last window: 90+91+92+...+100 = 955

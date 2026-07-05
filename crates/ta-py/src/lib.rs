@@ -8,6 +8,7 @@
 use pyo3::prelude::*;
 
 /// Python module for technical analysis indicators
+#[cfg(not(test))]
 #[pymodule]
 fn ta_py(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hello_world, m)?)?;
@@ -15,23 +16,7 @@ fn ta_py(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 /// Example function to verify Python bindings work
-#[pyfunction]
-fn hello_world() -> PyResult<String> {
-    Ok("Hello from ta-py!".to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_hello_world() {
-        assert_eq!(hello_world().unwrap(), "Hello from ta-py!");
-    }
-}
-
-/// Example function to verify Python bindings work
-#[pyfunction]
+#[cfg_attr(not(test), pyfunction)]
 fn hello_world() -> PyResult<String> {
     Ok("Hello from ta-py!".to_string())
 }
