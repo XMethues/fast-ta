@@ -51,5 +51,5 @@ pub use common::{
     validate_output_len, validate_period, validate_same_len, OutputRange, PadValue,
 };
 pub use error::{Result, TalibError};
-pub use traits::{Indicator, Resettable};
+pub use traits::{Indicator, Resettable, StreamingIndicator};
 pub use types::Float;

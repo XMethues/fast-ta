@@ -6,9 +6,8 @@
 //! full-length padded vector for convenience.
 
 use crate::{
-    compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, Float, Indicator, OutputRange, Resettable, Result,
-    TalibError,
+    period_lookback, validate_finite_slice, validate_input_len, validate_output_len, Float,
+    Indicator, OutputRange, Resettable, Result, StreamingIndicator,
 };
 
 #[cfg(not(feature = "std"))]
@@ -48,13 +47,28 @@ pub fn SMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<
 /// Computes SMA into a full-length vector padded with `Float::NAN` before the lookback.
 #[allow(non_snake_case)]
 pub fn SMA_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = SMA(real, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
+    let lookback = period_lookback("timeperiod", timeperiod)?;
+    validate_finite_slice("real", real)?;
+    let count = validate_input_len(real.len(), lookback)?;
+
+    let mut output = Vec::new();
+    output.resize(real.len(), Float::NAN);
+    if count == 0 {
+        return Ok(output);
+    }
+
+    let inv_period = 1.0 as Float / timeperiod as Float;
+    let mut window_sum: Float = real[..timeperiod].iter().copied().sum();
+    output[lookback] = window_sum * inv_period;
+
+    for output_idx in 1..count {
+        let new_idx = output_idx + timeperiod - 1;
+        let old_idx = output_idx - 1;
+        window_sum += real[new_idx] - real[old_idx];
+        output[lookback + output_idx] = window_sum * inv_period;
+    }
+
+    Ok(output)
 }
 
 /// Simple Moving Average indicator.
@@ -91,7 +105,7 @@ impl SMA {
         let mut sma = Self::new(timeperiod)?;
         let start = real.len().saturating_sub(timeperiod);
         for &value in &real[start..] {
-            sma.next(value);
+            let _ = sma.next(value)?;
         }
         Ok(sma)
     }
@@ -114,18 +128,16 @@ impl SMA {
         SMA_vec(real, self.period)
     }
 
-    /// Checked streaming update that rejects non-finite inputs.
+    /// Checked streaming update that returns `Float::NAN` during warm-up.
     pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        if !input.is_finite() {
-            return Err(TalibError::invalid_input("SMA input must be finite"));
-        }
-        Ok(self.next(input))
+        Ok(self.next(input)?.unwrap_or(Float::NAN))
     }
 }
 
 impl Indicator for SMA {
-    type Input = Float;
-    type Output = Float;
+    type Input<'a> = &'a [Float];
+    type OutputMut<'a> = &'a mut [Float];
+    type OutputOwned = Vec<Float>;
 
     #[inline]
     fn lookback(&self) -> usize {
@@ -133,17 +145,28 @@ impl Indicator for SMA {
     }
 
     #[inline]
-    fn compute(&self, inputs: &[Self::Input], outputs: &mut [Self::Output]) -> Result<OutputRange> {
+    fn compute<'a>(
+        &self,
+        inputs: Self::Input<'a>,
+        outputs: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
         SMA(inputs, self.period, outputs)
     }
 
     #[inline]
-    fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
+    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
         SMA_vec(inputs, self.period)
     }
+}
+
+impl StreamingIndicator for SMA {
+    type Tick = Float;
+    type TickOutput = Float;
 
     #[inline]
-    fn next(&mut self, input: Float) -> Float {
+    fn next(&mut self, input: Float) -> Result<Option<Float>> {
+        validate_finite_slice("input", &[input])?;
+
         if self.count < self.period {
             self.buffer[self.index] = input;
             self.sum += input;
@@ -151,17 +174,17 @@ impl Indicator for SMA {
             self.index = (self.index + 1) % self.period;
 
             if self.count < self.period {
-                return Float::NAN;
+                return Ok(None);
             }
 
-            return self.sum * self.inv_period;
+            return Ok(Some(self.sum * self.inv_period));
         }
 
         let old = self.buffer[self.index];
         self.buffer[self.index] = input;
         self.sum += input - old;
         self.index = (self.index + 1) % self.period;
-        self.sum * self.inv_period
+        Ok(Some(self.sum * self.inv_period))
     }
 }
 

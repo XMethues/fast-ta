@@ -3,6 +3,7 @@
 use crate::{
     compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
     validate_input_len, validate_output_len, Float, Indicator, OutputRange, Resettable, Result,
+    StreamingIndicator,
 };
 
 #[cfg(not(feature = "std"))]
@@ -10,34 +11,17 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-fn rolling_apply<F>(
+fn validate_rolling_window(
     name: &str,
     real: &[Float],
     timeperiod: usize,
-    out_real: &mut [Float],
-    mut aggregate: F,
-) -> Result<OutputRange>
-where
-    F: FnMut(&[Float]) -> Float,
-{
+    output_len: usize,
+) -> Result<(usize, usize)> {
     let lookback = period_lookback("timeperiod", timeperiod)?;
     validate_finite_slice("real", real)?;
     let count = validate_input_len(real.len(), lookback)?;
-    validate_output_len(name, out_real.len(), count)?;
-
-    if count == 0 {
-        return Ok(OutputRange::empty());
-    }
-
-    for output_idx in 0..count {
-        out_real[output_idx] = aggregate(&real[output_idx..output_idx + timeperiod]);
-    }
-
-    Ok(OutputRange::new(lookback, count))
-}
-
-fn sum_window(window: &[Float]) -> Float {
-    window.iter().copied().sum()
+    validate_output_len(name, output_len, count)?;
+    Ok((lookback, count))
 }
 
 fn min_window(window: &[Float]) -> Float {
@@ -48,10 +32,69 @@ fn max_window(window: &[Float]) -> Float {
     window.iter().copied().fold(window[0], Float::max)
 }
 
+fn rolling_extreme<F>(
+    name: &str,
+    real: &[Float],
+    timeperiod: usize,
+    out_real: &mut [Float],
+    mut is_better: F,
+) -> Result<OutputRange>
+where
+    F: FnMut(Float, Float) -> bool,
+{
+    let (lookback, count) = validate_rolling_window(name, real, timeperiod, out_real.len())?;
+    if count == 0 {
+        return Ok(OutputRange::empty());
+    }
+
+    let mut deque = Vec::new();
+    deque.reserve(real.len());
+    let mut head = 0usize;
+
+    for idx in 0..real.len() {
+        while head < deque.len() && deque[head] + timeperiod <= idx {
+            head += 1;
+        }
+
+        while deque.len() > head {
+            let &last_idx = deque.last().expect("deque has an element");
+            if is_better(real[idx], real[last_idx]) {
+                deque.pop();
+            } else {
+                break;
+            }
+        }
+
+        deque.push(idx);
+
+        if idx + 1 >= timeperiod {
+            let output_idx = idx + 1 - timeperiod;
+            out_real[output_idx] = real[deque[head]];
+        }
+    }
+
+    Ok(OutputRange::new(lookback, count))
+}
+
 /// TA-Lib-style rolling sum.
 #[allow(non_snake_case)]
 pub fn SUM(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
-    rolling_apply("SUM", real, timeperiod, out_real, sum_window)
+    let (lookback, count) = validate_rolling_window("SUM", real, timeperiod, out_real.len())?;
+    if count == 0 {
+        return Ok(OutputRange::empty());
+    }
+
+    let mut window_sum: Float = real[..timeperiod].iter().copied().sum();
+    out_real[0] = window_sum;
+
+    for output_idx in 1..count {
+        let new_idx = output_idx + timeperiod - 1;
+        let old_idx = output_idx - 1;
+        window_sum += real[new_idx] - real[old_idx];
+        out_real[output_idx] = window_sum;
+    }
+
+    Ok(OutputRange::new(lookback, count))
 }
 
 /// Computes rolling sum into a full-length vector.
@@ -69,7 +112,9 @@ pub fn SUM_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
 /// TA-Lib-style rolling minimum.
 #[allow(non_snake_case)]
 pub fn MIN(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
-    rolling_apply("MIN", real, timeperiod, out_real, min_window)
+    rolling_extreme("MIN", real, timeperiod, out_real, |candidate, current| {
+        candidate < current
+    })
 }
 
 /// Computes rolling minimum into a full-length vector.
@@ -87,7 +132,9 @@ pub fn MIN_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
 /// TA-Lib-style rolling maximum.
 #[allow(non_snake_case)]
 pub fn MAX(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
-    rolling_apply("MAX", real, timeperiod, out_real, max_window)
+    rolling_extreme("MAX", real, timeperiod, out_real, |candidate, current| {
+        candidate > current
+    })
 }
 
 /// Computes rolling maximum into a full-length vector.
@@ -103,7 +150,7 @@ pub fn MAX_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
 }
 
 macro_rules! define_rolling_struct {
-    ($name:ident, $vec_name:ident, $aggregate:ident) => {
+    ($name:ident, $vec_name:ident, $aggregate:expr) => {
         #[doc = concat!(stringify!($name), " struct surface.")]
         #[derive(Debug, Clone)]
         pub struct $name {
@@ -144,26 +191,34 @@ macro_rules! define_rolling_struct {
         }
 
         impl Indicator for $name {
-            type Input = Float;
-            type Output = Float;
+            type Input<'a> = &'a [Float];
+            type OutputMut<'a> = &'a mut [Float];
+            type OutputOwned = Vec<Float>;
 
             fn lookback(&self) -> usize {
                 self.period - 1
             }
 
-            fn compute(
+            fn compute<'a>(
                 &self,
-                inputs: &[Self::Input],
-                outputs: &mut [Self::Output],
+                inputs: Self::Input<'a>,
+                outputs: Self::OutputMut<'a>,
             ) -> Result<OutputRange> {
                 $name(inputs, self.period, outputs)
             }
 
-            fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
+            fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
                 $vec_name(inputs, self.period)
             }
+        }
 
-            fn next(&mut self, input: Float) -> Float {
+        impl StreamingIndicator for $name {
+            type Tick = Float;
+            type TickOutput = Float;
+
+            fn next(&mut self, input: Float) -> Result<Option<Float>> {
+                validate_finite_slice("input", &[input])?;
+
                 self.buffer[self.index] = input;
                 if self.count < self.period {
                     self.count += 1;
@@ -171,10 +226,10 @@ macro_rules! define_rolling_struct {
                 self.index = (self.index + 1) % self.period;
 
                 if self.count < self.period {
-                    return Float::NAN;
+                    return Ok(None);
                 }
 
-                $aggregate(&self.buffer)
+                Ok(Some($aggregate(&self.buffer)))
             }
         }
 
@@ -190,6 +245,9 @@ macro_rules! define_rolling_struct {
     };
 }
 
-define_rolling_struct!(SUM, SUM_vec, sum_window);
+define_rolling_struct!(SUM, SUM_vec, |window: &[Float]| window
+    .iter()
+    .copied()
+    .sum());
 define_rolling_struct!(MIN, MIN_vec, min_window);
 define_rolling_struct!(MAX, MAX_vec, max_window);

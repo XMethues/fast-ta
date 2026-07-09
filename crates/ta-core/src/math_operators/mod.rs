@@ -7,9 +7,12 @@ mod arithmetic;
 mod extrema;
 mod rolling;
 
-pub use arithmetic::{ADD_vec, DIV_vec, MULT_vec, SUB_vec, ADD, DIV, MULT, SUB};
+pub use arithmetic::{
+    ADD_vec, BinaryInput, BinaryTick, DIV_vec, MULT_vec, SUB_vec, ADD, DIV, MULT, SUB,
+};
 pub use extrema::{
-    MAXINDEX_vec, MININDEX_vec, MINMAXINDEXOutput, MINMAXINDEX_vec, MINMAXOutput, MINMAX_vec,
-    MAXINDEX, MININDEX, MINMAX, MINMAXINDEX,
+    MAXINDEX_vec, MININDEX_vec, MINMAXINDEXOutput, MINMAXINDEXOutputMut, MINMAXINDEXValue,
+    MINMAXINDEX_vec, MINMAXOutput, MINMAXOutputMut, MINMAXValue, MINMAX_vec, MAXINDEX, MININDEX,
+    MINMAX, MINMAXINDEX,
 };
 pub use rolling::{MAX_vec, MIN_vec, SUM_vec, MAX, MIN, SUM};

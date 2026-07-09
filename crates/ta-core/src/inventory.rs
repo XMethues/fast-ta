@@ -8,8 +8,8 @@
 /// Total official TA-Lib function count tracked by this ledger.
 pub const FUNCTION_COUNT: usize = 161;
 
-/// Number of functions implemented by the foundation + first-tranche design.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 32;
+/// Number of functions currently implemented in Rust `ta-core`.
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 39;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -150,11 +150,11 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     // Overlap Studies — 18 functions.
     function!("ACCBANDS", OverlapStudies, Planned),
     function!("BBANDS", OverlapStudies, Planned),
-    function!("DEMA", OverlapStudies, Planned),
-    function!("EMA", OverlapStudies, Planned),
+    function!("DEMA", OverlapStudies, Implemented),
+    function!("EMA", OverlapStudies, Implemented),
     function!("HT_TRENDLINE", OverlapStudies, Planned),
     function!("KAMA", OverlapStudies, Planned),
-    function!("MA", OverlapStudies, Planned),
+    function!("MA", OverlapStudies, Implemented),
     function!("MAMA", OverlapStudies, Planned),
     function!("MAVP", OverlapStudies, Planned),
     function!("MIDPOINT", OverlapStudies, Planned),
@@ -162,10 +162,10 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("SAR", OverlapStudies, Planned),
     function!("SAREXT", OverlapStudies, Planned),
     function!("SMA", OverlapStudies, Implemented),
-    function!("T3", OverlapStudies, Planned),
-    function!("TEMA", OverlapStudies, Planned),
-    function!("TRIMA", OverlapStudies, Planned),
-    function!("WMA", OverlapStudies, Planned),
+    function!("T3", OverlapStudies, Implemented),
+    function!("TEMA", OverlapStudies, Implemented),
+    function!("TRIMA", OverlapStudies, Implemented),
+    function!("WMA", OverlapStudies, Implemented),
     // Momentum Indicators — 31 functions.
     function!("ADX", MomentumIndicators, Planned),
     function!("ADXR", MomentumIndicators, Planned),

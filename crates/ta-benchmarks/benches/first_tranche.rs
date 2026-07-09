@@ -5,11 +5,14 @@
 //! Fixtures and reusable output buffers are allocated outside `b.iter()` unless
 //! the wrapper allocation itself is the behavior under measurement.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
 use ta_core::{
     math_operators::{ADD, MINMAX, SUM},
     math_transform::SQRT,
-    overlap::{SMA_vec, SMA},
+    overlap::{
+        EMA_vec, MAType, SMA_vec, T3_with_default_vfactor, DEMA, EMA, MA, SMA, TEMA, TRIMA, WMA,
+    },
     price_transform::{AVGDEV, AVGPRICE},
     Float,
 };
@@ -83,6 +86,145 @@ fn bench_overlap_sma(c: &mut Criterion) {
                 black_box(output);
             });
         });
+    }
+
+    group.finish();
+}
+
+fn bench_overlap_moving_averages(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ta_core/overlap/moving_averages");
+
+    for &size in SIZES {
+        group.bench_with_input(BenchmarkId::new("EMA_compact", size), &size, |b, &size| {
+            let prices = series_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = EMA(
+                    black_box(prices.as_slice()),
+                    black_box(PERIOD),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid EMA benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+
+        group.bench_with_input(BenchmarkId::new("EMA_vec", size), &size, |b, &size| {
+            let prices = series_fixture(size);
+
+            b.iter(|| {
+                let output = EMA_vec(black_box(prices.as_slice()), black_box(PERIOD))
+                    .expect("valid EMA benchmark fixture");
+                black_box(output);
+            });
+        });
+
+        group.bench_with_input(BenchmarkId::new("WMA_compact", size), &size, |b, &size| {
+            let prices = series_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = WMA(
+                    black_box(prices.as_slice()),
+                    black_box(PERIOD),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid WMA benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+
+        group.bench_with_input(
+            BenchmarkId::new("TRIMA_compact", size),
+            &size,
+            |b, &size| {
+                let prices = series_fixture(size);
+                let mut output = vec![0.0 as Float; size];
+
+                b.iter(|| {
+                    let range = TRIMA(
+                        black_box(prices.as_slice()),
+                        black_box(PERIOD),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid TRIMA benchmark fixture");
+                    black_box(range);
+                    black_box(output.as_slice());
+                });
+            },
+        );
+
+        group.bench_with_input(BenchmarkId::new("DEMA_compact", size), &size, |b, &size| {
+            let prices = series_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = DEMA(
+                    black_box(prices.as_slice()),
+                    black_box(PERIOD),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid DEMA benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+
+        group.bench_with_input(BenchmarkId::new("TEMA_compact", size), &size, |b, &size| {
+            let prices = series_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = TEMA(
+                    black_box(prices.as_slice()),
+                    black_box(PERIOD),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid TEMA benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+
+        group.bench_with_input(BenchmarkId::new("T3_compact", size), &size, |b, &size| {
+            let prices = series_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = T3_with_default_vfactor(
+                    black_box(prices.as_slice()),
+                    black_box(PERIOD),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid T3 benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+
+        group.bench_with_input(
+            BenchmarkId::new("MA_EMA_compact", size),
+            &size,
+            |b, &size| {
+                let prices = series_fixture(size);
+                let mut output = vec![0.0 as Float; size];
+
+                b.iter(|| {
+                    let range = MA(
+                        black_box(prices.as_slice()),
+                        black_box(PERIOD),
+                        black_box(MAType::EMA),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid MA benchmark fixture");
+                    black_box(range);
+                    black_box(output.as_slice());
+                });
+            },
+        );
     }
 
     group.finish();
@@ -227,6 +369,7 @@ fn bench_math_operators(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_overlap_sma,
+    bench_overlap_moving_averages,
     bench_price_transform,
     bench_math_transform,
     bench_math_operators

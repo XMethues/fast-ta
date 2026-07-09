@@ -10,7 +10,7 @@ mod typprice;
 mod wclprice;
 
 pub use avgdev::{AVGDEV_vec, AVGDEV};
-pub use avgprice::{AVGPRICE_vec, AVGPRICE};
-pub use medprice::{MEDPRICE_vec, MEDPRICE};
-pub use typprice::{TYPPRICE_vec, TYPPRICE};
-pub use wclprice::{WCLPRICE_vec, WCLPRICE};
+pub use avgprice::{AVGPRICEInput, AVGPRICETick, AVGPRICE_vec, AVGPRICE};
+pub use medprice::{MEDPRICEInput, MEDPRICETick, MEDPRICE_vec, MEDPRICE};
+pub use typprice::{TYPPRICEInput, TYPPRICETick, TYPPRICE_vec, TYPPRICE};
+pub use wclprice::{WCLPRICEInput, WCLPRICETick, WCLPRICE_vec, WCLPRICE};

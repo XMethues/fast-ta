@@ -2,7 +2,8 @@
 //!
 //! This module contains fundamental benchmarks to validate the benchmarking setup.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
 
 /// Simple addition benchmark to validate Criterion setup
 fn bench_add(c: &mut Criterion) {

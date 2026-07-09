@@ -1,13 +1,13 @@
 //! Math Transform functions.
 //!
 //! These are unary element-wise transforms over one real input series. They use
-//! strict finite-input validation, compact zero-copy output buffers, and padded
-//! convenience wrappers matching the first-tranche core contract.
+//! strict finite-input validation, compact zero-copy output buffers, padded
+//! convenience wrappers, and per-tick streaming surfaces.
 
 mod functions {
     use crate::{
         compact_buffer, padded_from_compact, validate_finite_slice, validate_output_len, Float,
-        Indicator, OutputRange, Result,
+        Indicator, OutputRange, Result, StreamingIndicator,
     };
 
     #[cfg(not(feature = "std"))]
@@ -69,28 +69,35 @@ mod functions {
             }
 
             impl Indicator for $name {
-                type Input = Float;
-                type Output = Float;
+                type Input<'a> = &'a [Float];
+                type OutputMut<'a> = &'a mut [Float];
+                type OutputOwned = Vec<Float>;
 
                 fn lookback(&self) -> usize {
                     0
                 }
 
-                fn compute(
+                fn compute<'a>(
                     &self,
-                    inputs: &[Self::Input],
-                    outputs: &mut [Self::Output],
+                    inputs: Self::Input<'a>,
+                    outputs: Self::OutputMut<'a>,
                 ) -> Result<OutputRange> {
                     $name(inputs, outputs)
                 }
 
-                fn compute_to_vec(&self, inputs: &[Self::Input]) -> Result<Vec<Self::Output>> {
+                fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
                     $vec_name(inputs)
                 }
+            }
 
-                fn next(&mut self, input: Float) -> Float {
+            impl StreamingIndicator for $name {
+                type Tick = Float;
+                type TickOutput = Float;
+
+                fn next(&mut self, input: Float) -> Result<Option<Float>> {
+                    validate_finite_slice("input", &[input])?;
                     let operation = $operation;
-                    operation(input)
+                    Ok(Some(operation(input)))
                 }
             }
         };

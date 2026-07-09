@@ -2,6 +2,15 @@ use ta_core::inventory::{
     function, FunctionGroup, ImplementationStatus, FUNCTION_COUNT, IMPLEMENTED_FUNCTION_COUNT,
     TALIB_FUNCTIONS,
 };
+use ta_core::math_operators::{
+    ADD, DIV, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX, MULT, SUB, SUM,
+};
+use ta_core::math_transform::{
+    ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN, TANH,
+};
+use ta_core::overlap::{DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA};
+use ta_core::price_transform::{AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE};
+use ta_core::{Indicator, StreamingIndicator};
 
 #[test]
 fn inventory_contains_official_161_functions() {
@@ -60,6 +69,13 @@ fn function_names_are_unique() {
 fn first_tranche_functions_are_marked_implemented() {
     let implemented = [
         "SMA",
+        "DEMA",
+        "EMA",
+        "MA",
+        "T3",
+        "TEMA",
+        "TRIMA",
+        "WMA",
         "AVGDEV",
         "AVGPRICE",
         "MEDPRICE",
@@ -110,8 +126,98 @@ fn first_tranche_functions_are_marked_implemented() {
 }
 
 #[test]
+fn first_tranche_structs_implement_batch_and_streaming_traits() {
+    fn assert_indicator<T: Indicator>() {}
+    fn assert_streaming<T: StreamingIndicator>() {}
+
+    assert_indicator::<SMA>();
+    assert_streaming::<SMA>();
+    assert_indicator::<DEMA>();
+    assert_streaming::<DEMA>();
+    assert_indicator::<EMA>();
+    assert_streaming::<EMA>();
+    assert_indicator::<MA>();
+    assert_streaming::<MA>();
+    assert_indicator::<T3>();
+    assert_streaming::<T3>();
+    assert_indicator::<TEMA>();
+    assert_streaming::<TEMA>();
+    assert_indicator::<TRIMA>();
+    assert_streaming::<TRIMA>();
+    assert_indicator::<WMA>();
+    assert_streaming::<WMA>();
+
+    assert_indicator::<AVGDEV>();
+    assert_streaming::<AVGDEV>();
+    assert_indicator::<AVGPRICE>();
+    assert_streaming::<AVGPRICE>();
+    assert_indicator::<MEDPRICE>();
+    assert_streaming::<MEDPRICE>();
+    assert_indicator::<TYPPRICE>();
+    assert_streaming::<TYPPRICE>();
+    assert_indicator::<WCLPRICE>();
+    assert_streaming::<WCLPRICE>();
+
+    assert_indicator::<ACOS>();
+    assert_streaming::<ACOS>();
+    assert_indicator::<ASIN>();
+    assert_streaming::<ASIN>();
+    assert_indicator::<ATAN>();
+    assert_streaming::<ATAN>();
+    assert_indicator::<CEIL>();
+    assert_streaming::<CEIL>();
+    assert_indicator::<COS>();
+    assert_streaming::<COS>();
+    assert_indicator::<COSH>();
+    assert_streaming::<COSH>();
+    assert_indicator::<EXP>();
+    assert_streaming::<EXP>();
+    assert_indicator::<FLOOR>();
+    assert_streaming::<FLOOR>();
+    assert_indicator::<LN>();
+    assert_streaming::<LN>();
+    assert_indicator::<LOG10>();
+    assert_streaming::<LOG10>();
+    assert_indicator::<SIN>();
+    assert_streaming::<SIN>();
+    assert_indicator::<SINH>();
+    assert_streaming::<SINH>();
+    assert_indicator::<SQRT>();
+    assert_streaming::<SQRT>();
+    assert_indicator::<TAN>();
+    assert_streaming::<TAN>();
+    assert_indicator::<TANH>();
+    assert_streaming::<TANH>();
+
+    assert_indicator::<ADD>();
+    assert_streaming::<ADD>();
+    assert_indicator::<DIV>();
+    assert_streaming::<DIV>();
+    assert_indicator::<MAX>();
+    assert_streaming::<MAX>();
+    assert_indicator::<MAXINDEX>();
+    assert_streaming::<MAXINDEX>();
+    assert_indicator::<MIN>();
+    assert_streaming::<MIN>();
+    assert_indicator::<MININDEX>();
+    assert_streaming::<MININDEX>();
+    assert_indicator::<MINMAX>();
+    assert_streaming::<MINMAX>();
+    assert_indicator::<MINMAXINDEX>();
+    assert_streaming::<MINMAXINDEX>();
+    assert_indicator::<MULT>();
+    assert_streaming::<MULT>();
+    assert_indicator::<SUB>();
+    assert_streaming::<SUB>();
+    assert_indicator::<SUM>();
+    assert_streaming::<SUM>();
+}
+
+#[test]
 fn deferred_functions_remain_planned() {
-    for name in ["MACD", "BBANDS", "ATR", "OBV", "CDLDOJI", "VAR", "HT_SINE"] {
+    for name in [
+        "KAMA", "MAMA", "MACD", "BBANDS", "ATR", "OBV", "CDLDOJI", "VAR", "HT_SINE",
+    ] {
         let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
         assert_eq!(info.status, ImplementationStatus::Planned, "{name}");
     }
