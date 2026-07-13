@@ -14,11 +14,15 @@ use ta_core::{
         EMA_vec, MAType, SMA_vec, T3_with_default_vfactor, DEMA, EMA, MA, SMA, TEMA, TRIMA, WMA,
     },
     price_transform::{AVGDEV, AVGPRICE},
+    volatility::{ATR, NATR, TRANGE},
+    volume::{AD, ADOSC, OBV},
     Float,
 };
 
 const SIZES: &[usize] = &[1_024, 16_384, 65_536];
 const PERIOD: usize = 20;
+const ADOSC_FAST_PERIOD: usize = 3;
+const ADOSC_SLOW_PERIOD: usize = 10;
 
 fn series_fixture(size: usize) -> Vec<Float> {
     (0..size)
@@ -55,6 +59,14 @@ fn ohlc_fixture(size: usize) -> (Vec<Float>, Vec<Float>, Vec<Float>, Vec<Float>)
         .collect();
 
     (open, high, low, close)
+}
+
+fn hlcv_fixture(size: usize) -> (Vec<Float>, Vec<Float>, Vec<Float>, Vec<Float>) {
+    let (_open, high, low, close) = ohlc_fixture(size);
+    let volume = (0..size)
+        .map(|idx| ((idx % 1_000) + 1) as Float * 10.0 as Float)
+        .collect();
+    (high, low, close, volume)
 }
 
 fn bench_overlap_sma(c: &mut Criterion) {
@@ -280,6 +292,137 @@ fn bench_price_transform(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_volatility(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ta_core/volatility");
+
+    for &size in SIZES {
+        group.bench_with_input(
+            BenchmarkId::new("TRANGE_compact", size),
+            &size,
+            |b, &size| {
+                let (_open, high, low, close) = ohlc_fixture(size);
+                let mut output = vec![0.0 as Float; size];
+
+                b.iter(|| {
+                    let range = TRANGE(
+                        black_box(high.as_slice()),
+                        black_box(low.as_slice()),
+                        black_box(close.as_slice()),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid TRANGE benchmark fixture");
+                    black_box(range);
+                    black_box(output.as_slice());
+                });
+            },
+        );
+
+        group.bench_with_input(BenchmarkId::new("ATR_compact", size), &size, |b, &size| {
+            let (_open, high, low, close) = ohlc_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = ATR(
+                    black_box(high.as_slice()),
+                    black_box(low.as_slice()),
+                    black_box(close.as_slice()),
+                    black_box(PERIOD),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid ATR benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+
+        group.bench_with_input(BenchmarkId::new("NATR_compact", size), &size, |b, &size| {
+            let (_open, high, low, close) = ohlc_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = NATR(
+                    black_box(high.as_slice()),
+                    black_box(low.as_slice()),
+                    black_box(close.as_slice()),
+                    black_box(PERIOD),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid NATR benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_volume(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ta_core/volume");
+
+    for &size in SIZES {
+        group.bench_with_input(BenchmarkId::new("AD_compact", size), &size, |b, &size| {
+            let (high, low, close, volume) = hlcv_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = AD(
+                    black_box(high.as_slice()),
+                    black_box(low.as_slice()),
+                    black_box(close.as_slice()),
+                    black_box(volume.as_slice()),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid AD benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+
+        group.bench_with_input(BenchmarkId::new("OBV_compact", size), &size, |b, &size| {
+            let (_high, _low, close, volume) = hlcv_fixture(size);
+            let mut output = vec![0.0 as Float; size];
+
+            b.iter(|| {
+                let range = OBV(
+                    black_box(close.as_slice()),
+                    black_box(volume.as_slice()),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid OBV benchmark fixture");
+                black_box(range);
+                black_box(output.as_slice());
+            });
+        });
+
+        group.bench_with_input(
+            BenchmarkId::new("ADOSC_compact", size),
+            &size,
+            |b, &size| {
+                let (high, low, close, volume) = hlcv_fixture(size);
+                let mut output = vec![0.0 as Float; size];
+
+                b.iter(|| {
+                    let range = ADOSC(
+                        black_box(high.as_slice()),
+                        black_box(low.as_slice()),
+                        black_box(close.as_slice()),
+                        black_box(volume.as_slice()),
+                        black_box(ADOSC_FAST_PERIOD),
+                        black_box(ADOSC_SLOW_PERIOD),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid ADOSC benchmark fixture");
+                    black_box(range);
+                    black_box(output.as_slice());
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
 fn bench_math_transform(c: &mut Criterion) {
     let mut group = c.benchmark_group("ta_core/math_transform");
 
@@ -371,6 +514,8 @@ criterion_group!(
     bench_overlap_sma,
     bench_overlap_moving_averages,
     bench_price_transform,
+    bench_volatility,
+    bench_volume,
     bench_math_transform,
     bench_math_operators
 );
