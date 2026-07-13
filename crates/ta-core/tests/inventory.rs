@@ -10,6 +10,8 @@ use ta_core::math_transform::{
 };
 use ta_core::overlap::{DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA};
 use ta_core::price_transform::{AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE};
+use ta_core::volatility::{ATR, NATR, TRANGE};
+use ta_core::volume::{AD, ADOSC, OBV};
 use ta_core::{Indicator, StreamingIndicator};
 
 #[test]
@@ -81,6 +83,12 @@ fn first_tranche_functions_are_marked_implemented() {
         "MEDPRICE",
         "TYPPRICE",
         "WCLPRICE",
+        "AD",
+        "ADOSC",
+        "OBV",
+        "ATR",
+        "NATR",
+        "TRANGE",
         "ACOS",
         "ASIN",
         "ATAN",
@@ -158,6 +166,20 @@ fn first_tranche_structs_implement_batch_and_streaming_traits() {
     assert_indicator::<WCLPRICE>();
     assert_streaming::<WCLPRICE>();
 
+    assert_indicator::<AD>();
+    assert_streaming::<AD>();
+    assert_indicator::<ADOSC>();
+    assert_streaming::<ADOSC>();
+    assert_indicator::<OBV>();
+    assert_streaming::<OBV>();
+
+    assert_indicator::<ATR>();
+    assert_streaming::<ATR>();
+    assert_indicator::<NATR>();
+    assert_streaming::<NATR>();
+    assert_indicator::<TRANGE>();
+    assert_streaming::<TRANGE>();
+
     assert_indicator::<ACOS>();
     assert_streaming::<ACOS>();
     assert_indicator::<ASIN>();
@@ -216,7 +238,7 @@ fn first_tranche_structs_implement_batch_and_streaming_traits() {
 #[test]
 fn deferred_functions_remain_planned() {
     for name in [
-        "KAMA", "MAMA", "MACD", "BBANDS", "ATR", "OBV", "CDLDOJI", "VAR", "HT_SINE",
+        "KAMA", "MAMA", "MACD", "BBANDS", "CDLDOJI", "VAR", "HT_SINE",
     ] {
         let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
         assert_eq!(info.status, ImplementationStatus::Planned, "{name}");

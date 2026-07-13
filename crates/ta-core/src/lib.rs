@@ -44,6 +44,10 @@ pub mod price_transform;
 pub mod simd;
 pub mod traits;
 pub mod types;
+/// Volatility Indicators functions.
+pub mod volatility;
+/// Volume Indicators functions.
+pub mod volume;
 
 pub use common::{
     compact_buffer, copy_compact_to_padded, output_count, padded_from_compact, period_lookback,

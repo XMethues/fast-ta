@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 39;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 45;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -199,13 +199,13 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("ULTOSC", MomentumIndicators, Planned),
     function!("WILLR", MomentumIndicators, Planned),
     // Volume Indicators — 3 functions.
-    function!("AD", VolumeIndicators, Planned),
-    function!("ADOSC", VolumeIndicators, Planned),
-    function!("OBV", VolumeIndicators, Planned),
+    function!("AD", VolumeIndicators, Implemented),
+    function!("ADOSC", VolumeIndicators, Implemented),
+    function!("OBV", VolumeIndicators, Implemented),
     // Volatility Indicators — 3 functions.
-    function!("ATR", VolatilityIndicators, Planned),
-    function!("NATR", VolatilityIndicators, Planned),
-    function!("TRANGE", VolatilityIndicators, Planned),
+    function!("ATR", VolatilityIndicators, Implemented),
+    function!("NATR", VolatilityIndicators, Implemented),
+    function!("TRANGE", VolatilityIndicators, Implemented),
     // Price Transform — 5 functions.
     function!("AVGDEV", PriceTransform, Implemented),
     function!("AVGPRICE", PriceTransform, Implemented),
