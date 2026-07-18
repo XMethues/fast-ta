@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 45;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 54;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -281,15 +281,15 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLUPSIDEGAP2CROWS", PatternRecognition, Planned),
     function!("CDLXSIDEGAP3METHODS", PatternRecognition, Planned),
     // Statistic Functions — 9 functions.
-    function!("BETA", StatisticFunctions, Planned),
-    function!("CORREL", StatisticFunctions, Planned),
-    function!("LINEARREG", StatisticFunctions, Planned),
-    function!("LINEARREG_ANGLE", StatisticFunctions, Planned),
-    function!("LINEARREG_INTERCEPT", StatisticFunctions, Planned),
-    function!("LINEARREG_SLOPE", StatisticFunctions, Planned),
-    function!("STDDEV", StatisticFunctions, Planned),
-    function!("TSF", StatisticFunctions, Planned),
-    function!("VAR", StatisticFunctions, Planned),
+    function!("BETA", StatisticFunctions, Implemented),
+    function!("CORREL", StatisticFunctions, Implemented),
+    function!("LINEARREG", StatisticFunctions, Implemented),
+    function!("LINEARREG_ANGLE", StatisticFunctions, Implemented),
+    function!("LINEARREG_INTERCEPT", StatisticFunctions, Implemented),
+    function!("LINEARREG_SLOPE", StatisticFunctions, Implemented),
+    function!("STDDEV", StatisticFunctions, Implemented),
+    function!("TSF", StatisticFunctions, Implemented),
+    function!("VAR", StatisticFunctions, Implemented),
     // Math Transform — 15 functions.
     function!("ACOS", MathTransform, Implemented),
     function!("ASIN", MathTransform, Implemented),

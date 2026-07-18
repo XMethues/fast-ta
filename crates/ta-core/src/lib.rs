@@ -42,6 +42,8 @@ pub mod overlap;
 /// Price Transform functions.
 pub mod price_transform;
 pub mod simd;
+/// Statistic Functions.
+pub mod statistic;
 pub mod traits;
 pub mod types;
 /// Volatility Indicators functions.

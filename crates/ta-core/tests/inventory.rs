@@ -10,6 +10,10 @@ use ta_core::math_transform::{
 };
 use ta_core::overlap::{DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA};
 use ta_core::price_transform::{AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE};
+use ta_core::statistic::{
+    BETA, CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF,
+    VAR,
+};
 use ta_core::volatility::{ATR, NATR, TRANGE};
 use ta_core::volume::{AD, ADOSC, OBV};
 use ta_core::{Indicator, StreamingIndicator};
@@ -89,6 +93,15 @@ fn first_tranche_functions_are_marked_implemented() {
         "ATR",
         "NATR",
         "TRANGE",
+        "BETA",
+        "CORREL",
+        "LINEARREG",
+        "LINEARREG_ANGLE",
+        "LINEARREG_INTERCEPT",
+        "LINEARREG_SLOPE",
+        "STDDEV",
+        "TSF",
+        "VAR",
         "ACOS",
         "ASIN",
         "ATAN",
@@ -180,6 +193,25 @@ fn first_tranche_structs_implement_batch_and_streaming_traits() {
     assert_indicator::<TRANGE>();
     assert_streaming::<TRANGE>();
 
+    assert_indicator::<BETA>();
+    assert_streaming::<BETA>();
+    assert_indicator::<CORREL>();
+    assert_streaming::<CORREL>();
+    assert_indicator::<LINEARREG>();
+    assert_streaming::<LINEARREG>();
+    assert_indicator::<LINEARREG_ANGLE>();
+    assert_streaming::<LINEARREG_ANGLE>();
+    assert_indicator::<LINEARREG_INTERCEPT>();
+    assert_streaming::<LINEARREG_INTERCEPT>();
+    assert_indicator::<LINEARREG_SLOPE>();
+    assert_streaming::<LINEARREG_SLOPE>();
+    assert_indicator::<STDDEV>();
+    assert_streaming::<STDDEV>();
+    assert_indicator::<TSF>();
+    assert_streaming::<TSF>();
+    assert_indicator::<VAR>();
+    assert_streaming::<VAR>();
+
     assert_indicator::<ACOS>();
     assert_streaming::<ACOS>();
     assert_indicator::<ASIN>();
@@ -237,9 +269,7 @@ fn first_tranche_structs_implement_batch_and_streaming_traits() {
 
 #[test]
 fn deferred_functions_remain_planned() {
-    for name in [
-        "KAMA", "MAMA", "MACD", "BBANDS", "CDLDOJI", "VAR", "HT_SINE",
-    ] {
+    for name in ["KAMA", "MAMA", "MACD", "BBANDS", "CDLDOJI", "HT_SINE"] {
         let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
         assert_eq!(info.status, ImplementationStatus::Planned, "{name}");
     }
