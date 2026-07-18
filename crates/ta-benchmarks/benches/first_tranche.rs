@@ -14,6 +14,11 @@ use ta_core::{
         EMA_vec, MAType, SMA_vec, T3_with_default_vfactor, DEMA, EMA, MA, SMA, TEMA, TRIMA, WMA,
     },
     price_transform::{AVGDEV, AVGPRICE},
+    statistic::{
+        BETA_vec, CORREL_vec, LINEARREG_ANGLE_vec, LINEARREG_INTERCEPT_vec, LINEARREG_SLOPE_vec,
+        LINEARREG_vec, STDDEV_vec, TSF_vec, VAR_vec, BETA, CORREL, LINEARREG, LINEARREG_ANGLE,
+        LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF, VAR,
+    },
     volatility::{ATR, NATR, TRANGE},
     volume::{AD, ADOSC, OBV},
     Float,
@@ -21,6 +26,7 @@ use ta_core::{
 
 const SIZES: &[usize] = &[1_024, 16_384, 65_536];
 const PERIOD: usize = 20;
+const STATISTIC_PERIODS: &[usize] = &[5, 20, 100, 500];
 const ADOSC_FAST_PERIOD: usize = 3;
 const ADOSC_SLOW_PERIOD: usize = 10;
 
@@ -509,6 +515,162 @@ fn bench_math_operators(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_statistic(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ta_core/statistic");
+
+    macro_rules! bench_variance {
+        ($compact:ident, $vec:ident, $label:literal, $size:expr, $period:expr) => {
+            group.bench_function(
+                BenchmarkId::new(
+                    concat!($label, "_compact"),
+                    format!("{}/p{}", $size, $period),
+                ),
+                move |b| {
+                    let real = series_fixture($size);
+                    let mut output = vec![0.0 as Float; $size];
+                    b.iter(|| {
+                        let range = $compact(
+                            black_box(real.as_slice()),
+                            black_box($period),
+                            black_box(1.0 as Float),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid ", $label, " benchmark fixture"));
+                        black_box(range);
+                        black_box(output.as_slice());
+                    });
+                },
+            );
+            group.bench_function(
+                BenchmarkId::new(concat!($label, "_vec"), format!("{}/p{}", $size, $period)),
+                move |b| {
+                    let real = series_fixture($size);
+                    b.iter(|| {
+                        let output = $vec(
+                            black_box(real.as_slice()),
+                            black_box($period),
+                            black_box(1.0 as Float),
+                        )
+                        .expect(concat!("valid ", $label, " benchmark fixture"));
+                        black_box(output);
+                    });
+                },
+            );
+        };
+    }
+
+    macro_rules! bench_single {
+        ($compact:ident, $vec:ident, $label:literal, $size:expr, $period:expr) => {
+            group.bench_function(
+                BenchmarkId::new(
+                    concat!($label, "_compact"),
+                    format!("{}/p{}", $size, $period),
+                ),
+                move |b| {
+                    let real = series_fixture($size);
+                    let mut output = vec![0.0 as Float; $size];
+                    b.iter(|| {
+                        let range = $compact(
+                            black_box(real.as_slice()),
+                            black_box($period),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid ", $label, " benchmark fixture"));
+                        black_box(range);
+                        black_box(output.as_slice());
+                    });
+                },
+            );
+            group.bench_function(
+                BenchmarkId::new(concat!($label, "_vec"), format!("{}/p{}", $size, $period)),
+                move |b| {
+                    let real = series_fixture($size);
+                    b.iter(|| {
+                        let output = $vec(black_box(real.as_slice()), black_box($period))
+                            .expect(concat!("valid ", $label, " benchmark fixture"));
+                        black_box(output);
+                    });
+                },
+            );
+        };
+    }
+
+    macro_rules! bench_paired {
+        ($compact:ident, $vec:ident, $label:literal, $size:expr, $period:expr) => {
+            group.bench_function(
+                BenchmarkId::new(
+                    concat!($label, "_compact"),
+                    format!("{}/p{}", $size, $period),
+                ),
+                move |b| {
+                    let (real0, real1) = paired_fixture($size);
+                    let mut output = vec![0.0 as Float; $size];
+                    b.iter(|| {
+                        let range = $compact(
+                            black_box(real0.as_slice()),
+                            black_box(real1.as_slice()),
+                            black_box($period),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid ", $label, " benchmark fixture"));
+                        black_box(range);
+                        black_box(output.as_slice());
+                    });
+                },
+            );
+            group.bench_function(
+                BenchmarkId::new(concat!($label, "_vec"), format!("{}/p{}", $size, $period)),
+                move |b| {
+                    let (real0, real1) = paired_fixture($size);
+                    b.iter(|| {
+                        let output = $vec(
+                            black_box(real0.as_slice()),
+                            black_box(real1.as_slice()),
+                            black_box($period),
+                        )
+                        .expect(concat!("valid ", $label, " benchmark fixture"));
+                        black_box(output);
+                    });
+                },
+            );
+        };
+    }
+
+    for &size in SIZES {
+        for &period in STATISTIC_PERIODS {
+            bench_variance!(VAR, VAR_vec, "VAR", size, period);
+            bench_variance!(STDDEV, STDDEV_vec, "STDDEV", size, period);
+            bench_paired!(CORREL, CORREL_vec, "CORREL", size, period);
+            bench_paired!(BETA, BETA_vec, "BETA", size, period);
+            bench_single!(LINEARREG, LINEARREG_vec, "LINEARREG", size, period);
+            bench_single!(
+                LINEARREG_SLOPE,
+                LINEARREG_SLOPE_vec,
+                "LINEARREG_SLOPE",
+                size,
+                period
+            );
+            bench_single!(
+                LINEARREG_INTERCEPT,
+                LINEARREG_INTERCEPT_vec,
+                "LINEARREG_INTERCEPT",
+                size,
+                period
+            );
+            bench_single!(
+                LINEARREG_ANGLE,
+                LINEARREG_ANGLE_vec,
+                "LINEARREG_ANGLE",
+                size,
+                period
+            );
+            bench_single!(TSF, TSF_vec, "TSF", size, period);
+        }
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_overlap_sma,
@@ -517,6 +679,7 @@ criterion_group!(
     bench_volatility,
     bench_volume,
     bench_math_transform,
-    bench_math_operators
+    bench_math_operators,
+    bench_statistic
 );
 criterion_main!(benches);
