@@ -2,8 +2,9 @@
 
 use crate::{
     compact_buffer, padded_from_compact, validate_all_same_len, validate_finite_slices,
-    validate_input_len, validate_output_len, Float, Indicator, OutputRange, Resettable, Result,
-    StreamingIndicator,
+    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
+    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -34,6 +35,26 @@ fn validate_close_volume(close: &[Float], volume: &[Float]) -> Result<usize> {
     validate_finite_slices(&[("close", close), ("volume", volume)])?;
     Ok(len)
 }
+fn validate_obv_input(input: OBVInput<'_>) -> Result<(usize, usize)> {
+    let len = validate_close_volume(input.close, input.volume)?;
+    let count = validate_input_len(len, 1)?;
+    Ok((len, count))
+}
+
+fn obv_kernel(input: OBVInput<'_>, len: usize, count: usize, output: &mut [Float]) -> OutputRange {
+    if count == 0 {
+        return OutputRange::empty();
+    }
+
+    let mut value = 0.0 as Float;
+    let mut previous_close = input.close[0];
+    for idx in 1..len {
+        value = update_obv(value, input.close[idx], previous_close, input.volume[idx]);
+        output[idx - 1] = value;
+        previous_close = input.close[idx];
+    }
+    OutputRange::new(1, count)
+}
 
 #[inline]
 fn update_obv(value: Float, current_close: Float, previous_close: Float, volume: Float) -> Float {
@@ -49,28 +70,10 @@ fn update_obv(value: Float, current_close: Float, previous_close: Float, volume:
 /// On-Balance Volume batch function using first-observation warm-up.
 #[allow(non_snake_case)]
 pub fn OBV(close: &[Float], volume: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-    let len = validate_close_volume(close, volume)?;
-    let lookback = 1;
-    let count = validate_input_len(len, lookback)?;
+    let input = OBVInput { close, volume };
+    let (len, count) = validate_obv_input(input)?;
     validate_output_len("OBV", out_real.len(), count)?;
-
-    if count == 0 {
-        return Ok(OutputRange::empty());
-    }
-
-    let mut value = 0.0 as Float;
-    for output_idx in 0..count {
-        let input_idx = lookback + output_idx;
-        value = update_obv(
-            value,
-            close[input_idx],
-            close[input_idx - 1],
-            volume[input_idx],
-        );
-        out_real[output_idx] = value;
-    }
-
-    Ok(OutputRange::new(lookback, count))
+    Ok(obv_kernel(input, len, count, out_real))
 }
 
 /// Computes OBV into a full-length vector padded at the warm-up index.
@@ -83,6 +86,118 @@ pub fn OBV_vec(close: &[Float], volume: &[Float]) -> Result<Vec<Float>> {
         range,
         &compact[..range.nb_element],
     ))
+}
+/// Immutable On-Balance Volume Indicator Configuration.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct OBVConfig;
+
+impl OBVConfig {
+    /// Creates an OBV configuration.
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl crate::traits::sealed::Sealed for OBVConfig {}
+
+impl IndicatorConfig for OBVConfig {
+    type Input<'a> = OBVInput<'a>;
+    type Output = Vec<Float>;
+    type OutputMut<'a> = &'a mut [Float];
+    type BatchRunner = OBVBatchRunner;
+    type Stream = OBVStream;
+
+    #[inline]
+    fn lookback(&self) -> usize {
+        1
+    }
+
+    fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
+        let (len, count) = validate_obv_input(input)?;
+        let mut values = Vec::with_capacity(count);
+        values.resize(count, 0.0 as Float);
+        let range = obv_kernel(input, len, count, &mut values);
+        CompactOutput::new(len, range, values)
+    }
+
+    #[inline]
+    fn compute_into<'a>(
+        &self,
+        input: Self::Input<'a>,
+        output: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
+        OBV(input.close, input.volume, output)
+    }
+
+    #[inline]
+    fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
+        Ok(OBVBatchRunner {
+            config: *self,
+            max_input_len,
+        })
+    }
+
+    #[inline]
+    fn stream(&self) -> Result<Self::Stream> {
+        Ok(OBVStream { inner: OBV::new()? })
+    }
+}
+
+/// Reusable Prepared Batch Runner for OBV.
+#[derive(Debug, Clone)]
+pub struct OBVBatchRunner {
+    config: OBVConfig,
+    max_input_len: usize,
+}
+
+impl crate::traits::sealed::Sealed for OBVBatchRunner {}
+
+impl PreparedBatchRunner<OBVConfig> for OBVBatchRunner {
+    #[inline]
+    fn max_input_len(&self) -> usize {
+        self.max_input_len
+    }
+
+    #[inline]
+    fn compute_into<'a>(
+        &mut self,
+        input: <OBVConfig as IndicatorConfig>::Input<'a>,
+        output: <OBVConfig as IndicatorConfig>::OutputMut<'a>,
+    ) -> Result<OutputRange>
+    where
+        OBVConfig: 'a,
+    {
+        if input.close.len() > self.max_input_len {
+            return Err(TalibError::prepared_capacity_exceeded(
+                self.max_input_len,
+                input.close.len(),
+            ));
+        }
+        IndicatorConfig::compute_into(&self.config, input, output)
+    }
+}
+
+/// Independent Streaming Computation state for OBV.
+#[derive(Debug, Clone)]
+pub struct OBVStream {
+    inner: OBV,
+}
+
+impl crate::traits::sealed::Sealed for OBVStream {}
+
+impl StreamingComputation<OBVConfig> for OBVStream {
+    type Tick = OBVTick;
+    type TickOutput = Float;
+
+    #[inline]
+    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
+        StreamingIndicator::next(&mut self.inner, input)
+    }
+
+    #[inline]
+    fn reset(&mut self) {
+        Resettable::reset(&mut self.inner);
+    }
 }
 
 /// On-Balance Volume indicator using first-observation warm-up.

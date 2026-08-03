@@ -22,6 +22,10 @@ use ta_core::{
         MEDPRICEInput, MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig,
         WCLPRICEInput, WCLPRICETick, AVGDEV, AVGPRICE,
     },
+    volume::{
+        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
+        OBVTick, AD, ADOSC, OBV,
+    },
     Float, Indicator, IndicatorConfig, OutputRange, PreparedBatchRunner, Resettable,
     StreamingComputation, StreamingIndicator, TalibError,
 };
@@ -2807,6 +2811,780 @@ fn avgdev_config_covers_reusable_prepared_validated_and_independent_stream_execu
         core::mem::size_of::<AVGDEVStream>(),
         core::mem::size_of::<AVGDEV>()
     );
+}
+
+#[test]
+fn ad_config_covers_owned_caller_prepared_validation_and_independent_streams() {
+    let high = [2.0 as Float; 4];
+    let low = [0.0 as Float; 4];
+    let close = [2.0 as Float; 4];
+    let volume = [1.0 as Float, 2.0, 3.0, 4.0];
+    let input = ADInput {
+        high: &high,
+        low: &low,
+        close: &close,
+        volume: &volume,
+    };
+    let config = ADConfig::new();
+    assert_eq!(IndicatorConfig::lookback(&config), 0);
+
+    let owned = IndicatorConfig::compute(&config, input).unwrap();
+    assert_eq!(owned.source_len(), high.len());
+    assert_eq!(owned.range(), OutputRange::new(0, 4));
+    assert_float_slice_close(owned.values(), &[1.0, 3.0, 6.0, 10.0]);
+
+    let mut output = [FLOAT_SENTINEL; 5];
+    let range = IndicatorConfig::compute_into(&config, input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_float_slice_close(&output[..4], owned.values());
+    assert_eq!(output[4], FLOAT_SENTINEL);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, high.len()).unwrap();
+    assert_eq!(
+        PreparedBatchRunner::<ADConfig>::max_input_len(&runner),
+        high.len()
+    );
+    output.fill(FLOAT_SENTINEL);
+    let prepared =
+        PreparedBatchRunner::<ADConfig>::compute_into(&mut runner, input, &mut output).unwrap();
+    assert_eq!(prepared, owned.range());
+    assert_float_slice_close(&output[..4], owned.values());
+    assert_eq!(output[4], FLOAT_SENTINEL);
+
+    let second_high = [4.0 as Float; 3];
+    let second_low = [0.0 as Float; 3];
+    let second_close = [0.0 as Float; 3];
+    let second_volume = [2.0 as Float, 4.0, 6.0];
+    let second_input = ADInput {
+        high: &second_high,
+        low: &second_low,
+        close: &second_close,
+        volume: &second_volume,
+    };
+    let second_owned = IndicatorConfig::compute(&config, second_input).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    let second_range =
+        PreparedBatchRunner::<ADConfig>::compute_into(&mut runner, second_input, &mut output)
+            .unwrap();
+    assert_eq!(second_range, second_owned.range());
+    assert_float_slice_close(&output[..3], second_owned.values());
+    assert_eq!(&output[3..], &[FLOAT_SENTINEL; 2]);
+
+    let oversized = [Float::NAN; 5];
+    output.fill(FLOAT_SENTINEL);
+    assert_eq!(
+        PreparedBatchRunner::<ADConfig>::compute_into(
+            &mut runner,
+            ADInput {
+                high: &oversized,
+                low: &oversized,
+                close: &oversized,
+                volume: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: 4,
+            actual_input_len: 5,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 5]);
+
+    let valid = [1.0 as Float, 2.0];
+    let short = [1.0 as Float];
+    let invalid = [1.0 as Float, Float::NAN];
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ADInput {
+                high: &valid,
+                low: &short,
+                close: &invalid,
+                volume: &valid,
+            },
+            &mut output,
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high and low must have the same length: got 2 and 1"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 5]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ADInput {
+                high: &invalid,
+                low: &valid,
+                close: &valid,
+                volume: &valid,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high[1] must be finite, got NaN"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 5]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ADInput {
+                high: &valid,
+                low: &valid,
+                close: &valid,
+                volume: &valid,
+            },
+            &mut output[..1],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: AD output buffer too small: need 2, got 1"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 5]);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut legacy = AD::new().unwrap();
+    for idx in 0..high.len() {
+        let tick = ADTick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+            volume: volume[idx],
+        };
+        let configured = StreamingComputation::<ADConfig>::next(&mut stream, tick)
+            .unwrap()
+            .unwrap();
+        let legacy_value = StreamingIndicator::next(&mut legacy, tick)
+            .unwrap()
+            .unwrap();
+        assert_float_close(configured, owned.values()[idx]);
+        assert_float_close(configured, legacy_value);
+    }
+
+    let invalid_tick = ADTick {
+        high: 2.0,
+        low: 0.0,
+        close: 2.0,
+        volume: Float::NAN,
+    };
+    assert!(StreamingComputation::<ADConfig>::next(&mut stream, invalid_tick).is_err());
+    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
+    let next_tick = ADTick {
+        high: 2.0,
+        low: 0.0,
+        close: 2.0,
+        volume: 1.0,
+    };
+    assert_some_float_close(
+        StreamingComputation::<ADConfig>::next(&mut stream, next_tick).unwrap(),
+        11.0,
+    );
+    assert_some_float_close(
+        StreamingIndicator::next(&mut legacy, next_tick).unwrap(),
+        11.0,
+    );
+
+    let mut left = IndicatorConfig::stream(&config).unwrap();
+    let mut right = IndicatorConfig::stream(&config).unwrap();
+    assert_some_float_close(
+        StreamingComputation::<ADConfig>::next(
+            &mut left,
+            ADTick {
+                volume: 1.0,
+                ..next_tick
+            },
+        )
+        .unwrap(),
+        1.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<ADConfig>::next(
+            &mut right,
+            ADTick {
+                volume: 10.0,
+                ..next_tick
+            },
+        )
+        .unwrap(),
+        10.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<ADConfig>::next(
+            &mut left,
+            ADTick {
+                volume: 2.0,
+                ..next_tick
+            },
+        )
+        .unwrap(),
+        3.0,
+    );
+
+    StreamingComputation::<ADConfig>::reset(&mut stream);
+    Resettable::reset(&mut legacy);
+    for idx in 0..high.len() {
+        let tick = ADTick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+            volume: volume[idx],
+        };
+        assert_some_float_close(
+            StreamingComputation::<ADConfig>::next(&mut stream, tick).unwrap(),
+            owned.values()[idx],
+        );
+        assert_some_float_close(
+            StreamingIndicator::next(&mut legacy, tick).unwrap(),
+            owned.values()[idx],
+        );
+    }
+}
+
+#[test]
+fn adosc_config_covers_owned_caller_prepared_validation_and_independent_streams() {
+    let high = [2.0 as Float; 5];
+    let low = [0.0 as Float; 5];
+    let close = [2.0 as Float; 5];
+    let volume = [1.0 as Float, 2.0, 3.0, 4.0, 5.0];
+    let input = ADOSCInput {
+        high: &high,
+        low: &low,
+        close: &close,
+        volume: &volume,
+    };
+    let config = ADOSCConfig::new(2, 3).unwrap();
+    assert_eq!(config.fastperiod(), 2);
+    assert_eq!(config.slowperiod(), 3);
+    assert_eq!(IndicatorConfig::lookback(&config), 2);
+    assert!(ADOSCConfig::new(0, 3).is_err());
+    assert!(ADOSCConfig::new(3, 3).is_err());
+
+    let owned = IndicatorConfig::compute(&config, input).unwrap();
+    assert_eq!(owned.source_len(), high.len());
+    assert_eq!(owned.range(), OutputRange::new(2, 3));
+    assert_float_slice_close(owned.values(), &[4.0 / 3.0, 14.0 / 9.0, 103.0 / 54.0]);
+
+    let mut output = [FLOAT_SENTINEL; 6];
+    let range = IndicatorConfig::compute_into(&config, input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_float_slice_close(&output[..3], owned.values());
+    assert_eq!(&output[3..], &[FLOAT_SENTINEL; 3]);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, high.len()).unwrap();
+    assert_eq!(
+        PreparedBatchRunner::<ADOSCConfig>::max_input_len(&runner),
+        high.len()
+    );
+    output.fill(FLOAT_SENTINEL);
+    let prepared =
+        PreparedBatchRunner::<ADOSCConfig>::compute_into(&mut runner, input, &mut output).unwrap();
+    assert_eq!(prepared, owned.range());
+    assert_float_slice_close(&output[..3], owned.values());
+    assert_eq!(&output[3..], &[FLOAT_SENTINEL; 3]);
+
+    let second_high = [4.0 as Float; 4];
+    let second_low = [0.0 as Float; 4];
+    let second_close = [0.0 as Float; 4];
+    let second_volume = [2.0 as Float, 4.0, 6.0, 8.0];
+    let second_input = ADOSCInput {
+        high: &second_high,
+        low: &second_low,
+        close: &second_close,
+        volume: &second_volume,
+    };
+    let second_owned = IndicatorConfig::compute(&config, second_input).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    let second_range =
+        PreparedBatchRunner::<ADOSCConfig>::compute_into(&mut runner, second_input, &mut output)
+            .unwrap();
+    assert_eq!(second_range, second_owned.range());
+    assert_float_slice_close(&output[..2], second_owned.values());
+    assert_eq!(&output[2..], &[FLOAT_SENTINEL; 4]);
+
+    let oversized = [Float::NAN; 6];
+    output.fill(FLOAT_SENTINEL);
+    assert_eq!(
+        PreparedBatchRunner::<ADOSCConfig>::compute_into(
+            &mut runner,
+            ADOSCInput {
+                high: &oversized,
+                low: &oversized,
+                close: &oversized,
+                volume: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: 5,
+            actual_input_len: 6,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let valid_three = [1.0 as Float, 2.0, 3.0];
+    let valid_two = [1.0 as Float, 2.0];
+    let invalid_two = [1.0 as Float, Float::NAN];
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ADOSCInput {
+                high: &valid_three,
+                low: &valid_two,
+                close: &valid_three,
+                volume: &valid_three,
+            },
+            &mut output,
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high and low must have the same length: got 3 and 2"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ADOSCInput {
+                high: &invalid_two,
+                low: &valid_two,
+                close: &valid_two,
+                volume: &valid_two,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high[1] must be finite, got NaN"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ADOSCInput {
+                high: &valid_two,
+                low: &valid_two,
+                close: &valid_two,
+                volume: &valid_two,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err(),
+        TalibError::InsufficientData {
+            required: 3,
+            actual: 2,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ADOSCInput {
+                high: &valid_three,
+                low: &valid_three,
+                close: &valid_three,
+                volume: &valid_three,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: ADOSC output buffer too small: need 1, got 0"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut legacy = ADOSC::new(2, 3).unwrap();
+    let mut configured_values = Vec::new();
+    let mut legacy_values = Vec::new();
+    for idx in 0..high.len() {
+        let tick = ADOSCTick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+            volume: volume[idx],
+        };
+        let configured = StreamingComputation::<ADOSCConfig>::next(&mut stream, tick).unwrap();
+        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
+        assert_eq!(configured.is_some(), legacy_value.is_some());
+        if let Some(value) = configured {
+            configured_values.push(value);
+        }
+        if let Some(value) = legacy_value {
+            legacy_values.push(value);
+        }
+    }
+    assert_float_slice_close(&configured_values, owned.values());
+    assert_float_slice_close(&legacy_values, owned.values());
+
+    let invalid_tick = ADOSCTick {
+        high: 2.0,
+        low: 0.0,
+        close: 2.0,
+        volume: Float::NAN,
+    };
+    assert!(StreamingComputation::<ADOSCConfig>::next(&mut stream, invalid_tick).is_err());
+    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
+    let next_tick = ADOSCTick {
+        volume: 6.0,
+        ..invalid_tick
+    };
+    let configured_after_rejection =
+        StreamingComputation::<ADOSCConfig>::next(&mut stream, next_tick)
+            .unwrap()
+            .unwrap();
+    let legacy_after_rejection = StreamingIndicator::next(&mut legacy, next_tick)
+        .unwrap()
+        .unwrap();
+    assert_float_close(configured_after_rejection, legacy_after_rejection);
+
+    let mut left = IndicatorConfig::stream(&config).unwrap();
+    let mut right = IndicatorConfig::stream(&config).unwrap();
+    for _ in 0..2 {
+        assert_eq!(
+            StreamingComputation::<ADOSCConfig>::next(
+                &mut left,
+                ADOSCTick {
+                    volume: 1.0,
+                    ..next_tick
+                },
+            )
+            .unwrap(),
+            None
+        );
+        assert_eq!(
+            StreamingComputation::<ADOSCConfig>::next(
+                &mut right,
+                ADOSCTick {
+                    volume: 10.0,
+                    ..next_tick
+                },
+            )
+            .unwrap(),
+            None
+        );
+    }
+    assert_some_float_close(
+        StreamingComputation::<ADOSCConfig>::next(
+            &mut left,
+            ADOSCTick {
+                volume: 1.0,
+                ..next_tick
+            },
+        )
+        .unwrap(),
+        0.5,
+    );
+    assert_some_float_close(
+        StreamingComputation::<ADOSCConfig>::next(
+            &mut right,
+            ADOSCTick {
+                volume: 10.0,
+                ..next_tick
+            },
+        )
+        .unwrap(),
+        5.0,
+    );
+
+    StreamingComputation::<ADOSCConfig>::reset(&mut stream);
+    Resettable::reset(&mut legacy);
+    let replayed = high
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, _)| {
+            StreamingComputation::<ADOSCConfig>::next(
+                &mut stream,
+                ADOSCTick {
+                    high: high[idx],
+                    low: low[idx],
+                    close: close[idx],
+                    volume: volume[idx],
+                },
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let legacy_replayed = high
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, _)| {
+            StreamingIndicator::next(
+                &mut legacy,
+                ADOSCTick {
+                    high: high[idx],
+                    low: low[idx],
+                    close: close[idx],
+                    volume: volume[idx],
+                },
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_float_slice_close(&replayed, owned.values());
+    assert_float_slice_close(&legacy_replayed, owned.values());
+}
+
+#[test]
+fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() {
+    let close = [10.0 as Float, 12.0, 11.0, 15.0, 15.0];
+    let volume = [100.0 as Float, 200.0, 50.0, 300.0, 400.0];
+    let input = OBVInput {
+        close: &close,
+        volume: &volume,
+    };
+    let config = OBVConfig::new();
+    assert_eq!(IndicatorConfig::lookback(&config), 1);
+
+    let owned = IndicatorConfig::compute(&config, input).unwrap();
+    assert_eq!(owned.source_len(), close.len());
+    assert_eq!(owned.range(), OutputRange::new(1, 4));
+    assert_float_slice_close(owned.values(), &[200.0, 150.0, 450.0, 450.0]);
+
+    let mut output = [FLOAT_SENTINEL; 6];
+    let range = IndicatorConfig::compute_into(&config, input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_float_slice_close(&output[..4], owned.values());
+    assert_eq!(&output[4..], &[FLOAT_SENTINEL; 2]);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, close.len()).unwrap();
+    assert_eq!(
+        PreparedBatchRunner::<OBVConfig>::max_input_len(&runner),
+        close.len()
+    );
+    output.fill(FLOAT_SENTINEL);
+    let prepared =
+        PreparedBatchRunner::<OBVConfig>::compute_into(&mut runner, input, &mut output).unwrap();
+    assert_eq!(prepared, owned.range());
+    assert_float_slice_close(&output[..4], owned.values());
+    assert_eq!(&output[4..], &[FLOAT_SENTINEL; 2]);
+
+    let second_close = [5.0 as Float, 4.0, 6.0, 6.0];
+    let second_volume = [9.0 as Float, 3.0, 7.0, 2.0];
+    let second_input = OBVInput {
+        close: &second_close,
+        volume: &second_volume,
+    };
+    let second_owned = IndicatorConfig::compute(&config, second_input).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    let second_range =
+        PreparedBatchRunner::<OBVConfig>::compute_into(&mut runner, second_input, &mut output)
+            .unwrap();
+    assert_eq!(second_range, second_owned.range());
+    assert_float_slice_close(&output[..3], second_owned.values());
+    assert_eq!(&output[3..], &[FLOAT_SENTINEL; 3]);
+
+    let oversized = [Float::NAN; 6];
+    output.fill(FLOAT_SENTINEL);
+    assert_eq!(
+        PreparedBatchRunner::<OBVConfig>::compute_into(
+            &mut runner,
+            OBVInput {
+                close: &oversized,
+                volume: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: 5,
+            actual_input_len: 6,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let valid_two = [1.0 as Float, 2.0];
+    let valid_one = [1.0 as Float];
+    let invalid_one = [Float::NAN];
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            OBVInput {
+                close: &valid_two,
+                volume: &valid_one,
+            },
+            &mut output,
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: close and volume must have the same length: got 2 and 1"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            OBVInput {
+                close: &invalid_one,
+                volume: &valid_one,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: close[0] must be finite, got NaN"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            OBVInput {
+                close: &valid_one,
+                volume: &valid_one,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err(),
+        TalibError::InsufficientData {
+            required: 2,
+            actual: 1,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            OBVInput {
+                close: &valid_two,
+                volume: &valid_two,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: OBV output buffer too small: need 1, got 0"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut legacy = OBV::new().unwrap();
+    let first_tick = OBVTick {
+        close: close[0],
+        volume: volume[0],
+    };
+    assert_eq!(
+        StreamingComputation::<OBVConfig>::next(&mut stream, first_tick).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingIndicator::next(&mut legacy, first_tick).unwrap(),
+        None
+    );
+    for idx in 1..close.len() {
+        let tick = OBVTick {
+            close: close[idx],
+            volume: volume[idx],
+        };
+        let configured = StreamingComputation::<OBVConfig>::next(&mut stream, tick)
+            .unwrap()
+            .unwrap();
+        let legacy_value = StreamingIndicator::next(&mut legacy, tick)
+            .unwrap()
+            .unwrap();
+        assert_float_close(configured, owned.values()[idx - 1]);
+        assert_float_close(configured, legacy_value);
+    }
+
+    let invalid_tick = OBVTick {
+        close: Float::NAN,
+        volume: 1.0,
+    };
+    assert!(StreamingComputation::<OBVConfig>::next(&mut stream, invalid_tick).is_err());
+    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
+    let next_tick = OBVTick {
+        close: 16.0,
+        volume: 10.0,
+    };
+    assert_some_float_close(
+        StreamingComputation::<OBVConfig>::next(&mut stream, next_tick).unwrap(),
+        460.0,
+    );
+    assert_some_float_close(
+        StreamingIndicator::next(&mut legacy, next_tick).unwrap(),
+        460.0,
+    );
+
+    let mut left = IndicatorConfig::stream(&config).unwrap();
+    let mut right = IndicatorConfig::stream(&config).unwrap();
+    assert_eq!(
+        StreamingComputation::<OBVConfig>::next(
+            &mut left,
+            OBVTick {
+                close: 10.0,
+                volume: 1.0,
+            },
+        )
+        .unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<OBVConfig>::next(
+            &mut right,
+            OBVTick {
+                close: 100.0,
+                volume: 10.0,
+            },
+        )
+        .unwrap(),
+        None
+    );
+    assert_some_float_close(
+        StreamingComputation::<OBVConfig>::next(
+            &mut left,
+            OBVTick {
+                close: 11.0,
+                volume: 2.0,
+            },
+        )
+        .unwrap(),
+        2.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<OBVConfig>::next(
+            &mut right,
+            OBVTick {
+                close: 90.0,
+                volume: 20.0,
+            },
+        )
+        .unwrap(),
+        -20.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<OBVConfig>::next(
+            &mut left,
+            OBVTick {
+                close: 10.0,
+                volume: 3.0,
+            },
+        )
+        .unwrap(),
+        -1.0,
+    );
+
+    StreamingComputation::<OBVConfig>::reset(&mut stream);
+    Resettable::reset(&mut legacy);
+    assert_eq!(
+        StreamingComputation::<OBVConfig>::next(&mut stream, first_tick).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingIndicator::next(&mut legacy, first_tick).unwrap(),
+        None
+    );
+    for idx in 1..close.len() {
+        let tick = OBVTick {
+            close: close[idx],
+            volume: volume[idx],
+        };
+        assert_some_float_close(
+            StreamingComputation::<OBVConfig>::next(&mut stream, tick).unwrap(),
+            owned.values()[idx - 1],
+        );
+        assert_some_float_close(
+            StreamingIndicator::next(&mut legacy, tick).unwrap(),
+            owned.values()[idx - 1],
+        );
+    }
 }
 
 #[test]

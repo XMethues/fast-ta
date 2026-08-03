@@ -28,6 +28,10 @@ use ta_core::{
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
         WCLPRICETick, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
     },
+    volume::{
+        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
+        OBVTick, AD, ADOSC, OBV,
+    },
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
     StreamingIndicator,
 };
@@ -1934,6 +1938,8 @@ macro_rules! define_named_price_benchmarks {
         $workloads_group:literal,
         $indicator:ident,
         $config:ident,
+        $indicator_ctor:expr,
+        $config_ctor:expr,
         $input:ident,
         $tick:ident,
         [$($field:ident),+ $(,)?]
@@ -1948,7 +1954,8 @@ macro_rules! define_named_price_benchmarks {
                     &size,
                     |b, &size| {
                         let ohlc = ohlc_fixture(size);
-                        let indicator = $indicator::new().expect("valid price configuration");
+                        let indicator =
+                            ($indicator_ctor)().expect("valid multi-series configuration");
                         let mut output = vec![0.0 as Float; size];
                         b.iter(|| {
                             let range = Indicator::compute(
@@ -1969,7 +1976,7 @@ macro_rules! define_named_price_benchmarks {
                     &size,
                     |b, &size| {
                         let ohlc = ohlc_fixture(size);
-                        let config = $config::new();
+                        let config = ($config_ctor)();
                         let mut output = vec![0.0 as Float; size];
                         b.iter(|| {
                             let range = IndicatorConfig::compute_into(
@@ -1990,7 +1997,7 @@ macro_rules! define_named_price_benchmarks {
                     &size,
                     |b, &size| {
                         let ohlc = ohlc_fixture(size);
-                        let config = $config::new();
+                        let config = ($config_ctor)();
                         let mut runner = IndicatorConfig::prepare_batch(&config, size)
                             .expect("valid prepared price capacity");
                         let mut output = vec![0.0 as Float; size];
@@ -2013,7 +2020,8 @@ macro_rules! define_named_price_benchmarks {
                     &size,
                     |b, &size| {
                         let ohlc = ohlc_fixture(size);
-                        let indicator = $indicator::new().expect("valid price configuration");
+                        let indicator =
+                            ($indicator_ctor)().expect("valid multi-series configuration");
                         b.iter_batched(
                             || (),
                             |_| {
@@ -2036,7 +2044,7 @@ macro_rules! define_named_price_benchmarks {
                     &size,
                     |b, &size| {
                         let ohlc = ohlc_fixture(size);
-                        let config = $config::new();
+                        let config = ($config_ctor)();
                         b.iter_batched(
                             || (),
                             |_| {
@@ -2067,7 +2075,7 @@ macro_rules! define_named_price_benchmarks {
                 let universe = (0..UNIVERSE_INSTRUMENTS)
                     .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
-                let indicator = $indicator::new().expect("valid price configuration");
+                let indicator = ($indicator_ctor)().expect("valid multi-series configuration");
                 let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
                 b.iter(|| {
                     for ohlc in &universe {
@@ -2087,7 +2095,7 @@ macro_rules! define_named_price_benchmarks {
                 let universe = (0..UNIVERSE_INSTRUMENTS)
                     .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
-                let config = $config::new();
+                let config = ($config_ctor)();
                 let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
                 b.iter(|| {
                     for ohlc in &universe {
@@ -2107,7 +2115,7 @@ macro_rules! define_named_price_benchmarks {
                 let universe = (0..UNIVERSE_INSTRUMENTS)
                     .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
-                let config = $config::new();
+                let config = ($config_ctor)();
                 let mut runner =
                     IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN).unwrap();
                 let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
@@ -2132,7 +2140,9 @@ macro_rules! define_named_price_benchmarks {
             group.bench_function("per_worker/current_instances", |b| {
                 let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
                 let indicators = (0..WORKERS)
-                    .map(|_| $indicator::new().expect("valid price configuration"))
+                    .map(|_| {
+                        ($indicator_ctor)().expect("valid multi-series configuration")
+                    })
                     .collect::<Vec<_>>();
                 let mut outputs =
                     vec![vec![0.0 as Float; REPEATED_SERIES_LEN]; WORKERS];
@@ -2152,7 +2162,7 @@ macro_rules! define_named_price_benchmarks {
             });
             group.bench_function("per_worker/prepared_runners", |b| {
                 let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
-                let config = $config::new();
+                let config = ($config_ctor)();
                 let mut runners = (0..WORKERS)
                     .map(|_| IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN).unwrap())
                     .collect::<Vec<_>>();
@@ -2183,7 +2193,9 @@ macro_rules! define_named_price_benchmarks {
                 b.iter_batched_ref(
                     || {
                         (0..STREAM_INSTRUMENTS)
-                            .map(|_| $indicator::new().expect("valid price configuration"))
+                            .map(|_| {
+                                ($indicator_ctor)().expect("valid multi-series configuration")
+                            })
                             .collect::<Vec<_>>()
                     },
                     |streams| {
@@ -2207,7 +2219,7 @@ macro_rules! define_named_price_benchmarks {
                 let inputs = (0..STREAM_INSTRUMENTS)
                     .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
-                let config = $config::new();
+                let config = ($config_ctor)();
                 b.iter_batched_ref(
                     || {
                         (0..STREAM_INSTRUMENTS)
@@ -2500,6 +2512,85 @@ define_single_output_workloads!(
     Float,
     0.0 as Float
 );
+fn bench_adosc_parameter_sweep(c: &mut Criterion) {
+    let mut group =
+        c.benchmark_group("indicator_execution/expanded/volume_workloads/ADOSC/parameter_sweep");
+    let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+    let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+
+    for &slowperiod in SWEEP_PERIODS {
+        let fastperiod = core::cmp::max(1, slowperiod / 2);
+        let config =
+            ADOSCConfig::new(fastperiod, slowperiod).expect("valid ADOSC sweep parameters");
+        let indicator = ADOSC::new(fastperiod, slowperiod).expect("valid ADOSC sweep parameters");
+        let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+            .expect("valid ADOSC sweep capacity");
+        group.throughput(Throughput::Elements(REPEATED_SERIES_LEN as u64));
+
+        group.bench_with_input(
+            BenchmarkId::new("current_caller_compact", slowperiod),
+            &slowperiod,
+            |b, _| {
+                b.iter(|| {
+                    let range = Indicator::compute(
+                        black_box(&indicator),
+                        black_box(ADOSCInput {
+                            high: ohlc.high.as_slice(),
+                            low: ohlc.low.as_slice(),
+                            close: ohlc.close.as_slice(),
+                            volume: ohlc.volume.as_slice(),
+                        }),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid ADOSC sweep fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("config_caller_compact", slowperiod),
+            &slowperiod,
+            |b, _| {
+                b.iter(|| {
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
+                        black_box(ADOSCInput {
+                            high: ohlc.high.as_slice(),
+                            low: ohlc.low.as_slice(),
+                            close: ohlc.close.as_slice(),
+                            volume: ohlc.volume.as_slice(),
+                        }),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid configured ADOSC sweep fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("prepared_runner", slowperiod),
+            &slowperiod,
+            |b, _| {
+                b.iter(|| {
+                    let range = PreparedBatchRunner::<ADOSCConfig>::compute_into(
+                        black_box(&mut runner),
+                        black_box(ADOSCInput {
+                            high: ohlc.high.as_slice(),
+                            low: ohlc.low.as_slice(),
+                            close: ohlc.close.as_slice(),
+                            volume: ohlc.volume.as_slice(),
+                        }),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid prepared ADOSC sweep fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
 define_named_price_benchmarks!(
     bench_avgprice_qualified_matrix,
     bench_avgprice_repeated_and_streaming,
@@ -2507,6 +2598,8 @@ define_named_price_benchmarks!(
     "indicator_execution/expanded/price_transform_workloads/AVGPRICE",
     AVGPRICE,
     AVGPRICEConfig,
+    AVGPRICE::new,
+    AVGPRICEConfig::new,
     AVGPRICEInput,
     AVGPRICETick,
     [open, high, low, close]
@@ -2518,6 +2611,8 @@ define_named_price_benchmarks!(
     "indicator_execution/expanded/price_transform_workloads/MEDPRICE",
     MEDPRICE,
     MEDPRICEConfig,
+    MEDPRICE::new,
+    MEDPRICEConfig::new,
     MEDPRICEInput,
     MEDPRICETick,
     [high, low]
@@ -2529,6 +2624,8 @@ define_named_price_benchmarks!(
     "indicator_execution/expanded/price_transform_workloads/TYPPRICE",
     TYPPRICE,
     TYPPRICEConfig,
+    TYPPRICE::new,
+    TYPPRICEConfig::new,
     TYPPRICEInput,
     TYPPRICETick,
     [high, low, close]
@@ -2540,9 +2637,51 @@ define_named_price_benchmarks!(
     "indicator_execution/expanded/price_transform_workloads/WCLPRICE",
     WCLPRICE,
     WCLPRICEConfig,
+    WCLPRICE::new,
+    WCLPRICEConfig::new,
     WCLPRICEInput,
     WCLPRICETick,
     [high, low, close]
+);
+
+define_named_price_benchmarks!(
+    bench_ad_qualified_matrix,
+    bench_ad_repeated_and_streaming,
+    "indicator_execution/expanded/volume/AD",
+    "indicator_execution/expanded/volume_workloads/AD",
+    AD,
+    ADConfig,
+    AD::new,
+    ADConfig::new,
+    ADInput,
+    ADTick,
+    [high, low, close, volume]
+);
+define_named_price_benchmarks!(
+    bench_adosc_qualified_matrix,
+    bench_adosc_repeated_and_streaming,
+    "indicator_execution/expanded/volume/ADOSC",
+    "indicator_execution/expanded/volume_workloads/ADOSC",
+    ADOSC,
+    ADOSCConfig,
+    || ADOSC::new(PERIOD / 2, PERIOD),
+    || ADOSCConfig::new(PERIOD / 2, PERIOD).expect("valid ADOSC parameters"),
+    ADOSCInput,
+    ADOSCTick,
+    [high, low, close, volume]
+);
+define_named_price_benchmarks!(
+    bench_obv_qualified_matrix,
+    bench_obv_repeated_and_streaming,
+    "indicator_execution/expanded/volume/OBV",
+    "indicator_execution/expanded/volume_workloads/OBV",
+    OBV,
+    OBVConfig,
+    OBV::new,
+    OBVConfig::new,
+    OBVInput,
+    OBVTick,
+    [close, volume]
 );
 
 criterion_group!(
@@ -2594,5 +2733,12 @@ criterion_group!(
     bench_medprice_repeated_and_streaming,
     bench_typprice_repeated_and_streaming,
     bench_wclprice_repeated_and_streaming,
+    bench_ad_qualified_matrix,
+    bench_adosc_qualified_matrix,
+    bench_obv_qualified_matrix,
+    bench_ad_repeated_and_streaming,
+    bench_adosc_repeated_and_streaming,
+    bench_obv_repeated_and_streaming,
+    bench_adosc_parameter_sweep,
 );
 criterion_main!(benches);

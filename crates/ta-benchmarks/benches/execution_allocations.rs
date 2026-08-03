@@ -32,6 +32,9 @@ use ta_core::{
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
         WCLPRICETick, AVGPRICE,
     },
+    volume::{
+        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
+    },
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
     StreamingIndicator,
 };
@@ -1054,7 +1057,8 @@ macro_rules! profile_named_price_indicator {
         $new_config:expr,
         $input:ident,
         $tick:ident,
-        [$($field:ident),+ $(,)?]
+        [$($field:ident),+ $(,)?],
+        $lookback:expr
     ) => {{
         let ohlc = ohlc_fixture(PROFILE_SIZE);
         let scenario = format!("setup/{}Config/parameters", $label);
@@ -1062,7 +1066,7 @@ macro_rules! profile_named_price_indicator {
         assert_zero_allocations(&scenario, profile);
 
         let config: $config = $new_config;
-        let output_bytes = PROFILE_SIZE * core::mem::size_of::<Float>();
+        let output_bytes = (PROFILE_SIZE - $lookback) * core::mem::size_of::<Float>();
         let mut output = vec![0.0 as Float; PROFILE_SIZE];
         let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $label);
         let profile = print_profile(&scenario, || {
@@ -1183,7 +1187,8 @@ fn profile_named_price_execution() {
         AVGPRICEConfig::new(),
         AVGPRICEInput,
         AVGPRICETick,
-        [open, high, low, close]
+        [open, high, low, close],
+        0
     );
     profile_named_price_indicator!(
         "MEDPRICE",
@@ -1191,7 +1196,8 @@ fn profile_named_price_execution() {
         MEDPRICEConfig::new(),
         MEDPRICEInput,
         MEDPRICETick,
-        [high, low]
+        [high, low],
+        0
     );
     profile_named_price_indicator!(
         "TYPPRICE",
@@ -1199,7 +1205,8 @@ fn profile_named_price_execution() {
         TYPPRICEConfig::new(),
         TYPPRICEInput,
         TYPPRICETick,
-        [high, low, close]
+        [high, low, close],
+        0
     );
     profile_named_price_indicator!(
         "WCLPRICE",
@@ -1207,7 +1214,35 @@ fn profile_named_price_execution() {
         WCLPRICEConfig::new(),
         WCLPRICEInput,
         WCLPRICETick,
-        [high, low, close]
+        [high, low, close],
+        0
+    );
+    profile_named_price_indicator!(
+        "AD",
+        ADConfig,
+        ADConfig::new(),
+        ADInput,
+        ADTick,
+        [high, low, close, volume],
+        0
+    );
+    profile_named_price_indicator!(
+        "ADOSC",
+        ADOSCConfig,
+        ADOSCConfig::new(PERIOD / 2, PERIOD).expect("valid ADOSC parameters"),
+        ADOSCInput,
+        ADOSCTick,
+        [high, low, close, volume],
+        PERIOD - 1
+    );
+    profile_named_price_indicator!(
+        "OBV",
+        OBVConfig,
+        OBVConfig::new(),
+        OBVInput,
+        OBVTick,
+        [close, volume],
+        1
     );
 }
 

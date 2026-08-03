@@ -2,7 +2,8 @@
 
 use crate::{
     compact_buffer, padded_from_compact, validate_all_same_len, validate_finite_slices,
-    validate_output_len, Float, Indicator, OutputRange, Resettable, Result, StreamingIndicator,
+    validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig, OutputRange,
+    PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -68,6 +69,19 @@ pub(super) fn money_flow_volume(high: Float, low: Float, close: Float, volume: F
         (((close - low) - (high - close)) / range) * volume
     }
 }
+fn ad_kernel(input: ADInput<'_>, len: usize, output: &mut [Float]) -> OutputRange {
+    let mut cumulative = 0.0 as Float;
+    for idx in 0..len {
+        cumulative += money_flow_volume(
+            input.high[idx],
+            input.low[idx],
+            input.close[idx],
+            input.volume[idx],
+        );
+        output[idx] = cumulative;
+    }
+    OutputRange::new(0, len)
+}
 
 /// TA-Lib-style Chaikin Accumulation/Distribution Line batch function.
 #[allow(non_snake_case)]
@@ -78,16 +92,15 @@ pub fn AD(
     volume: &[Float],
     out_real: &mut [Float],
 ) -> Result<OutputRange> {
+    let input = ADInput {
+        high,
+        low,
+        close,
+        volume,
+    };
     let len = validate_hlcv(high, low, close, volume)?;
     validate_output_len("AD", out_real.len(), len)?;
-
-    let mut cumulative = 0.0 as Float;
-    for idx in 0..len {
-        cumulative += money_flow_volume(high[idx], low[idx], close[idx], volume[idx]);
-        out_real[idx] = cumulative;
-    }
-
-    Ok(OutputRange::new(0, len))
+    Ok(ad_kernel(input, len, out_real))
 }
 
 /// Computes AD into a full-length vector.
@@ -105,6 +118,118 @@ pub fn AD_vec(
         range,
         &compact[..range.nb_element],
     ))
+}
+/// Immutable Chaikin Accumulation/Distribution Line Indicator Configuration.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct ADConfig;
+
+impl ADConfig {
+    /// Creates an AD configuration.
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl crate::traits::sealed::Sealed for ADConfig {}
+
+impl IndicatorConfig for ADConfig {
+    type Input<'a> = ADInput<'a>;
+    type Output = Vec<Float>;
+    type OutputMut<'a> = &'a mut [Float];
+    type BatchRunner = ADBatchRunner;
+    type Stream = ADStream;
+
+    #[inline]
+    fn lookback(&self) -> usize {
+        0
+    }
+
+    fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
+        let len = validate_hlcv(input.high, input.low, input.close, input.volume)?;
+        let mut values = Vec::with_capacity(len);
+        values.resize(len, 0.0 as Float);
+        let range = ad_kernel(input, len, &mut values);
+        CompactOutput::new(len, range, values)
+    }
+
+    #[inline]
+    fn compute_into<'a>(
+        &self,
+        input: Self::Input<'a>,
+        output: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
+        AD(input.high, input.low, input.close, input.volume, output)
+    }
+
+    #[inline]
+    fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
+        Ok(ADBatchRunner {
+            config: *self,
+            max_input_len,
+        })
+    }
+
+    #[inline]
+    fn stream(&self) -> Result<Self::Stream> {
+        Ok(ADStream { inner: AD::new()? })
+    }
+}
+
+/// Reusable Prepared Batch Runner for AD.
+#[derive(Debug, Clone)]
+pub struct ADBatchRunner {
+    config: ADConfig,
+    max_input_len: usize,
+}
+
+impl crate::traits::sealed::Sealed for ADBatchRunner {}
+
+impl PreparedBatchRunner<ADConfig> for ADBatchRunner {
+    #[inline]
+    fn max_input_len(&self) -> usize {
+        self.max_input_len
+    }
+
+    #[inline]
+    fn compute_into<'a>(
+        &mut self,
+        input: <ADConfig as IndicatorConfig>::Input<'a>,
+        output: <ADConfig as IndicatorConfig>::OutputMut<'a>,
+    ) -> Result<OutputRange>
+    where
+        ADConfig: 'a,
+    {
+        if input.high.len() > self.max_input_len {
+            return Err(TalibError::prepared_capacity_exceeded(
+                self.max_input_len,
+                input.high.len(),
+            ));
+        }
+        IndicatorConfig::compute_into(&self.config, input, output)
+    }
+}
+
+/// Independent Streaming Computation state for AD.
+#[derive(Debug, Clone)]
+pub struct ADStream {
+    inner: AD,
+}
+
+impl crate::traits::sealed::Sealed for ADStream {}
+
+impl StreamingComputation<ADConfig> for ADStream {
+    type Tick = ADTick;
+    type TickOutput = Float;
+
+    #[inline]
+    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
+        StreamingIndicator::next(&mut self.inner, input)
+    }
+
+    #[inline]
+    fn reset(&mut self) {
+        Resettable::reset(&mut self.inner);
+    }
 }
 
 /// Chaikin Accumulation/Distribution Line indicator.

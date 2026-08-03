@@ -13,8 +13,10 @@ issue_7_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines 
 issue_7_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/recursive_overlap/MA_EMA'"
 issue_8_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/price_transform"
 issue_8_streaming_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/price_transform_workloads/.*/streaming'"
+issue_9_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volume"
+issue_9_streaming_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volume_workloads/ADOSC/streaming"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
-status: issue-8-price-transform-qualified
+status: issue-9-volume-qualified
 ---
 
 # Indicator Execution Baselines
@@ -708,3 +710,58 @@ Universe and parameter-sweep rows report current / configuration / prepared. Per
 ### Gate conclusion
 
 All allocation gates clear exactly. No configuration caller-owned, prepared, repeated-workload, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path except `AVGDEV` at the two period-512 cases, where it remained within +0.02%. These are host-local default-`f64` qualification results, not portable speedup claims.
+
+## Issue #9 volume qualification
+
+Issue #9 adds parameter-only configurations for `AD`, `ADOSC`, and `OBV`, with owned and caller-owned Compact Output, reusable Prepared Batch Runners, and independent Streaming Computations. Uppercase compatibility indicators retain their existing batch, padded-owned, streaming, warm-up, and reset behavior. Multi-series high/low/close/volume and close/volume inputs use typed structures.
+
+The full benchmark command is `cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volume`. The matrix uses observations 64/4,096/65,536; `ADOSC` uses fast/slow periods 7/14 and its parameter sweep uses slow periods 5/14/50/200 with `fastperiod = max(1, slowperiod / 2)`. A focused rerun of `indicator_execution/expanded/volume_workloads/ADOSC/streaming` records the final direct configured stream and compatibility adapter. Values below are Criterion point estimates from the 100-sample qualification runs.
+
+### Allocation evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports:
+
+| Indicator | Configuration | Caller-owned | Owned Compact Output | Prepared setup / first / repeated / oversize | Stream setup / ticks |
+|---|---:|---:|---:|---:|---:|
+| AD | 0 / 0 B | 0 / 0 B | 1 / 32,768 B | 0 / 0 B in every phase | 0 / 0 B |
+| ADOSC | 0 / 0 B | 0 / 0 B | 1 / 32,664 B | 0 / 0 B in every phase | 0 / 0 B |
+| OBV | 0 / 0 B | 0 / 0 B | 1 / 32,760 B | 0 / 0 B in every phase | 0 / 0 B |
+
+Entries are allocation operations / gross allocated bytes. Owned byte counts are exactly `compact_count × size_of::<Float>()`; caller-owned computation, prepared reuse and rejection, stream construction, and streaming ticks allocate nothing.
+
+### Full timing evidence
+
+Caller-owned fields report current / configuration / prepared. Owned fields report legacy Aligned Output / configuration Compact Output.
+
+| Indicator | Observations | Caller-owned point estimates | Config / current | Prepared / current | Owned point estimates | Compact / legacy |
+|---|---:|---:|---:|---:|---:|---:|
+| AD | 64 | 162.97 ns / 162.10 ns / 163.25 ns | -0.53% | +0.17% | 223.36 ns / 183.53 ns | -17.83% |
+| AD | 4,096 | 11.098 µs / 11.115 µs / 11.113 µs | +0.15% | +0.14% | 14.150 µs / 11.764 µs | -16.87% |
+| AD | 65,536 | 175.496 µs / 176.281 µs / 175.826 µs | +0.45% | +0.19% | 217.396 µs / 184.982 µs | -14.91% |
+| ADOSC | 64 | 280.80 ns / 280.41 ns / 281.16 ns | -0.14% | +0.13% | 347.45 ns / 306.84 ns | -11.69% |
+| ADOSC | 4,096 | 19.035 µs / 19.041 µs / 19.197 µs | +0.03% | +0.85% | 22.135 µs / 19.787 µs | -10.61% |
+| ADOSC | 65,536 | 306.848 µs / 304.461 µs / 305.825 µs | -0.78% | -0.33% | 348.035 µs / 308.570 µs | -11.34% |
+| OBV | 64 | 97.59 ns / 97.18 ns / 100.28 ns | -0.42% | +2.76% | 161.37 ns / 119.34 ns | -26.04% |
+| OBV | 4,096 | 6.932 µs / 7.032 µs / 6.935 µs | +1.45% | +0.04% | 9.179 µs / 7.515 µs | -18.14% |
+| OBV | 65,536 | 111.922 µs / 111.028 µs / 112.316 µs | -0.80% | +0.35% | 138.932 µs / 116.496 µs | -16.15% |
+
+### Repeated and streaming evidence
+
+Universe rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured. Fixtures and caller-owned buffers are identical within each comparison; construction and reset remain outside measured operations. The ADOSC sweep row aggregates the four separately measured period point estimates.
+
+| Indicator / workload | Point estimates | Same-run deltas |
+|---|---:|---:|
+| AD Universe, 128 × 4,096 | 1.4564 ms / 1.4571 ms / 1.4489 ms | config/current +0.05%; prepared/current -0.52% |
+| AD Per-worker, 4 × 4,096 | 46.447 µs / 45.005 µs | prepared/current -3.11% |
+| AD Streaming, 16 × 4,096 | 470.770 µs / 326.096 µs | configured/legacy -30.73% |
+| ADOSC Universe, 128 × 4,096 | 2.4658 ms / 2.4536 ms / 2.4743 ms | config/current -0.49%; prepared/current +0.35% |
+| ADOSC Sweep, 4 × 4,096 | 76.160 µs / 76.104 µs / 76.645 µs | config/current -0.07%; prepared/current +0.64% |
+| ADOSC Per-worker, 4 × 4,096 | 77.436 µs / 76.389 µs | prepared/current -1.35% |
+| ADOSC Streaming, 16 × 4,096 | 422.320 µs / 422.325 µs | configured/legacy +0.00% |
+| OBV Universe, 128 × 4,096 | 890.584 µs / 892.538 µs / 893.511 µs | config/current +0.22%; prepared/current +0.33% |
+| OBV Per-worker, 4 × 4,096 | 28.087 µs / 27.659 µs | prepared/current -1.52% |
+| OBV Streaming, 16 × 4,096 | 245.730 µs / 244.982 µs | configured/legacy -0.30% |
+
+### Gate conclusion
+
+All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path by 10.61%–26.04%. These are host-local default-`f64` qualification results, not portable speedup claims.

@@ -12,6 +12,7 @@ pub(crate) struct OhlcFixture {
     pub(crate) high: Vec<Float>,
     pub(crate) low: Vec<Float>,
     pub(crate) close: Vec<Float>,
+    pub(crate) volume: Vec<Float>,
 }
 
 pub(crate) fn series_fixture(size: usize, seed: usize) -> Vec<Float> {
@@ -26,6 +27,7 @@ pub(crate) fn series_fixture(size: usize, seed: usize) -> Vec<Float> {
 
 pub(crate) fn ohlc_fixture(size: usize) -> OhlcFixture {
     let close = series_fixture(size, 0);
+    let volume = series_fixture(size, 1);
     let open = close
         .iter()
         .enumerate()
@@ -46,6 +48,7 @@ pub(crate) fn ohlc_fixture(size: usize) -> OhlcFixture {
         high,
         low,
         close,
+        volume,
     }
 }
 
