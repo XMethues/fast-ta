@@ -19,14 +19,14 @@ use ta_core::{
         MINMAXINDEXOutputMut, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MAX,
         MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
-    overlap::{SMAConfig, SMA},
+    overlap::{SMAConfig, TRIMAConfig, WMAConfig, SMA, TRIMA, WMA},
     price_transform::{AVGPRICEInput, AVGPRICE},
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
     StreamingIndicator,
 };
 
 const SIZES: &[usize] = &[64, 4_096, 65_536];
-const EXTREMA_MATRIX: &[(usize, usize)] = &[
+const EXECUTION_MATRIX: &[(usize, usize)] = &[
     (64, 14),
     (4_096, 14),
     (4_096, 512),
@@ -305,7 +305,7 @@ fn bench_minmaxindex_one_shot(c: &mut Criterion) {
 }
 
 #[derive(Clone, Copy)]
-enum ExtremaPath {
+enum ExecutionPath {
     Current,
     Config,
     Prepared,
@@ -313,27 +313,27 @@ enum ExtremaPath {
     ConfigOwned,
 }
 
-const EXTREMA_PATHS: [ExtremaPath; 5] = [
-    ExtremaPath::Current,
-    ExtremaPath::Config,
-    ExtremaPath::Prepared,
-    ExtremaPath::LegacyOwned,
-    ExtremaPath::ConfigOwned,
+const EXECUTION_PATHS: [ExecutionPath; 5] = [
+    ExecutionPath::Current,
+    ExecutionPath::Config,
+    ExecutionPath::Prepared,
+    ExecutionPath::LegacyOwned,
+    ExecutionPath::ConfigOwned,
 ];
 
-fn rotated_extrema_paths(case_index: usize) -> [ExtremaPath; 5] {
-    std::array::from_fn(|offset| EXTREMA_PATHS[(case_index + offset) % EXTREMA_PATHS.len()])
+fn rotated_execution_paths(case_index: usize) -> [ExecutionPath; 5] {
+    std::array::from_fn(|offset| EXECUTION_PATHS[(case_index + offset) % EXECUTION_PATHS.len()])
 }
 
 fn register_minmax_matrix_path(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
-    path: ExtremaPath,
+    path: ExecutionPath,
     size: usize,
     period: usize,
 ) {
     let parameter = format!("n={size}/period={period}");
     match path {
-        ExtremaPath::Current => group.bench_with_input(
+        ExecutionPath::Current => group.bench_with_input(
             BenchmarkId::new("current_caller_compact", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -356,7 +356,7 @@ fn register_minmax_matrix_path(
                 });
             },
         ),
-        ExtremaPath::Config => group.bench_with_input(
+        ExecutionPath::Config => group.bench_with_input(
             BenchmarkId::new("config_caller_compact", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -379,7 +379,7 @@ fn register_minmax_matrix_path(
                 });
             },
         ),
-        ExtremaPath::Prepared => group.bench_with_input(
+        ExecutionPath::Prepared => group.bench_with_input(
             BenchmarkId::new("prepared_runner", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -404,7 +404,7 @@ fn register_minmax_matrix_path(
                 });
             },
         ),
-        ExtremaPath::LegacyOwned => group.bench_with_input(
+        ExecutionPath::LegacyOwned => group.bench_with_input(
             BenchmarkId::new("legacy_owned_aligned", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -424,7 +424,7 @@ fn register_minmax_matrix_path(
                 );
             },
         ),
-        ExtremaPath::ConfigOwned => group.bench_with_input(
+        ExecutionPath::ConfigOwned => group.bench_with_input(
             BenchmarkId::new("config_owned_compact", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -454,9 +454,9 @@ macro_rules! define_extrema_matrix_benchmark {
         fn $name(c: &mut Criterion) {
             let mut group = c.benchmark_group($group_name);
 
-            for (case_index, &(size, period)) in EXTREMA_MATRIX.iter().enumerate() {
+            for (case_index, &(size, period)) in EXECUTION_MATRIX.iter().enumerate() {
                 group.throughput(Throughput::Elements(size as u64));
-                for path in rotated_extrema_paths(case_index) {
+                for path in rotated_execution_paths(case_index) {
                     $register(&mut group, path, size, period);
                 }
             }
@@ -474,13 +474,13 @@ define_extrema_matrix_benchmark!(
 
 fn register_minmaxindex_matrix_path(
     group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
-    path: ExtremaPath,
+    path: ExecutionPath,
     size: usize,
     period: usize,
 ) {
     let parameter = format!("n={size}/period={period}");
     match path {
-        ExtremaPath::Current => group.bench_with_input(
+        ExecutionPath::Current => group.bench_with_input(
             BenchmarkId::new("current_caller_compact", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -503,7 +503,7 @@ fn register_minmaxindex_matrix_path(
                 });
             },
         ),
-        ExtremaPath::Config => group.bench_with_input(
+        ExecutionPath::Config => group.bench_with_input(
             BenchmarkId::new("config_caller_compact", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -526,7 +526,7 @@ fn register_minmaxindex_matrix_path(
                 });
             },
         ),
-        ExtremaPath::Prepared => group.bench_with_input(
+        ExecutionPath::Prepared => group.bench_with_input(
             BenchmarkId::new("prepared_runner", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -551,7 +551,7 @@ fn register_minmaxindex_matrix_path(
                 });
             },
         ),
-        ExtremaPath::LegacyOwned => group.bench_with_input(
+        ExecutionPath::LegacyOwned => group.bench_with_input(
             BenchmarkId::new("legacy_owned_aligned", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -571,7 +571,7 @@ fn register_minmaxindex_matrix_path(
                 );
             },
         ),
-        ExtremaPath::ConfigOwned => group.bench_with_input(
+        ExecutionPath::ConfigOwned => group.bench_with_input(
             BenchmarkId::new("config_owned_compact", &parameter),
             &(size, period),
             |b, &(size, period)| {
@@ -1389,20 +1389,20 @@ fn bench_minmaxindex_repeated_and_streaming(c: &mut Criterion) {
     group.finish();
 }
 
-fn single_extrema_sweep_outputs<T: Copy>(initial: T) -> Vec<Vec<T>> {
+fn single_output_sweep_outputs<T: Copy>(initial: T) -> Vec<Vec<T>> {
     SWEEP_PERIODS
         .iter()
         .map(|&period| vec![initial; output_len(REPEATED_SERIES_LEN, period)])
         .collect()
 }
 
-fn single_extrema_worker_outputs<T: Copy>(initial: T) -> Vec<Vec<T>> {
+fn single_output_worker_outputs<T: Copy>(initial: T) -> Vec<Vec<T>> {
     (0..WORKERS)
         .map(|_| vec![initial; output_len(REPEATED_SERIES_LEN, PERIOD)])
         .collect()
 }
 
-macro_rules! define_single_extrema_workloads {
+macro_rules! define_single_output_workloads {
     (
         $name:ident,
         $group_name:literal,
@@ -1494,7 +1494,7 @@ macro_rules! define_single_extrema_workloads {
                     .iter()
                     .map(|&period| $indicator::new(period).expect("valid sweep period"))
                     .collect::<Vec<_>>();
-                let mut outputs = single_extrema_sweep_outputs::<$current_type>($current_initial);
+                let mut outputs = single_output_sweep_outputs::<$current_type>($current_initial);
                 b.iter(|| {
                     for (indicator, output) in indicators.iter().zip(outputs.iter_mut()) {
                         let range = Indicator::compute(
@@ -1517,7 +1517,7 @@ macro_rules! define_single_extrema_workloads {
                     .iter()
                     .map(|&period| $config::new(period).expect("valid sweep period"))
                     .collect::<Vec<_>>();
-                let mut outputs = single_extrema_sweep_outputs::<$config_type>($config_initial);
+                let mut outputs = single_output_sweep_outputs::<$config_type>($config_initial);
                 b.iter(|| {
                     for (config, output) in configs.iter().zip(outputs.iter_mut()) {
                         let range = IndicatorConfig::compute_into(
@@ -1547,7 +1547,7 @@ macro_rules! define_single_extrema_workloads {
                             .expect("valid prepared capacity")
                     })
                     .collect::<Vec<_>>();
-                let mut outputs = single_extrema_sweep_outputs::<$config_type>($config_initial);
+                let mut outputs = single_output_sweep_outputs::<$config_type>($config_initial);
                 b.iter(|| {
                     for (runner, output) in runners.iter_mut().zip(outputs.iter_mut()) {
                         let range = PreparedBatchRunner::<$config>::compute_into(
@@ -1571,7 +1571,7 @@ macro_rules! define_single_extrema_workloads {
                     .map(|_| $indicator::new(PERIOD).expect("valid period"))
                     .collect::<Vec<_>>();
                 let inputs = worker_fixtures();
-                let mut outputs = single_extrema_worker_outputs::<$current_type>($current_initial);
+                let mut outputs = single_output_worker_outputs::<$current_type>($current_initial);
                 b.iter(|| {
                     for ((indicator, input), output) in
                         indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
@@ -1599,7 +1599,7 @@ macro_rules! define_single_extrema_workloads {
                     })
                     .collect::<Vec<_>>();
                 let inputs = worker_fixtures();
-                let mut outputs = single_extrema_worker_outputs::<$config_type>($config_initial);
+                let mut outputs = single_output_worker_outputs::<$config_type>($config_initial);
                 b.iter(|| {
                     for ((runner, input), output) in runners
                         .iter_mut()
@@ -1678,7 +1678,7 @@ macro_rules! define_single_extrema_workloads {
     };
 }
 
-define_single_extrema_workloads!(
+define_single_output_workloads!(
     bench_min_repeated_and_streaming,
     "indicator_execution/expanded/single_extrema_workloads/MIN",
     MIN,
@@ -1688,7 +1688,7 @@ define_single_extrema_workloads!(
     Float,
     0.0 as Float
 );
-define_single_extrema_workloads!(
+define_single_output_workloads!(
     bench_max_repeated_and_streaming,
     "indicator_execution/expanded/single_extrema_workloads/MAX",
     MAX,
@@ -1698,7 +1698,7 @@ define_single_extrema_workloads!(
     Float,
     0.0 as Float
 );
-define_single_extrema_workloads!(
+define_single_output_workloads!(
     bench_minindex_repeated_and_streaming,
     "indicator_execution/expanded/single_extrema_workloads/MININDEX",
     MININDEX,
@@ -1708,7 +1708,7 @@ define_single_extrema_workloads!(
     usize,
     0_usize
 );
-define_single_extrema_workloads!(
+define_single_output_workloads!(
     bench_maxindex_repeated_and_streaming,
     "indicator_execution/expanded/single_extrema_workloads/MAXINDEX",
     MAXINDEX,
@@ -1719,7 +1719,7 @@ define_single_extrema_workloads!(
     0_usize
 );
 
-macro_rules! define_single_extrema_benchmark {
+macro_rules! define_single_output_benchmark {
     (
         $name:ident,
         $group_name:literal,
@@ -1732,12 +1732,12 @@ macro_rules! define_single_extrema_benchmark {
     ) => {
         fn $name(c: &mut Criterion) {
             let mut group = c.benchmark_group($group_name);
-            for (case_index, &(size, period)) in EXTREMA_MATRIX.iter().enumerate() {
+            for (case_index, &(size, period)) in EXECUTION_MATRIX.iter().enumerate() {
                 group.throughput(Throughput::Elements(size as u64));
                 let parameter = format!("n={size}/period={period}");
-                for path in rotated_extrema_paths(case_index) {
+                for path in rotated_execution_paths(case_index) {
                     match path {
-                        ExtremaPath::Current => group.bench_with_input(
+                        ExecutionPath::Current => group.bench_with_input(
                             BenchmarkId::new("current_caller_compact", &parameter),
                             &(size, period),
                             |b, &(size, period)| {
@@ -1757,7 +1757,7 @@ macro_rules! define_single_extrema_benchmark {
                                 });
                             },
                         ),
-                        ExtremaPath::Config => group.bench_with_input(
+                        ExecutionPath::Config => group.bench_with_input(
                             BenchmarkId::new("config_caller_compact", &parameter),
                             &(size, period),
                             |b, &(size, period)| {
@@ -1776,7 +1776,7 @@ macro_rules! define_single_extrema_benchmark {
                                 });
                             },
                         ),
-                        ExtremaPath::Prepared => group.bench_with_input(
+                        ExecutionPath::Prepared => group.bench_with_input(
                             BenchmarkId::new("prepared_runner", &parameter),
                             &(size, period),
                             |b, &(size, period)| {
@@ -1797,7 +1797,7 @@ macro_rules! define_single_extrema_benchmark {
                                 });
                             },
                         ),
-                        ExtremaPath::LegacyOwned => group.bench_with_input(
+                        ExecutionPath::LegacyOwned => group.bench_with_input(
                             BenchmarkId::new("legacy_owned_aligned", &parameter),
                             &(size, period),
                             |b, &(size, period)| {
@@ -1821,7 +1821,7 @@ macro_rules! define_single_extrema_benchmark {
                                 );
                             },
                         ),
-                        ExtremaPath::ConfigOwned => group.bench_with_input(
+                        ExecutionPath::ConfigOwned => group.bench_with_input(
                             BenchmarkId::new("config_owned_compact", &parameter),
                             &(size, period),
                             |b, &(size, period)| {
@@ -1852,7 +1852,7 @@ macro_rules! define_single_extrema_benchmark {
     };
 }
 
-define_single_extrema_benchmark!(
+define_single_output_benchmark!(
     bench_min_qualified_scratch_matrix,
     "indicator_execution/expanded/single_extrema/MIN",
     MIN,
@@ -1862,7 +1862,7 @@ define_single_extrema_benchmark!(
     Float,
     0.0 as Float
 );
-define_single_extrema_benchmark!(
+define_single_output_benchmark!(
     bench_max_qualified_scratch_matrix,
     "indicator_execution/expanded/single_extrema/MAX",
     MAX,
@@ -1872,7 +1872,7 @@ define_single_extrema_benchmark!(
     Float,
     0.0 as Float
 );
-define_single_extrema_benchmark!(
+define_single_output_benchmark!(
     bench_minindex_qualified_scratch_matrix,
     "indicator_execution/expanded/single_extrema/MININDEX",
     MININDEX,
@@ -1882,7 +1882,7 @@ define_single_extrema_benchmark!(
     usize,
     0_usize
 );
-define_single_extrema_benchmark!(
+define_single_output_benchmark!(
     bench_maxindex_qualified_scratch_matrix,
     "indicator_execution/expanded/single_extrema/MAXINDEX",
     MAXINDEX,
@@ -1891,6 +1891,47 @@ define_single_extrema_benchmark!(
     0_i32,
     usize,
     0_usize
+);
+
+define_single_output_workloads!(
+    bench_wma_repeated_and_streaming,
+    "indicator_execution/expanded/windowed_overlap_workloads/WMA",
+    WMA,
+    WMAConfig,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_trima_repeated_and_streaming,
+    "indicator_execution/expanded/windowed_overlap_workloads/TRIMA",
+    TRIMA,
+    TRIMAConfig,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_wma_qualified_matrix,
+    "indicator_execution/expanded/windowed_overlap/WMA",
+    WMA,
+    WMAConfig,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_trima_qualified_matrix,
+    "indicator_execution/expanded/windowed_overlap/TRIMA",
+    TRIMA,
+    TRIMAConfig,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
 );
 
 criterion_group!(
@@ -1909,6 +1950,10 @@ criterion_group!(
     bench_max_repeated_and_streaming,
     bench_minindex_repeated_and_streaming,
     bench_maxindex_repeated_and_streaming,
+    bench_wma_qualified_matrix,
+    bench_trima_qualified_matrix,
+    bench_wma_repeated_and_streaming,
+    bench_trima_repeated_and_streaming,
     bench_minmax_repeated_and_streaming,
     bench_minmaxindex_repeated_and_streaming,
     bench_universe,

@@ -12,7 +12,9 @@ use ta_core::{
         MINMAXINDEXStreamValue, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXStream,
         MINMAXValuesMut, MINStream, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
-    overlap::{SMAConfig, SMAStream, SMA},
+    overlap::{
+        SMAConfig, SMAStream, TRIMAConfig, TRIMAStream, WMAConfig, WMAStream, SMA, TRIMA, WMA,
+    },
     price_transform::{AVGPRICEInput, AVGPRICE},
     Float, Indicator, IndicatorConfig, OutputRange, PreparedBatchRunner, Resettable,
     StreamingComputation, StreamingIndicator, TalibError,
@@ -586,6 +588,212 @@ fn legacy_sma_from_data_clone_reset_and_replay_remain_compatible() {
         SMA::from_data(0, &[Float::NAN]),
         Err(TalibError::InvalidInput { .. })
     ));
+}
+
+#[test]
+fn wma_and_trima_configs_cover_owned_caller_owned_and_prepared_execution() {
+    let input = [1.0 as Float, 2.0, 4.0, 8.0, 16.0];
+    let wma_config = WMAConfig::new(3).unwrap();
+    let trima_config = TRIMAConfig::new(3).unwrap();
+    assert_eq!(wma_config.period(), 3);
+    assert_eq!(trima_config.period(), 3);
+    assert_eq!(IndicatorConfig::lookback(&wma_config), 2);
+    assert_eq!(IndicatorConfig::lookback(&trima_config), 2);
+    assert_eq!(
+        core::mem::size_of::<WMAConfig>(),
+        core::mem::size_of::<usize>()
+    );
+    assert_eq!(
+        core::mem::size_of::<TRIMAConfig>(),
+        core::mem::size_of::<usize>()
+    );
+
+    let wma_owned = IndicatorConfig::compute(&wma_config, &input).unwrap();
+    let trima_owned = IndicatorConfig::compute(&trima_config, &input).unwrap();
+    assert_eq!(wma_owned.source_len(), input.len());
+    assert_eq!(trima_owned.source_len(), input.len());
+    assert_eq!(wma_owned.range(), OutputRange::new(2, 3));
+    assert_eq!(trima_owned.range(), wma_owned.range());
+    assert_float_slice_close(wma_owned.values(), &[17.0 / 6.0, 34.0 / 6.0, 68.0 / 6.0]);
+    assert_float_slice_close(trima_owned.values(), &[9.0 / 4.0, 18.0 / 4.0, 36.0 / 4.0]);
+
+    let mut wma_output = [FLOAT_SENTINEL; 4];
+    let mut trima_output = [FLOAT_SENTINEL; 4];
+    let wma_range = IndicatorConfig::compute_into(&wma_config, &input, &mut wma_output).unwrap();
+    let trima_range =
+        IndicatorConfig::compute_into(&trima_config, &input, &mut trima_output).unwrap();
+    assert_eq!(wma_range, wma_owned.range());
+    assert_eq!(trima_range, trima_owned.range());
+    assert_float_slice_close(&wma_output[..3], wma_owned.values());
+    assert_float_slice_close(&trima_output[..3], trima_owned.values());
+    assert_eq!(wma_output[3], FLOAT_SENTINEL);
+    assert_eq!(trima_output[3], FLOAT_SENTINEL);
+
+    let mut wma_runner = IndicatorConfig::prepare_batch(&wma_config, input.len()).unwrap();
+    let mut trima_runner = IndicatorConfig::prepare_batch(&trima_config, input.len()).unwrap();
+    assert_eq!(
+        PreparedBatchRunner::<WMAConfig>::max_input_len(&wma_runner),
+        input.len()
+    );
+    assert_eq!(
+        PreparedBatchRunner::<TRIMAConfig>::max_input_len(&trima_runner),
+        input.len()
+    );
+    wma_output.fill(FLOAT_SENTINEL);
+    trima_output.fill(FLOAT_SENTINEL);
+    PreparedBatchRunner::<WMAConfig>::compute_into(&mut wma_runner, &input, &mut wma_output)
+        .unwrap();
+    PreparedBatchRunner::<TRIMAConfig>::compute_into(&mut trima_runner, &input, &mut trima_output)
+        .unwrap();
+    assert_float_slice_close(&wma_output[..3], wma_owned.values());
+    assert_float_slice_close(&trima_output[..3], trima_owned.values());
+    assert_eq!(wma_output[3], FLOAT_SENTINEL);
+    assert_eq!(trima_output[3], FLOAT_SENTINEL);
+
+    let alternate_input = [16.0 as Float, 8.0, 4.0, 2.0, 1.0];
+    let alternate_wma = IndicatorConfig::compute(&wma_config, &alternate_input).unwrap();
+    let alternate_trima = IndicatorConfig::compute(&trima_config, &alternate_input).unwrap();
+    let mut second_wma_runner =
+        IndicatorConfig::prepare_batch(&wma_config, alternate_input.len()).unwrap();
+    let mut second_trima_runner =
+        IndicatorConfig::prepare_batch(&trima_config, alternate_input.len()).unwrap();
+    let mut alternate_wma_output = [FLOAT_SENTINEL; 3];
+    let mut alternate_trima_output = [FLOAT_SENTINEL; 3];
+    PreparedBatchRunner::<WMAConfig>::compute_into(
+        &mut second_wma_runner,
+        &alternate_input,
+        &mut alternate_wma_output,
+    )
+    .unwrap();
+    PreparedBatchRunner::<TRIMAConfig>::compute_into(
+        &mut second_trima_runner,
+        &alternate_input,
+        &mut alternate_trima_output,
+    )
+    .unwrap();
+    assert_float_slice_close(&alternate_wma_output, alternate_wma.values());
+    assert_float_slice_close(&alternate_trima_output, alternate_trima.values());
+    assert_float_slice_close(&wma_output[..3], wma_owned.values());
+    assert_float_slice_close(&trima_output[..3], trima_owned.values());
+
+    let oversized = [Float::NAN; 6];
+    assert!(matches!(
+        PreparedBatchRunner::<WMAConfig>::compute_into(
+            &mut wma_runner,
+            &oversized,
+            &mut wma_output
+        ),
+        Err(TalibError::PreparedCapacityExceeded {
+            max_input_len: 5,
+            actual_input_len: 6
+        })
+    ));
+    assert_eq!(wma_output[0], wma_owned.values()[0]);
+}
+
+#[test]
+fn wma_and_trima_streams_are_independent_and_preserve_reset_batch_parity() {
+    let input = [1.0 as Float, 2.0, 4.0, 8.0, 16.0];
+    let wma_config = WMAConfig::new(3).unwrap();
+    let trima_config = TRIMAConfig::new(3).unwrap();
+    let batch_wma = IndicatorConfig::compute(&wma_config, &input).unwrap();
+    let batch_trima = IndicatorConfig::compute(&trima_config, &input).unwrap();
+    let mut wma_stream = IndicatorConfig::stream(&wma_config).unwrap();
+    let mut trima_stream = IndicatorConfig::stream(&trima_config).unwrap();
+    let mut independent_wma = IndicatorConfig::stream(&wma_config).unwrap();
+    let mut independent_trima = IndicatorConfig::stream(&trima_config).unwrap();
+    let mut legacy_wma = WMA::new(3).unwrap();
+    let mut legacy_trima = TRIMA::new(3).unwrap();
+    let mut streamed_wma = Vec::new();
+    let mut streamed_trima = Vec::new();
+
+    for &tick in &input {
+        let wma_value = StreamingComputation::<WMAConfig>::next(&mut wma_stream, tick).unwrap();
+        let trima_value =
+            StreamingComputation::<TRIMAConfig>::next(&mut trima_stream, tick).unwrap();
+        assert_eq!(
+            StreamingIndicator::next(&mut legacy_wma, tick).unwrap(),
+            wma_value
+        );
+        assert_eq!(
+            StreamingIndicator::next(&mut legacy_trima, tick).unwrap(),
+            trima_value
+        );
+        streamed_wma.extend(wma_value);
+        streamed_trima.extend(trima_value);
+    }
+    assert_float_slice_close(&streamed_wma, batch_wma.values());
+    assert_float_slice_close(&streamed_trima, batch_trima.values());
+
+    assert_eq!(
+        StreamingComputation::<WMAConfig>::next(&mut independent_wma, 10.0).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<TRIMAConfig>::next(&mut independent_trima, 10.0).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<WMAConfig>::next(&mut independent_wma, 20.0).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<TRIMAConfig>::next(&mut independent_trima, 20.0).unwrap(),
+        None
+    );
+    assert_some_float_close(
+        StreamingComputation::<WMAConfig>::next(&mut independent_wma, 30.0).unwrap(),
+        140.0 / 6.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<TRIMAConfig>::next(&mut independent_trima, 30.0).unwrap(),
+        20.0,
+    );
+    StreamingComputation::<WMAConfig>::reset(&mut wma_stream);
+    StreamingComputation::<TRIMAConfig>::reset(&mut trima_stream);
+    Resettable::reset(&mut legacy_wma);
+    Resettable::reset(&mut legacy_trima);
+    assert_some_float_close(
+        StreamingComputation::<WMAConfig>::next(&mut independent_wma, 40.0).unwrap(),
+        200.0 / 6.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<TRIMAConfig>::next(&mut independent_trima, 40.0).unwrap(),
+        30.0,
+    );
+
+    let replayed_wma = input
+        .iter()
+        .filter_map(|&tick| {
+            let value = StreamingComputation::<WMAConfig>::next(&mut wma_stream, tick).unwrap();
+            assert_eq!(
+                StreamingIndicator::next(&mut legacy_wma, tick).unwrap(),
+                value
+            );
+            value
+        })
+        .collect::<Vec<_>>();
+    let replayed_trima = input
+        .iter()
+        .filter_map(|&tick| {
+            let value = StreamingComputation::<TRIMAConfig>::next(&mut trima_stream, tick).unwrap();
+            assert_eq!(
+                StreamingIndicator::next(&mut legacy_trima, tick).unwrap(),
+                value
+            );
+            value
+        })
+        .collect::<Vec<_>>();
+    assert_float_slice_close(&replayed_wma, batch_wma.values());
+    assert_float_slice_close(&replayed_trima, batch_trima.values());
+    assert_eq!(
+        core::mem::size_of::<WMA>(),
+        core::mem::size_of::<WMAStream>()
+    );
+    assert_eq!(
+        core::mem::size_of::<TRIMA>(),
+        core::mem::size_of::<TRIMAStream>()
+    );
 }
 
 #[test]

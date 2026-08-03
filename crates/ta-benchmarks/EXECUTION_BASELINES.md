@@ -467,3 +467,87 @@ The exact allocation assertions clear the caller-owned, prepared-reuse, and stre
 The two timing runs are recorded, but the host was not idle: a separate `huge-trading` workspace continuously compiled throughout both acceptance runs, and medians drifted substantially between Run A and Run B. The compared implementations also differ: current MIN/MAX free functions use a period-bounded queue, current index functions use their legacy single-index kernel, and configuration/prepared paths use append scratch. These results therefore do not isolate host contention from implementation differences. Prepared execution was usually faster but not uniformly so. The values qualify benchmark coverage, not portable speedups or a stable code-path regression.
 
 Per the explicit issue #5 implementation decision, residual timing regressions and uncertainty are accepted in favor of the clean, idiomatic single-queue implementation. No fallback implementation or second execution convention is retained. Future uncontended qualification can rerun the two durable commands without changing benchmark IDs.
+
+## Issue #6 WMA and TRIMA qualification
+
+Issue #6 adds parameter-only `WMAConfig` and `TRIMAConfig` types, owned and caller-owned Compact Output, scratch-free Prepared Batch Runners, and independent Streaming Computations. The uppercase `WMA` and `TRIMA` compatibility objects now store only their corresponding stream while preserving all historical batch, padded-owned, streaming, reset, and `MA` dispatch behavior.
+
+The durable commands are:
+
+```text
+cargo bench -p ta-benchmarks --bench execution_allocations
+cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/windowed_overlap --quick
+cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/windowed_overlap
+cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/windowed_overlap
+```
+
+The valid timing matrix is observations 64/4,096/65,536 crossed with periods 14/512 where observations are at least the period. Both full commands used Criterion's default 100 samples and reported latency plus element throughput. Registration order rotates across current caller-owned, configuration caller-owned, prepared, legacy owned Aligned Output, and configuration owned Compact Output paths.
+
+### Exact allocation profiles
+
+These executable assertions use 4,096 observations, period 14, `Float = f64`, and a 64-bit host:
+
+| Scenario | Operations | Gross bytes | Peak bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| Construct either configuration | 0 | 0 | 0 | 0 |
+| Either caller-owned one-shot | 0 | 0 | 0 | 0 |
+| Either owned Compact Output | 1 | 32,664 | 32,664 | 32,664 |
+| Empty owned Compact Output | 0 | 0 | 0 | 0 |
+| Prepare either runner | 0 | 0 | 0 | 0 |
+| Prepared first/repeated call | 0 | 0 | 0 | 0 |
+| Prepared oversize rejection | 0 | 0 | 0 | 0 |
+| Construct either period-14 stream | 1 | 112 | 112 | 112 |
+| Stream 4,096 ticks after construction | 0 | 0 | 0 | 0 |
+
+Owned computation allocates only its exact 4,083-value Compact Output. Caller-owned and prepared kernels need no algorithm scratch. Stream construction retains exactly `period * size_of::<Float>()` bytes; ticks allocate nothing.
+
+### Full timing evidence
+
+The caller-owned table reports current free function / configuration / Prepared Batch Runner. Negative deltas mean the candidate took less time.
+
+| Indicator | Observations / period | Run A medians | Run A same-run deltas | Run B medians | Run B same-run deltas |
+|---|---:|---:|---:|---:|---:|
+| WMA | 64 / 14 | 122.88 ns / 125.26 ns / 124.12 ns | config/current +1.94%; prepared/current +1.01%; prepared/config -0.91% | 128.23 ns / 124.82 ns / 130.23 ns | config/current -2.66%; prepared/current +1.56%; prepared/config +4.34% |
+| WMA | 4,096 / 14 | 9.059 µs / 9.070 µs / 9.067 µs | config/current +0.11%; prepared/current +0.08%; prepared/config -0.03% | 9.925 µs / 9.043 µs / 9.418 µs | config/current -8.89%; prepared/current -5.10%; prepared/config +4.16% |
+| WMA | 4,096 / 512 | 8.983 µs / 8.985 µs / 8.983 µs | config/current +0.02%; prepared/current +0.00%; prepared/config -0.02% | 8.981 µs / 8.980 µs / 8.976 µs | config/current -0.00%; prepared/current -0.05%; prepared/config -0.05% |
+| WMA | 65,536 / 14 | 145.858 µs / 145.491 µs / 145.270 µs | config/current -0.25%; prepared/current -0.40%; prepared/config -0.15% | 145.563 µs / 144.855 µs / 145.827 µs | config/current -0.49%; prepared/current +0.18%; prepared/config +0.67% |
+| WMA | 65,536 / 512 | 145.731 µs / 146.034 µs / 145.477 µs | config/current +0.21%; prepared/current -0.17%; prepared/config -0.38% | 145.122 µs / 147.149 µs / 149.910 µs | config/current +1.40%; prepared/current +3.30%; prepared/config +1.88% |
+| TRIMA | 64 / 14 | 318.62 ns / 315.62 ns / 315.12 ns | config/current -0.94%; prepared/current -1.10%; prepared/config -0.16% | 316.72 ns / 315.04 ns / 315.55 ns | config/current -0.53%; prepared/current -0.37%; prepared/config +0.16% |
+| TRIMA | 4,096 / 14 | 24.762 µs / 24.625 µs / 24.494 µs | config/current -0.55%; prepared/current -1.08%; prepared/config -0.53% | 24.355 µs / 25.054 µs / 24.396 µs | config/current +2.87%; prepared/current +0.17%; prepared/config -2.63% |
+| TRIMA | 4,096 / 512 | 1.4816 ms / 1.5021 ms / 1.4907 ms | config/current +1.38%; prepared/current +0.61%; prepared/config -0.76% | 1.4735 ms / 1.4810 ms / 1.4793 ms | config/current +0.51%; prepared/current +0.39%; prepared/config -0.12% |
+| TRIMA | 65,536 / 14 | 397.095 µs / 404.360 µs / 395.445 µs | config/current +1.83%; prepared/current -0.42%; prepared/config -2.20% | 391.387 µs / 391.586 µs / 392.310 µs | config/current +0.05%; prepared/current +0.24%; prepared/config +0.18% |
+| TRIMA | 65,536 / 512 | 27.0043 ms / 27.0609 ms / 27.8810 ms | config/current +0.21%; prepared/current +3.25%; prepared/config +3.03% | 26.7989 ms / 26.8458 ms / 26.8144 ms | config/current +0.18%; prepared/current +0.06%; prepared/config -0.12% |
+
+Owned qualification reports legacy owned Aligned Output / configuration owned Compact Output:
+
+| Indicator | Observations / period | Run A medians | Run A delta | Run B medians | Run B delta |
+|---|---:|---:|---:|---:|---:|
+| WMA | 64 / 14 | 177.30 ns / 140.57 ns | -20.71% | 205.13 ns / 158.51 ns | -22.72% |
+| WMA | 4,096 / 14 | 10.579 µs / 9.607 µs | -9.19% | 10.591 µs / 10.441 µs | -1.42% |
+| WMA | 4,096 / 512 | 10.430 µs / 9.435 µs | -9.54% | 10.500 µs / 9.432 µs | -10.17% |
+| WMA | 65,536 / 14 | 190.017 µs / 150.194 µs | -20.96% | 195.415 µs / 149.907 µs | -23.29% |
+| WMA | 65,536 / 512 | 187.959 µs / 149.704 µs | -20.35% | 192.047 µs / 149.272 µs | -22.27% |
+| TRIMA | 64 / 14 | 379.87 ns / 339.50 ns | -10.63% | 391.92 ns / 342.89 ns | -12.51% |
+| TRIMA | 4,096 / 14 | 25.969 µs / 25.675 µs | -1.13% | 25.709 µs / 25.039 µs | -2.61% |
+| TRIMA | 4,096 / 512 | 1.5043 ms / 1.5402 ms | +2.39% | 1.4770 ms / 1.4758 ms | -0.08% |
+| TRIMA | 65,536 / 14 | 446.528 µs / 404.752 µs | -9.36% | 435.051 µs / 399.810 µs | -8.10% |
+| TRIMA | 65,536 / 512 | 28.3352 ms / 26.8167 ms | -5.36% | 26.8794 ms / 26.7561 ms | -0.46% |
+
+### Repeated and streaming evidence
+
+Universe and parameter-sweep rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured. Fixtures and caller-owned buffers are identical within each comparison; construction and reset remain outside measured operations.
+
+| Indicator / workload | Run A medians | Run A same-run deltas | Run B medians | Run B same-run deltas |
+|---|---:|---:|---:|---:|
+| WMA Universe, 128 × 4,096 | 1.2243 ms / 1.3179 ms / 1.2114 ms | config/current +7.65%; prepared/current -1.05%; prepared/config -8.08% | 1.1622 ms / 1.1608 ms / 1.1839 ms | config/current -0.11%; prepared/current +1.87%; prepared/config +1.99% |
+| WMA sweep, 4 × 4,096 | 36.385 µs / 36.865 µs / 37.034 µs | config/current +1.32%; prepared/current +1.78%; prepared/config +0.46% | 36.406 µs / 36.444 µs / 36.407 µs | config/current +0.11%; prepared/current +0.00%; prepared/config -0.10% |
+| WMA per-worker, 4 × 4,096 | 37.099 µs / 37.797 µs | candidate/reference +1.88% | 36.556 µs / 36.613 µs | candidate/reference +0.16% |
+| WMA streaming, 16 × 4,096 | 781.974 µs / 797.623 µs | candidate/reference +2.00% | 777.127 µs / 776.838 µs | candidate/reference -0.04% |
+| TRIMA Universe, 128 × 4,096 | 3.2573 ms / 3.2642 ms / 3.5488 ms | config/current +0.21%; prepared/current +8.95%; prepared/config +8.72% | 3.1479 ms / 3.1456 ms / 3.1476 ms | config/current -0.07%; prepared/current -0.01%; prepared/config +0.07% |
+| TRIMA sweep, 4 × 4,096 | 695.060 µs / 891.873 µs / 744.866 µs | config/current +28.32%; prepared/current +7.17%; prepared/config -16.48% | 659.811 µs / 656.885 µs / 658.220 µs | config/current -0.44%; prepared/current -0.24%; prepared/config +0.20% |
+| TRIMA per-worker, 4 × 4,096 | 121.893 µs / 116.952 µs | candidate/reference -4.05% | 99.895 µs / 97.445 µs | candidate/reference -2.45% |
+| TRIMA streaming, 16 × 4,096 | 1.0076 ms / 981.712 µs | candidate/reference -2.57% | 818.366 µs / 816.824 µs | candidate/reference -0.19% |
+
+### Gate conclusion
+
+Allocation gates clear exactly: both caller-owned and prepared paths are allocation-free, owned output allocates one exact compact payload, and streaming allocates only at construction. No timing regression above approximately five percent reproduced across both full runs. The non-reproduced Run A regressions were WMA Universe configuration/current (+7.65%), TRIMA Universe prepared/current (+8.95%) and prepared/configuration (+8.72%), and TRIMA sweep configuration/current (+28.32%) and prepared/current (+7.17%); their Run B counterparts ranged from -0.44% to +1.99%. They are not stable regressions. These are host-local `f64` results, not portable speedup claims.

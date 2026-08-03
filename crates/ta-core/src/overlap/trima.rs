@@ -2,8 +2,9 @@
 
 use crate::{
     compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, Float, Indicator, OutputRange, Resettable, Result,
-    StreamingIndicator,
+    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
+    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -51,23 +52,36 @@ fn trima_window(window: &[Float]) -> Float {
     weighted_sum / trima_denominator(window.len())
 }
 
-/// TA-Lib-style Triangular Moving Average batch function.
-#[allow(non_snake_case)]
-pub fn TRIMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
+fn validate_trima_input(real: &[Float], timeperiod: usize) -> Result<(usize, usize)> {
     let lookback = period_lookback("timeperiod", timeperiod)?;
     validate_finite_slice("real", real)?;
     let count = validate_input_len(real.len(), lookback)?;
-    validate_output_len("TRIMA", out_real.len(), count)?;
+    Ok((lookback, count))
+}
 
-    if count == 0 {
-        return Ok(OutputRange::empty());
-    }
-
+fn trima_kernel(
+    real: &[Float],
+    timeperiod: usize,
+    lookback: usize,
+    count: usize,
+    out_real: &mut [Float],
+) -> OutputRange {
     for output_idx in 0..count {
         out_real[output_idx] = trima_window(&real[output_idx..output_idx + timeperiod]);
     }
+    if count == 0 {
+        OutputRange::empty()
+    } else {
+        OutputRange::new(lookback, count)
+    }
+}
 
-    Ok(OutputRange::new(lookback, count))
+/// TA-Lib-style Triangular Moving Average batch function.
+#[allow(non_snake_case)]
+pub fn TRIMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
+    let (lookback, count) = validate_trima_input(real, timeperiod)?;
+    validate_output_len("TRIMA", out_real.len(), count)?;
+    Ok(trima_kernel(real, timeperiod, lookback, count, out_real))
 }
 
 /// Computes TRIMA into a full-length vector padded with `Float::NAN` before the lookback.
@@ -82,79 +96,139 @@ pub fn TRIMA_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
     ))
 }
 
-/// Triangular Moving Average indicator.
-#[derive(Debug, Clone)]
-pub struct TRIMA {
+/// Immutable Triangular Moving Average Indicator Configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TRIMAConfig {
     period: usize,
-    buffer: Vec<Float>,
-    index: usize,
-    count: usize,
 }
 
-impl TRIMA {
-    /// Creates a new TRIMA indicator.
+impl TRIMAConfig {
+    /// Creates a configuration for `timeperiod` observations.
     pub fn new(timeperiod: usize) -> Result<Self> {
         period_lookback("timeperiod", timeperiod)?;
-        let mut buffer = Vec::new();
-        buffer.resize(timeperiod, 0.0 as Float);
-        Ok(Self {
-            period: timeperiod,
-            buffer,
-            index: 0,
-            count: 0,
-        })
+        Ok(Self { period: timeperiod })
     }
 
-    /// Returns the configured period.
+    /// Returns the configured Period.
     #[inline]
     pub const fn period(&self) -> usize {
         self.period
     }
-
-    /// Computes compact TRIMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        TRIMA(real, self.period, out_real)
-    }
-
-    /// Computes full-length padded TRIMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        TRIMA_vec(real, self.period)
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
-    }
 }
 
-impl Indicator for TRIMA {
+impl crate::traits::sealed::Sealed for TRIMAConfig {}
+
+impl IndicatorConfig for TRIMAConfig {
     type Input<'a> = &'a [Float];
+    type Output = Vec<Float>;
     type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
+    type BatchRunner = TRIMABatchRunner;
+    type Stream = TRIMAStream;
 
     #[inline]
     fn lookback(&self) -> usize {
         self.period - 1
     }
 
-    #[inline]
-    fn compute<'a>(
-        &self,
-        inputs: Self::Input<'a>,
-        outputs: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        TRIMA(inputs, self.period, outputs)
+    fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
+        let (lookback, count) = validate_trima_input(input, self.period)?;
+        let mut values = Vec::with_capacity(count);
+        values.resize(count, 0.0 as Float);
+        let range = trima_kernel(input, self.period, lookback, count, &mut values);
+        CompactOutput::new(input.len(), range, values)
     }
 
     #[inline]
-    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        TRIMA_vec(inputs, self.period)
+    fn compute_into<'a>(
+        &self,
+        input: Self::Input<'a>,
+        output: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
+        TRIMA(input, self.period, output)
+    }
+
+    #[inline]
+    fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
+        Ok(TRIMABatchRunner {
+            config: *self,
+            max_input_len,
+        })
+    }
+
+    #[inline]
+    fn stream(&self) -> Result<Self::Stream> {
+        TRIMAStream::new(self.period)
     }
 }
 
-impl StreamingIndicator for TRIMA {
+/// Prepared Batch Runner for Triangular Moving Average.
+///
+/// TRIMA needs no heap scratch, so preparation stores only the configuration
+/// and declared source capacity.
+#[derive(Debug, Clone)]
+pub struct TRIMABatchRunner {
+    config: TRIMAConfig,
+    max_input_len: usize,
+}
+
+impl crate::traits::sealed::Sealed for TRIMABatchRunner {}
+
+impl PreparedBatchRunner<TRIMAConfig> for TRIMABatchRunner {
+    #[inline]
+    fn max_input_len(&self) -> usize {
+        self.max_input_len
+    }
+
+    #[inline]
+    fn compute_into<'a>(
+        &mut self,
+        input: <TRIMAConfig as IndicatorConfig>::Input<'a>,
+        output: <TRIMAConfig as IndicatorConfig>::OutputMut<'a>,
+    ) -> Result<OutputRange>
+    where
+        TRIMAConfig: 'a,
+    {
+        if input.len() > self.max_input_len {
+            return Err(TalibError::prepared_capacity_exceeded(
+                self.max_input_len,
+                input.len(),
+            ));
+        }
+        IndicatorConfig::compute_into(&self.config, input, output)
+    }
+}
+
+/// Independent Streaming Computation state for Triangular Moving Average.
+#[derive(Debug, Clone)]
+pub struct TRIMAStream {
+    period: usize,
+    buffer: Vec<Float>,
+    index: usize,
+    count: usize,
+}
+
+impl TRIMAStream {
+    fn new(period: usize) -> Result<Self> {
+        period_lookback("timeperiod", period)?;
+        let mut buffer = Vec::new();
+        buffer.resize(period, 0.0 as Float);
+        Ok(Self {
+            period,
+            buffer,
+            index: 0,
+            count: 0,
+        })
+    }
+
+    #[inline]
+    const fn period(&self) -> usize {
+        self.period
+    }
+}
+
+impl crate::traits::sealed::Sealed for TRIMAStream {}
+
+impl StreamingComputation<TRIMAConfig> for TRIMAStream {
     type Tick = Float;
     type TickOutput = Float;
 
@@ -179,14 +253,93 @@ impl StreamingIndicator for TRIMA {
             .sum::<Float>();
         Ok(Some(weighted_sum / trima_denominator(self.period)))
     }
+
+    fn reset(&mut self) {
+        self.buffer.fill(0.0 as Float);
+        self.index = 0;
+        self.count = 0;
+    }
+}
+
+/// Legacy Triangular Moving Average indicator.
+///
+/// This compatibility adapter keeps the historical combined batch/streaming
+/// signatures while storing only its [`TRIMAStream`] execution state.
+#[derive(Debug, Clone)]
+pub struct TRIMA {
+    stream: TRIMAStream,
+}
+
+impl TRIMA {
+    /// Creates a new legacy TRIMA indicator.
+    pub fn new(timeperiod: usize) -> Result<Self> {
+        let config = TRIMAConfig::new(timeperiod)?;
+        let stream = IndicatorConfig::stream(&config)?;
+        Ok(Self { stream })
+    }
+
+    /// Returns the configured period.
+    #[inline]
+    pub const fn period(&self) -> usize {
+        self.stream.period()
+    }
+
+    /// Computes compact TRIMA outputs using this indicator's period.
+    #[inline]
+    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
+        TRIMA(real, self.period(), out_real)
+    }
+
+    /// Computes full-length padded TRIMA outputs using this indicator's period.
+    #[inline]
+    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
+        TRIMA_vec(real, self.period())
+    }
+
+    /// Checked streaming update that returns `Float::NAN` during warm-up.
+    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
+        Ok(StreamingIndicator::next(self, input)?.unwrap_or(Float::NAN))
+    }
+}
+
+impl Indicator for TRIMA {
+    type Input<'a> = &'a [Float];
+    type OutputMut<'a> = &'a mut [Float];
+    type OutputOwned = Vec<Float>;
+
+    #[inline]
+    fn lookback(&self) -> usize {
+        self.period() - 1
+    }
+
+    #[inline]
+    fn compute<'a>(
+        &self,
+        inputs: Self::Input<'a>,
+        outputs: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
+        TRIMA(inputs, self.period(), outputs)
+    }
+
+    #[inline]
+    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
+        TRIMA_vec(inputs, self.period())
+    }
+}
+
+impl StreamingIndicator for TRIMA {
+    type Tick = Float;
+    type TickOutput = Float;
+
+    #[inline]
+    fn next(&mut self, input: Float) -> Result<Option<Float>> {
+        StreamingComputation::<TRIMAConfig>::next(&mut self.stream, input)
+    }
 }
 
 impl Resettable for TRIMA {
+    #[inline]
     fn reset(&mut self) {
-        for value in &mut self.buffer {
-            *value = 0.0 as Float;
-        }
-        self.index = 0;
-        self.count = 0;
+        StreamingComputation::<TRIMAConfig>::reset(&mut self.stream);
     }
 }

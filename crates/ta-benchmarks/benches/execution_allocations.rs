@@ -23,7 +23,7 @@ use ta_core::{
         MINMAXINDEXOutputMut, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MAX,
         MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
-    overlap::{SMAConfig, SMA},
+    overlap::{SMAConfig, TRIMAConfig, WMAConfig, SMA},
     price_transform::{AVGPRICEInput, AVGPRICE},
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
     StreamingIndicator,
@@ -872,6 +872,114 @@ fn profile_single_extrema_execution() {
     assert_zero_allocations(&scenario, profile);
 }
 
+macro_rules! profile_windowed_overlap_indicator {
+    ($label:literal, $config:ty) => {{
+        let input = series_fixture(PROFILE_SIZE, 0);
+        let count = output_len(PROFILE_SIZE, PERIOD);
+        let output_bytes = count * core::mem::size_of::<Float>();
+        let scenario = format!("setup/{}Config/period_{PERIOD}", $label);
+        let profile = print_profile(&scenario, || <$config>::new(PERIOD).expect("valid period"));
+        assert_zero_allocations(&scenario, profile);
+
+        let config = <$config>::new(PERIOD).expect("valid period");
+        let mut output = vec![0.0 as Float; count];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(&config, input.as_slice(), output.as_mut_slice())
+                .expect("valid caller-owned fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input.as_slice()).expect("valid owned fixture")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let scenario = format!("one_shot/{}Config/owned_compact/count_0", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, &[]).expect("valid empty fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut runner =
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity");
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $label);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input.as_slice(),
+                    output.as_mut_slice(),
+                )
+                .expect("valid prepared fixture")
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized_input = series_fixture(PROFILE_SIZE + 1, 1);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $label,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                oversized_input.as_slice(),
+                output.as_mut_slice(),
+            )
+            .expect_err("oversized input must be rejected")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}Config/stream_period_{PERIOD}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::stream(&config).expect("valid stream")
+        });
+        let stream_bytes = PERIOD * core::mem::size_of::<Float>();
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            stream_bytes,
+            stream_bytes,
+            stream_bytes,
+        );
+
+        let mut stream = IndicatorConfig::stream(&config).expect("valid stream");
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            let mut last = None;
+            for &tick in &input {
+                last = StreamingComputation::<$config>::next(&mut stream, tick)
+                    .expect("valid stream tick");
+                black_box(last);
+            }
+            last
+        });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
+fn profile_windowed_overlap_execution() {
+    profile_windowed_overlap_indicator!("WMA", WMAConfig);
+    profile_windowed_overlap_indicator!("TRIMA", TRIMAConfig);
+}
+
 fn profile_small_owned_compact_counts() {
     let config = SMAConfig::new(3).expect("valid period");
     let count_0 = [];
@@ -1115,6 +1223,7 @@ fn main() {
     profile_one_shot();
     profile_extrema_execution();
     profile_single_extrema_execution();
+    profile_windowed_overlap_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }

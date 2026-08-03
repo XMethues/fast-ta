@@ -17,5 +17,5 @@ pub use t3::{
     T3_vec, T3_vec_with_default_vfactor, T3_with_default_vfactor, T3, T3_DEFAULT_VFACTOR,
 };
 pub use tema::{TEMA_vec, TEMA};
-pub use trima::{TRIMA_vec, TRIMA};
-pub use wma::{WMA_vec, WMA};
+pub use trima::{TRIMABatchRunner, TRIMAConfig, TRIMAStream, TRIMA_vec, TRIMA};
+pub use wma::{WMABatchRunner, WMAConfig, WMAStream, WMA_vec, WMA};

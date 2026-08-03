@@ -5,8 +5,9 @@
 
 use crate::{
     compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, Float, Indicator, OutputRange, Resettable, Result,
-    StreamingIndicator,
+    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
+    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -19,16 +20,22 @@ fn wma_denominator(timeperiod: usize) -> Float {
     (timeperiod * (timeperiod + 1) / 2) as Float
 }
 
-/// TA-Lib-style Weighted Moving Average batch function.
-#[allow(non_snake_case)]
-pub fn WMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
+fn validate_wma_input(real: &[Float], timeperiod: usize) -> Result<(usize, usize)> {
     let lookback = period_lookback("timeperiod", timeperiod)?;
     validate_finite_slice("real", real)?;
     let count = validate_input_len(real.len(), lookback)?;
-    validate_output_len("WMA", out_real.len(), count)?;
+    Ok((lookback, count))
+}
 
+fn wma_kernel(
+    real: &[Float],
+    timeperiod: usize,
+    lookback: usize,
+    count: usize,
+    out_real: &mut [Float],
+) -> OutputRange {
     if count == 0 {
-        return Ok(OutputRange::empty());
+        return OutputRange::empty();
     }
 
     let denominator = wma_denominator(timeperiod);
@@ -49,7 +56,15 @@ pub fn WMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<
         out_real[output_idx] = weighted_sum / denominator;
     }
 
-    Ok(OutputRange::new(lookback, count))
+    OutputRange::new(lookback, count)
+}
+
+/// TA-Lib-style Weighted Moving Average batch function.
+#[allow(non_snake_case)]
+pub fn WMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
+    let (lookback, count) = validate_wma_input(real, timeperiod)?;
+    validate_output_len("WMA", out_real.len(), count)?;
+    Ok(wma_kernel(real, timeperiod, lookback, count, out_real))
 }
 
 /// Computes WMA into a full-length vector padded with `Float::NAN` before the lookback.
@@ -64,79 +79,139 @@ pub fn WMA_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
     ))
 }
 
-/// Weighted Moving Average indicator.
-#[derive(Debug, Clone)]
-pub struct WMA {
+/// Immutable Weighted Moving Average Indicator Configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WMAConfig {
     period: usize,
-    buffer: Vec<Float>,
-    index: usize,
-    count: usize,
 }
 
-impl WMA {
-    /// Creates a new WMA indicator.
+impl WMAConfig {
+    /// Creates a configuration for `timeperiod` observations.
     pub fn new(timeperiod: usize) -> Result<Self> {
         period_lookback("timeperiod", timeperiod)?;
-        let mut buffer = Vec::new();
-        buffer.resize(timeperiod, 0.0 as Float);
-        Ok(Self {
-            period: timeperiod,
-            buffer,
-            index: 0,
-            count: 0,
-        })
+        Ok(Self { period: timeperiod })
     }
 
-    /// Returns the configured period.
+    /// Returns the configured Period.
     #[inline]
     pub const fn period(&self) -> usize {
         self.period
     }
-
-    /// Computes compact WMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        WMA(real, self.period, out_real)
-    }
-
-    /// Computes full-length padded WMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        WMA_vec(real, self.period)
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
-    }
 }
 
-impl Indicator for WMA {
+impl crate::traits::sealed::Sealed for WMAConfig {}
+
+impl IndicatorConfig for WMAConfig {
     type Input<'a> = &'a [Float];
+    type Output = Vec<Float>;
     type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
+    type BatchRunner = WMABatchRunner;
+    type Stream = WMAStream;
 
     #[inline]
     fn lookback(&self) -> usize {
         self.period - 1
     }
 
-    #[inline]
-    fn compute<'a>(
-        &self,
-        inputs: Self::Input<'a>,
-        outputs: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        WMA(inputs, self.period, outputs)
+    fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
+        let (lookback, count) = validate_wma_input(input, self.period)?;
+        let mut values = Vec::with_capacity(count);
+        values.resize(count, 0.0 as Float);
+        let range = wma_kernel(input, self.period, lookback, count, &mut values);
+        CompactOutput::new(input.len(), range, values)
     }
 
     #[inline]
-    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        WMA_vec(inputs, self.period)
+    fn compute_into<'a>(
+        &self,
+        input: Self::Input<'a>,
+        output: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
+        WMA(input, self.period, output)
+    }
+
+    #[inline]
+    fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
+        Ok(WMABatchRunner {
+            config: *self,
+            max_input_len,
+        })
+    }
+
+    #[inline]
+    fn stream(&self) -> Result<Self::Stream> {
+        WMAStream::new(self.period)
     }
 }
 
-impl StreamingIndicator for WMA {
+/// Prepared Batch Runner for Weighted Moving Average.
+///
+/// WMA needs no heap scratch, so preparation stores only the configuration and
+/// declared source capacity.
+#[derive(Debug, Clone)]
+pub struct WMABatchRunner {
+    config: WMAConfig,
+    max_input_len: usize,
+}
+
+impl crate::traits::sealed::Sealed for WMABatchRunner {}
+
+impl PreparedBatchRunner<WMAConfig> for WMABatchRunner {
+    #[inline]
+    fn max_input_len(&self) -> usize {
+        self.max_input_len
+    }
+
+    #[inline]
+    fn compute_into<'a>(
+        &mut self,
+        input: <WMAConfig as IndicatorConfig>::Input<'a>,
+        output: <WMAConfig as IndicatorConfig>::OutputMut<'a>,
+    ) -> Result<OutputRange>
+    where
+        WMAConfig: 'a,
+    {
+        if input.len() > self.max_input_len {
+            return Err(TalibError::prepared_capacity_exceeded(
+                self.max_input_len,
+                input.len(),
+            ));
+        }
+        IndicatorConfig::compute_into(&self.config, input, output)
+    }
+}
+
+/// Independent Streaming Computation state for Weighted Moving Average.
+#[derive(Debug, Clone)]
+pub struct WMAStream {
+    period: usize,
+    buffer: Vec<Float>,
+    index: usize,
+    count: usize,
+}
+
+impl WMAStream {
+    fn new(period: usize) -> Result<Self> {
+        period_lookback("timeperiod", period)?;
+        let mut buffer = Vec::new();
+        buffer.resize(period, 0.0 as Float);
+        Ok(Self {
+            period,
+            buffer,
+            index: 0,
+            count: 0,
+        })
+    }
+
+    #[inline]
+    const fn period(&self) -> usize {
+        self.period
+    }
+}
+
+impl crate::traits::sealed::Sealed for WMAStream {}
+
+impl StreamingComputation<WMAConfig> for WMAStream {
     type Tick = Float;
     type TickOutput = Float;
 
@@ -161,14 +236,93 @@ impl StreamingIndicator for WMA {
             .sum::<Float>();
         Ok(Some(weighted_sum / wma_denominator(self.period)))
     }
+
+    fn reset(&mut self) {
+        self.buffer.fill(0.0 as Float);
+        self.index = 0;
+        self.count = 0;
+    }
+}
+
+/// Legacy Weighted Moving Average indicator.
+///
+/// This compatibility adapter keeps the historical combined batch/streaming
+/// signatures while storing only its [`WMAStream`] execution state.
+#[derive(Debug, Clone)]
+pub struct WMA {
+    stream: WMAStream,
+}
+
+impl WMA {
+    /// Creates a new legacy WMA indicator.
+    pub fn new(timeperiod: usize) -> Result<Self> {
+        let config = WMAConfig::new(timeperiod)?;
+        let stream = IndicatorConfig::stream(&config)?;
+        Ok(Self { stream })
+    }
+
+    /// Returns the configured period.
+    #[inline]
+    pub const fn period(&self) -> usize {
+        self.stream.period()
+    }
+
+    /// Computes compact WMA outputs using this indicator's period.
+    #[inline]
+    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
+        WMA(real, self.period(), out_real)
+    }
+
+    /// Computes full-length padded WMA outputs using this indicator's period.
+    #[inline]
+    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
+        WMA_vec(real, self.period())
+    }
+
+    /// Checked streaming update that returns `Float::NAN` during warm-up.
+    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
+        Ok(StreamingIndicator::next(self, input)?.unwrap_or(Float::NAN))
+    }
+}
+
+impl Indicator for WMA {
+    type Input<'a> = &'a [Float];
+    type OutputMut<'a> = &'a mut [Float];
+    type OutputOwned = Vec<Float>;
+
+    #[inline]
+    fn lookback(&self) -> usize {
+        self.period() - 1
+    }
+
+    #[inline]
+    fn compute<'a>(
+        &self,
+        inputs: Self::Input<'a>,
+        outputs: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
+        WMA(inputs, self.period(), outputs)
+    }
+
+    #[inline]
+    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
+        WMA_vec(inputs, self.period())
+    }
+}
+
+impl StreamingIndicator for WMA {
+    type Tick = Float;
+    type TickOutput = Float;
+
+    #[inline]
+    fn next(&mut self, input: Float) -> Result<Option<Float>> {
+        StreamingComputation::<WMAConfig>::next(&mut self.stream, input)
+    }
 }
 
 impl Resettable for WMA {
+    #[inline]
     fn reset(&mut self) {
-        for value in &mut self.buffer {
-            *value = 0.0 as Float;
-        }
-        self.index = 0;
-        self.count = 0;
+        StreamingComputation::<WMAConfig>::reset(&mut self.stream);
     }
 }
