@@ -18,7 +18,10 @@ use support::{
     STREAM_INSTRUMENTS, SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
 use ta_core::{
-    math_operators::{MINMAXINDEXOutputMut, MINMAXOutputMut, MINMAX, MINMAXINDEX},
+    math_operators::{
+        MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXOutputMut, MINMAXINDEXValuesMut,
+        MINMAXOutputMut, MINMAXValuesMut, MINMAX, MINMAXINDEX,
+    },
     overlap::{SMAConfig, SMA},
     price_transform::{AVGPRICEInput, AVGPRICE},
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
@@ -325,6 +328,233 @@ fn profile_one_shot() {
     );
 }
 
+fn profile_extrema_execution() {
+    let input = series_fixture(PROFILE_SIZE, 0);
+    let count = output_len(PROFILE_SIZE, PERIOD);
+    let value_config_scenario = format!("setup/MINMAXConfig/period_{PERIOD}");
+    let profile = print_profile(&value_config_scenario, || {
+        MINMAXConfig::new(PERIOD).expect("valid period")
+    });
+    assert_zero_allocations(&value_config_scenario, profile);
+
+    let index_config_scenario = format!("setup/MINMAXINDEXConfig/period_{PERIOD}");
+    let profile = print_profile(&index_config_scenario, || {
+        MINMAXINDEXConfig::new(PERIOD).expect("valid period")
+    });
+    assert_zero_allocations(&index_config_scenario, profile);
+
+    let value_config = MINMAXConfig::new(PERIOD).expect("valid period");
+    let index_config = MINMAXINDEXConfig::new(PERIOD).expect("valid period");
+    let mut min = vec![0.0 as Float; count];
+    let mut max = vec![0.0 as Float; count];
+    let mut min_idx = vec![0_usize; count];
+    let mut max_idx = vec![0_usize; count];
+    let scratch_bytes = 2 * PROFILE_SIZE * core::mem::size_of::<usize>();
+
+    let scenario = format!("one_shot/MINMAXConfig/caller_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute_into(
+            &value_config,
+            input.as_slice(),
+            MINMAXValuesMut {
+                min: min.as_mut_slice(),
+                max: max.as_mut_slice(),
+            },
+        )
+        .expect("valid MINMAX fixture")
+    });
+    assert_profile(&scenario, profile, 2, scratch_bytes, scratch_bytes, 0);
+
+    let scenario = format!("one_shot/MINMAXINDEXConfig/caller_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute_into(
+            &index_config,
+            input.as_slice(),
+            MINMAXINDEXValuesMut {
+                min_idx: min_idx.as_mut_slice(),
+                max_idx: max_idx.as_mut_slice(),
+            },
+        )
+        .expect("valid MINMAXINDEX fixture")
+    });
+    assert_profile(&scenario, profile, 2, scratch_bytes, scratch_bytes, 0);
+
+    let value_output_bytes = 2 * count * core::mem::size_of::<Float>();
+    let scenario = format!("one_shot/MINMAXConfig/owned_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute(&value_config, input.as_slice()).expect("valid MINMAX fixture")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        4,
+        scratch_bytes + value_output_bytes,
+        scratch_bytes + value_output_bytes,
+        value_output_bytes,
+    );
+
+    let index_output_bytes = 2 * count * core::mem::size_of::<usize>();
+    let scenario = format!("one_shot/MINMAXINDEXConfig/owned_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute(&index_config, input.as_slice())
+            .expect("valid MINMAXINDEX fixture")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        4,
+        scratch_bytes + index_output_bytes,
+        scratch_bytes + index_output_bytes,
+        index_output_bytes,
+    );
+
+    for (name, profile) in [
+        (
+            "one_shot/MINMAXConfig/owned_compact/empty",
+            print_profile("one_shot/MINMAXConfig/owned_compact/empty", || {
+                IndicatorConfig::compute(&value_config, &[]).expect("valid empty MINMAX fixture")
+            }),
+        ),
+        (
+            "one_shot/MINMAXINDEXConfig/owned_compact/empty",
+            print_profile("one_shot/MINMAXINDEXConfig/owned_compact/empty", || {
+                IndicatorConfig::compute(&index_config, &[])
+                    .expect("valid empty MINMAXINDEX fixture")
+            }),
+        ),
+    ] {
+        assert_zero_allocations(name, profile);
+    }
+
+    let scenario = format!("setup/MINMAXBatchRunner/capacity_{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::prepare_batch(&value_config, PROFILE_SIZE)
+            .expect("valid prepared capacity")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        2,
+        scratch_bytes,
+        scratch_bytes,
+        scratch_bytes,
+    );
+
+    let scenario = format!("setup/MINMAXINDEXBatchRunner/capacity_{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::prepare_batch(&index_config, PROFILE_SIZE)
+            .expect("valid prepared capacity")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        2,
+        scratch_bytes,
+        scratch_bytes,
+        scratch_bytes,
+    );
+
+    let mut value_runner = IndicatorConfig::prepare_batch(&value_config, PROFILE_SIZE)
+        .expect("valid prepared capacity");
+    let mut index_runner = IndicatorConfig::prepare_batch(&index_config, PROFILE_SIZE)
+        .expect("valid prepared capacity");
+    for pass in ["first", "repeated"] {
+        let scenario = format!("repeated/prepared_MINMAX/{pass}/{PROFILE_SIZE}");
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<MINMAXConfig>::compute_into(
+                &mut value_runner,
+                input.as_slice(),
+                MINMAXValuesMut {
+                    min: min.as_mut_slice(),
+                    max: max.as_mut_slice(),
+                },
+            )
+            .expect("valid prepared MINMAX fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("repeated/prepared_MINMAXINDEX/{pass}/{PROFILE_SIZE}");
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<MINMAXINDEXConfig>::compute_into(
+                &mut index_runner,
+                input.as_slice(),
+                MINMAXINDEXValuesMut {
+                    min_idx: min_idx.as_mut_slice(),
+                    max_idx: max_idx.as_mut_slice(),
+                },
+            )
+            .expect("valid prepared MINMAXINDEX fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+    }
+
+    let mut oversized = series_fixture(PROFILE_SIZE + 1, 0);
+    oversized[0] = Float::NAN;
+    let mut insufficient_min = [0.0 as Float; 1];
+    let mut insufficient_max = [0.0 as Float; 1];
+    let mut insufficient_min_idx = [0_usize; 1];
+    let mut insufficient_max_idx = [0_usize; 1];
+    let scenario = format!(
+        "repeated/prepared_MINMAX/oversize_rejection/{}",
+        PROFILE_SIZE + 1
+    );
+    let profile = print_profile(&scenario, || {
+        PreparedBatchRunner::<MINMAXConfig>::compute_into(
+            &mut value_runner,
+            oversized.as_slice(),
+            MINMAXValuesMut {
+                min: &mut insufficient_min,
+                max: &mut insufficient_max,
+            },
+        )
+        .expect_err("oversize must be rejected")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let scenario = format!(
+        "repeated/prepared_MINMAXINDEX/oversize_rejection/{}",
+        PROFILE_SIZE + 1
+    );
+    let profile = print_profile(&scenario, || {
+        PreparedBatchRunner::<MINMAXINDEXConfig>::compute_into(
+            &mut index_runner,
+            oversized.as_slice(),
+            MINMAXINDEXValuesMut {
+                min_idx: &mut insufficient_min_idx,
+                max_idx: &mut insufficient_max_idx,
+            },
+        )
+        .expect_err("oversize must be rejected")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let mut value_stream = IndicatorConfig::stream(&value_config).expect("valid stream");
+    let scenario = format!("streaming/MINMAXConfig/ticks/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        let mut last = None;
+        for &tick in &input {
+            last = StreamingComputation::<MINMAXConfig>::next(&mut value_stream, tick)
+                .expect("valid stream tick");
+            black_box(last);
+        }
+        last
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let mut index_stream = IndicatorConfig::stream(&index_config).expect("valid stream");
+    let scenario = format!("streaming/MINMAXINDEXConfig/ticks/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        let mut last = None;
+        for &tick in &input {
+            last = StreamingComputation::<MINMAXINDEXConfig>::next(&mut index_stream, tick)
+                .expect("valid stream tick");
+            black_box(last);
+        }
+        last
+    });
+    assert_zero_allocations(&scenario, profile);
+}
+
 fn profile_small_owned_compact_counts() {
     let config = SMAConfig::new(3).expect("valid period");
     let count_0 = [];
@@ -566,6 +796,7 @@ fn main() {
     println!("scenario\tallocation_operations\tgross_allocated_bytes\tpeak_incremental_bytes\tretained_bytes");
     profile_setup();
     profile_one_shot();
+    profile_extrema_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }

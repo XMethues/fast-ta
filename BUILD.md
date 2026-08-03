@@ -27,6 +27,16 @@ Run tests:
 cargo test -p ta-core
 ```
 
+CI enforces `f32` correctness on the supported stable x86_64 Linux host with:
+
+```bash
+cargo test -p ta-core --no-default-features --features f32,std
+```
+
+Performance evidence is intentionally host-local and uses the default `f64`
+precision unless a benchmark record explicitly says otherwise; CI correctness
+coverage is not a portable performance claim.
+
 ### ta-py (Python Bindings)
 
 Requires Python 3.x interpreter to build:

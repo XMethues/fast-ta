@@ -6,7 +6,11 @@
 //! Batch Runners, and independent Streaming Computation.
 
 use ta_core::{
-    math_operators::{MINMAXINDEXOutputMut, MINMAXOutputMut, MINMAX, MINMAXINDEX},
+    math_operators::{
+        MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXOutputMut, MINMAXINDEXStream,
+        MINMAXINDEXStreamValue, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXStream,
+        MINMAXValuesMut, MINMAX, MINMAXINDEX,
+    },
     overlap::{SMAConfig, SMAStream, SMA},
     price_transform::{AVGPRICEInput, AVGPRICE},
     Float, Indicator, IndicatorConfig, OutputRange, PreparedBatchRunner, Resettable,
@@ -581,6 +585,518 @@ fn legacy_sma_from_data_clone_reset_and_replay_remain_compatible() {
         SMA::from_data(0, &[Float::NAN]),
         Err(TalibError::InvalidInput { .. })
     ));
+}
+
+#[test]
+fn minmax_configs_are_parameter_only_and_return_exact_named_compact_payloads() {
+    let input = [3.0 as Float, 1.0, 4.0, 2.0];
+    let values_config = MINMAXConfig::new(2).unwrap();
+    let indexes_config = MINMAXINDEXConfig::new(2).unwrap();
+
+    let values = IndicatorConfig::compute(&values_config, &input).unwrap();
+    assert_eq!(values.source_len(), input.len());
+    assert_eq!(values.range(), OutputRange::new(1, 3));
+    assert_float_slice_close(&values.values().min, &[1.0, 1.0, 2.0]);
+    assert_float_slice_close(&values.values().max, &[3.0, 4.0, 4.0]);
+    assert_eq!(values.values().min.capacity(), 3);
+    assert_eq!(values.values().max.capacity(), 3);
+
+    let indexes = IndicatorConfig::compute(&indexes_config, &input).unwrap();
+    assert_eq!(indexes.source_len(), input.len());
+    assert_eq!(indexes.range(), values.range());
+    assert_eq!(indexes.values().min_idx, vec![1_usize, 1, 3]);
+    assert_eq!(indexes.values().max_idx, vec![0_usize, 2, 2]);
+    assert_eq!(indexes.values().min_idx.capacity(), 3);
+    assert_eq!(indexes.values().max_idx.capacity(), 3);
+
+    assert_eq!(values_config.period(), 2);
+    assert_eq!(indexes_config.period(), 2);
+    assert_eq!(IndicatorConfig::lookback(&values_config), 1);
+    assert_eq!(IndicatorConfig::lookback(&indexes_config), 1);
+    assert_eq!(
+        core::mem::size_of::<MINMAXConfig>(),
+        core::mem::size_of::<usize>()
+    );
+    assert_eq!(
+        core::mem::size_of::<MINMAXINDEXConfig>(),
+        core::mem::size_of::<usize>()
+    );
+}
+
+#[test]
+fn minmax_config_caller_owned_paths_match_owned_and_leave_tails_untouched() {
+    let input = [3.0 as Float, 1.0, 4.0, 2.0];
+    let values_config = MINMAXConfig::new(2).unwrap();
+    let indexes_config = MINMAXINDEXConfig::new(2).unwrap();
+    let owned_values = IndicatorConfig::compute(&values_config, &input).unwrap();
+    let owned_indexes = IndicatorConfig::compute(&indexes_config, &input).unwrap();
+    let mut min = [FLOAT_SENTINEL; 5];
+    let mut max = [FLOAT_SENTINEL; 5];
+    let mut min_idx = [usize::MAX; 5];
+    let mut max_idx = [usize::MAX; 5];
+
+    let value_range = IndicatorConfig::compute_into(
+        &values_config,
+        &input,
+        MINMAXValuesMut {
+            min: &mut min,
+            max: &mut max,
+        },
+    )
+    .unwrap();
+    let index_range = IndicatorConfig::compute_into(
+        &indexes_config,
+        &input,
+        MINMAXINDEXValuesMut {
+            min_idx: &mut min_idx,
+            max_idx: &mut max_idx,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(value_range, owned_values.range());
+    assert_eq!(index_range, owned_indexes.range());
+    assert_float_slice_close(&min[..3], &owned_values.values().min);
+    assert_float_slice_close(&max[..3], &owned_values.values().max);
+    assert_eq!(&min[3..], &[FLOAT_SENTINEL; 2]);
+    assert_eq!(&max[3..], &[FLOAT_SENTINEL; 2]);
+    assert_eq!(&min_idx[..3], owned_indexes.values().min_idx.as_slice());
+    assert_eq!(&max_idx[..3], owned_indexes.values().max_idx.as_slice());
+    assert_eq!(&min_idx[3..], &[usize::MAX; 2]);
+    assert_eq!(&max_idx[3..], &[usize::MAX; 2]);
+}
+
+#[test]
+fn minmax_config_validation_is_pre_mutation_for_both_columns() {
+    let values_config = MINMAXConfig::new(3).unwrap();
+    let indexes_config = MINMAXINDEXConfig::new(3).unwrap();
+    let input = [1.0 as Float, 2.0, 3.0, 4.0, 5.0];
+    let mut min = [FLOAT_SENTINEL; 3];
+    let mut short_max = [FLOAT_SENTINEL; 2];
+    let mut min_idx = [usize::MAX; 3];
+    let mut short_max_idx = [usize::MAX; 2];
+
+    assert!(IndicatorConfig::compute_into(
+        &values_config,
+        &input,
+        MINMAXValuesMut {
+            min: &mut min,
+            max: &mut short_max,
+        },
+    )
+    .is_err());
+    assert_eq!(min, [FLOAT_SENTINEL; 3]);
+    assert_eq!(short_max, [FLOAT_SENTINEL; 2]);
+
+    assert!(IndicatorConfig::compute_into(
+        &indexes_config,
+        &[1.0 as Float, Float::NAN, 3.0, 4.0, 5.0],
+        MINMAXINDEXValuesMut {
+            min_idx: &mut min_idx,
+            max_idx: &mut short_max_idx,
+        },
+    )
+    .is_err());
+    assert_eq!(min_idx, [usize::MAX; 3]);
+    assert_eq!(short_max_idx, [usize::MAX; 2]);
+}
+
+#[test]
+fn prepared_minmax_runners_reuse_scratch_and_prioritize_oversize_rejection() {
+    let values_config = MINMAXConfig::new(3).unwrap();
+    let indexes_config = MINMAXINDEXConfig::new(3).unwrap();
+    let mut values_runner = IndicatorConfig::prepare_batch(&values_config, 5).unwrap();
+    let mut indexes_runner = IndicatorConfig::prepare_batch(&indexes_config, 5).unwrap();
+    let input = [2.0 as Float, 1.0, 1.0, 3.0, 3.0];
+    let mut min = [FLOAT_SENTINEL; 3];
+    let mut max = [FLOAT_SENTINEL; 3];
+    let mut min_idx = [usize::MAX; 3];
+    let mut max_idx = [usize::MAX; 3];
+
+    PreparedBatchRunner::<MINMAXConfig>::compute_into(
+        &mut values_runner,
+        &input,
+        MINMAXValuesMut {
+            min: &mut min,
+            max: &mut max,
+        },
+    )
+    .unwrap();
+    PreparedBatchRunner::<MINMAXINDEXConfig>::compute_into(
+        &mut indexes_runner,
+        &input,
+        MINMAXINDEXValuesMut {
+            min_idx: &mut min_idx,
+            max_idx: &mut max_idx,
+        },
+    )
+    .unwrap();
+    assert_float_slice_close(&min, &[1.0, 1.0, 1.0]);
+    assert_float_slice_close(&max, &[2.0, 3.0, 3.0]);
+    assert_eq!(min_idx, [1, 1, 2]);
+    assert_eq!(max_idx, [0, 3, 3]);
+
+    let oversized = [Float::NAN; 6];
+    let mut untouched_min = [FLOAT_SENTINEL; 1];
+    let mut untouched_max = [FLOAT_SENTINEL; 1];
+    let error = PreparedBatchRunner::<MINMAXConfig>::compute_into(
+        &mut values_runner,
+        &oversized,
+        MINMAXValuesMut {
+            min: &mut untouched_min,
+            max: &mut untouched_max,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(
+        error,
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: 5,
+            actual_input_len: 6,
+        }
+    );
+    assert_eq!(untouched_min, [FLOAT_SENTINEL]);
+    assert_eq!(untouched_max, [FLOAT_SENTINEL]);
+
+    let mut untouched_min_idx = [usize::MAX; 1];
+    let mut untouched_max_idx = [usize::MAX; 1];
+    let index_error = PreparedBatchRunner::<MINMAXINDEXConfig>::compute_into(
+        &mut indexes_runner,
+        &oversized,
+        MINMAXINDEXValuesMut {
+            min_idx: &mut untouched_min_idx,
+            max_idx: &mut untouched_max_idx,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(index_error, error);
+    assert_eq!(untouched_min_idx, [usize::MAX]);
+    assert_eq!(untouched_max_idx, [usize::MAX]);
+
+    // A rejected within-capacity call must not poison retained scratch semantics.
+    let mut too_short_max = [FLOAT_SENTINEL; 2];
+    assert!(PreparedBatchRunner::<MINMAXConfig>::compute_into(
+        &mut values_runner,
+        &input,
+        MINMAXValuesMut {
+            min: &mut min,
+            max: &mut too_short_max,
+        },
+    )
+    .is_err());
+    min.fill(FLOAT_SENTINEL);
+    max.fill(FLOAT_SENTINEL);
+    PreparedBatchRunner::<MINMAXConfig>::compute_into(
+        &mut values_runner,
+        &[5.0 as Float, 4.0, 3.0, 2.0, 1.0],
+        MINMAXValuesMut {
+            min: &mut min,
+            max: &mut max,
+        },
+    )
+    .unwrap();
+    assert_float_slice_close(&min, &[3.0, 2.0, 1.0]);
+    assert_float_slice_close(&max, &[5.0, 4.0, 3.0]);
+
+    let prior_min_idx = min_idx;
+    let prior_max_idx = max_idx;
+    let mut too_short_max_idx = [usize::MAX; 2];
+    assert!(PreparedBatchRunner::<MINMAXINDEXConfig>::compute_into(
+        &mut indexes_runner,
+        &input,
+        MINMAXINDEXValuesMut {
+            min_idx: &mut min_idx,
+            max_idx: &mut too_short_max_idx,
+        },
+    )
+    .is_err());
+    assert_eq!(min_idx, prior_min_idx);
+    assert_eq!(max_idx, prior_max_idx);
+    assert_eq!(too_short_max_idx, [usize::MAX; 2]);
+
+    PreparedBatchRunner::<MINMAXINDEXConfig>::compute_into(
+        &mut indexes_runner,
+        &[5.0 as Float, 4.0, 3.0, 2.0, 1.0],
+        MINMAXINDEXValuesMut {
+            min_idx: &mut min_idx,
+            max_idx: &mut max_idx,
+        },
+    )
+    .unwrap();
+    assert_eq!(min_idx, [2, 3, 4]);
+    assert_eq!(max_idx, [0, 1, 2]);
+}
+
+#[test]
+fn prepared_minmax_runners_are_independent_per_worker() {
+    let config = MINMAXINDEXConfig::new(2).unwrap();
+    let mut left = IndicatorConfig::prepare_batch(&config, 4).unwrap();
+    let mut right = IndicatorConfig::prepare_batch(&config, 4).unwrap();
+    let mut left_min = [usize::MAX; 3];
+    let mut left_max = [usize::MAX; 3];
+    let mut right_min = [usize::MAX; 3];
+    let mut right_max = [usize::MAX; 3];
+
+    PreparedBatchRunner::<MINMAXINDEXConfig>::compute_into(
+        &mut left,
+        &[1.0 as Float, 3.0, 2.0, 4.0],
+        MINMAXINDEXValuesMut {
+            min_idx: &mut left_min,
+            max_idx: &mut left_max,
+        },
+    )
+    .unwrap();
+    PreparedBatchRunner::<MINMAXINDEXConfig>::compute_into(
+        &mut right,
+        &[40.0 as Float, 30.0, 20.0, 10.0],
+        MINMAXINDEXValuesMut {
+            min_idx: &mut right_min,
+            max_idx: &mut right_max,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(left_min, [0, 2, 2]);
+    assert_eq!(left_max, [1, 1, 3]);
+    assert_eq!(right_min, [1, 2, 3]);
+    assert_eq!(right_max, [0, 1, 2]);
+}
+
+#[test]
+fn minmax_configs_preserve_period_one_empty_short_nonfinite_and_oldest_ties() {
+    assert!(matches!(
+        MINMAXConfig::new(0),
+        Err(TalibError::InvalidPeriod { period: 0, .. })
+    ));
+    assert!(MINMAXINDEXConfig::new(0).is_err());
+
+    for output in [
+        IndicatorConfig::compute(&MINMAXConfig::new(3).unwrap(), &[]).unwrap(),
+        IndicatorConfig::compute(&MINMAXConfig::new(1).unwrap(), &[]).unwrap(),
+    ] {
+        assert_eq!(output.source_len(), 0);
+        assert_eq!(output.range(), OutputRange::empty());
+        assert!(output.values().min.is_empty());
+        assert!(output.values().max.is_empty());
+    }
+
+    assert!(matches!(
+        IndicatorConfig::compute(&MINMAXConfig::new(3).unwrap(), &[1.0 as Float, 2.0]),
+        Err(TalibError::InsufficientData {
+            required: 3,
+            actual: 2
+        })
+    ));
+    assert!(IndicatorConfig::compute(
+        &MINMAXINDEXConfig::new(2).unwrap(),
+        &[1.0 as Float, Float::INFINITY],
+    )
+    .is_err());
+
+    let input = [4.0 as Float, -1.0, 7.0, 7.0];
+    let values = IndicatorConfig::compute(&MINMAXConfig::new(1).unwrap(), &input).unwrap();
+    let indexes = IndicatorConfig::compute(&MINMAXINDEXConfig::new(1).unwrap(), &input).unwrap();
+    assert_float_slice_close(&values.values().min, &input);
+    assert_float_slice_close(&values.values().max, &input);
+    assert_eq!(indexes.values().min_idx, vec![0, 1, 2, 3]);
+    assert_eq!(indexes.values().max_idx, vec![0, 1, 2, 3]);
+}
+
+#[test]
+fn minmax_config_streams_are_independent_reject_invalid_ticks_reset_and_match_batch() {
+    let input = [2.0 as Float, 1.0, 1.0, 3.0, 3.0];
+    let values_config = MINMAXConfig::new(3).unwrap();
+    let indexes_config = MINMAXINDEXConfig::new(3).unwrap();
+    let batch_values = IndicatorConfig::compute(&values_config, &input).unwrap();
+    let batch_indexes = IndicatorConfig::compute(&indexes_config, &input).unwrap();
+    let mut values_stream = IndicatorConfig::stream(&values_config).unwrap();
+    let mut indexes_stream = IndicatorConfig::stream(&indexes_config).unwrap();
+    let mut streamed_values = Vec::new();
+    let mut streamed_indexes: Vec<MINMAXINDEXStreamValue> = Vec::new();
+
+    assert_eq!(
+        StreamingComputation::<MINMAXConfig>::next(&mut values_stream, 2.0).unwrap(),
+        None
+    );
+    assert!(StreamingComputation::<MINMAXConfig>::next(&mut values_stream, Float::NAN).is_err());
+    StreamingComputation::<MINMAXConfig>::reset(&mut values_stream);
+
+    for &tick in &input {
+        if let Some(value) =
+            StreamingComputation::<MINMAXConfig>::next(&mut values_stream, tick).unwrap()
+        {
+            streamed_values.push(value);
+        }
+        if let Some(value) =
+            StreamingComputation::<MINMAXINDEXConfig>::next(&mut indexes_stream, tick).unwrap()
+        {
+            streamed_indexes.push(value);
+        }
+    }
+
+    assert_eq!(streamed_values.len(), batch_values.range().nb_element);
+    for (index, value) in streamed_values.iter().enumerate() {
+        assert_float_close(value.min, batch_values.values().min[index]);
+        assert_float_close(value.max, batch_values.values().max[index]);
+    }
+    assert_eq!(
+        streamed_indexes
+            .iter()
+            .map(|value| value.min_idx)
+            .collect::<Vec<_>>(),
+        batch_indexes.values().min_idx
+    );
+    assert_eq!(
+        streamed_indexes
+            .iter()
+            .map(|value| value.max_idx)
+            .collect::<Vec<_>>(),
+        batch_indexes.values().max_idx
+    );
+
+    let mut independent = IndicatorConfig::stream(&indexes_config).unwrap();
+    assert_eq!(
+        StreamingComputation::<MINMAXINDEXConfig>::next(&mut independent, 10.0).unwrap(),
+        None
+    );
+    StreamingComputation::<MINMAXINDEXConfig>::reset(&mut indexes_stream);
+    assert_eq!(
+        StreamingComputation::<MINMAXINDEXConfig>::next(&mut independent, 20.0).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<MINMAXINDEXConfig>::next(&mut independent, 30.0).unwrap(),
+        Some(MINMAXINDEXStreamValue {
+            min_idx: 0,
+            max_idx: 2,
+        })
+    );
+
+    let mut rejected_tick = IndicatorConfig::stream(&indexes_config).unwrap();
+    assert_eq!(
+        StreamingComputation::<MINMAXINDEXConfig>::next(&mut rejected_tick, 5.0).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<MINMAXINDEXConfig>::next(&mut rejected_tick, 4.0).unwrap(),
+        None
+    );
+    assert!(
+        StreamingComputation::<MINMAXINDEXConfig>::next(&mut rejected_tick, Float::INFINITY,)
+            .is_err()
+    );
+    assert_eq!(
+        StreamingComputation::<MINMAXINDEXConfig>::next(&mut rejected_tick, 3.0).unwrap(),
+        Some(MINMAXINDEXStreamValue {
+            min_idx: 2,
+            max_idx: 0,
+        })
+    );
+}
+
+#[test]
+fn legacy_minmax_adapters_match_config_streams_and_preserve_ties_and_warmup() {
+    let input = [2.0 as Float, 1.0, 1.0, 3.0, 3.0];
+    let mut legacy_values = MINMAX::new(3).unwrap();
+    let mut legacy_indexes = MINMAXINDEX::new(3).unwrap();
+    let value_config = MINMAXConfig::new(3).unwrap();
+    let index_config = MINMAXINDEXConfig::new(3).unwrap();
+    let mut config_values = IndicatorConfig::stream(&value_config).unwrap();
+    let mut config_indexes = IndicatorConfig::stream(&index_config).unwrap();
+
+    for &tick in &input {
+        assert_eq!(
+            StreamingIndicator::next(&mut legacy_values, tick).unwrap(),
+            StreamingComputation::<MINMAXConfig>::next(&mut config_values, tick).unwrap()
+        );
+        let expected = StreamingComputation::<MINMAXINDEXConfig>::next(&mut config_indexes, tick)
+            .unwrap()
+            .map(|value| ta_core::math_operators::MINMAXINDEXValue {
+                min_idx: i32::try_from(value.min_idx).unwrap(),
+                max_idx: i32::try_from(value.max_idx).unwrap(),
+            });
+        assert_eq!(
+            StreamingIndicator::next(&mut legacy_indexes, tick).unwrap(),
+            expected
+        );
+    }
+
+    assert_eq!(legacy_values.period(), 3);
+    assert_eq!(legacy_indexes.period(), 3);
+    assert_eq!(Indicator::lookback(&legacy_values), 2);
+    assert_eq!(Indicator::lookback(&legacy_indexes), 2);
+    assert_eq!(
+        core::mem::size_of::<MINMAX>(),
+        core::mem::size_of::<MINMAXStream>()
+    );
+    assert_eq!(
+        core::mem::size_of::<MINMAXINDEX>(),
+        core::mem::size_of::<MINMAXINDEXStream>()
+    );
+}
+
+#[test]
+fn legacy_minmax_adapters_clone_independently_preserve_invalid_ticks_and_reset_replay() {
+    let mut values = MINMAX::new(3).unwrap();
+    let mut indexes = MINMAXINDEX::new(3).unwrap();
+    for tick in [5.0 as Float, 4.0] {
+        assert_eq!(StreamingIndicator::next(&mut values, tick).unwrap(), None);
+        assert_eq!(StreamingIndicator::next(&mut indexes, tick).unwrap(), None);
+    }
+    let mut values_clone = values.clone();
+    let mut indexes_clone = indexes.clone();
+
+    assert!(StreamingIndicator::next(&mut values, Float::NAN).is_err());
+    assert!(StreamingIndicator::next(&mut indexes, Float::INFINITY).is_err());
+    assert_eq!(
+        StreamingIndicator::next(&mut values, 3.0).unwrap(),
+        Some(ta_core::math_operators::MINMAXValue { min: 3.0, max: 5.0 })
+    );
+    assert_eq!(
+        StreamingIndicator::next(&mut indexes, 3.0).unwrap(),
+        Some(ta_core::math_operators::MINMAXINDEXValue {
+            min_idx: 2,
+            max_idx: 0,
+        })
+    );
+    assert_eq!(
+        StreamingIndicator::next(&mut values_clone, 10.0).unwrap(),
+        Some(ta_core::math_operators::MINMAXValue {
+            min: 4.0,
+            max: 10.0,
+        })
+    );
+    assert_eq!(
+        StreamingIndicator::next(&mut indexes_clone, 10.0).unwrap(),
+        Some(ta_core::math_operators::MINMAXINDEXValue {
+            min_idx: 1,
+            max_idx: 2,
+        })
+    );
+
+    let replay = [2.0 as Float, 1.0, 4.0, 3.0];
+    Resettable::reset(&mut values);
+    Resettable::reset(&mut indexes);
+    let first_values = replay
+        .iter()
+        .map(|&tick| StreamingIndicator::next(&mut values, tick).unwrap())
+        .collect::<Vec<_>>();
+    let first_indexes = replay
+        .iter()
+        .map(|&tick| StreamingIndicator::next(&mut indexes, tick).unwrap())
+        .collect::<Vec<_>>();
+    Resettable::reset(&mut values);
+    Resettable::reset(&mut indexes);
+    let second_values = replay
+        .iter()
+        .map(|&tick| StreamingIndicator::next(&mut values, tick).unwrap())
+        .collect::<Vec<_>>();
+    let second_indexes = replay
+        .iter()
+        .map(|&tick| StreamingIndicator::next(&mut indexes, tick).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(first_values, second_values);
+    assert_eq!(first_indexes, second_indexes);
 }
 
 #[test]
