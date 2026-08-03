@@ -11,8 +11,10 @@ issue_4_extrema_workloads_command: "cargo bench -p ta-benchmarks --bench executi
 issue_4_streaming_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/extrema_workloads/.*/streaming'"
 issue_7_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/recursive_overlap"
 issue_7_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/recursive_overlap/MA_EMA'"
+issue_8_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/price_transform"
+issue_8_streaming_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/price_transform_workloads/.*/streaming'"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
-status: issue-7-recursive-overlap-qualified
+status: issue-8-price-transform-qualified
 ---
 
 # Indicator Execution Baselines
@@ -635,3 +637,74 @@ Universe and parameter-sweep rows report current / configuration / prepared. Per
 ### Gate conclusion
 
 All allocation gates clear exactly. In the full qualification run, no configuration caller-owned, prepared, repeated-workload, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path. These are host-local default-`f64` qualification results, not portable speedup claims.
+
+## Issue #8 price-transform qualification
+
+Issue #8 adds parameter-only configurations for `AVGDEV`, `AVGPRICE`, `MEDPRICE`, `TYPPRICE`, and `WCLPRICE`, with owned and caller-owned Compact Output, reusable Prepared Batch Runners, and independent Streaming Computations. Uppercase compatibility indicators retain their existing batch, padded-owned, and streaming behavior; stateful `AVGDEV` also retains reset behavior. Named multi-series inputs use typed structures rather than positional tuples.
+
+The full benchmark command is `cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/price_transform`. The valid `AVGDEV` matrix crosses observations 64/4,096/65,536 with periods 14/512; the four zero-lookback price transforms use observations 64/4,096/65,536. A focused rerun of `indicator_execution/expanded/price_transform_workloads/.*/streaming` records the final tick-interleaved multi-instrument workload. Values below are Criterion median point estimates from the 100-sample qualification runs.
+
+### Allocation evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports:
+
+| Indicator | Configuration | Caller-owned | Owned Compact Output | Prepared setup / first / repeated / oversize | Stream setup / ticks |
+|---|---:|---:|---:|---:|---:|
+| AVGDEV | 0 / 0 B | 0 / 0 B | 1 / 32,664 B | 0 / 0 B in every phase | 1 / 112 B; 0 / 0 B |
+| AVGPRICE | 0 / 0 B | 0 / 0 B | 1 / 32,768 B | 0 / 0 B in every phase | 0 / 0 B |
+| MEDPRICE | 0 / 0 B | 0 / 0 B | 1 / 32,768 B | 0 / 0 B in every phase | 0 / 0 B |
+| TYPPRICE | 0 / 0 B | 0 / 0 B | 1 / 32,768 B | 0 / 0 B in every phase | 0 / 0 B |
+| WCLPRICE | 0 / 0 B | 0 / 0 B | 1 / 32,768 B | 0 / 0 B in every phase | 0 / 0 B |
+
+Entries are allocation operations / gross allocated bytes. Owned byte counts are exactly `compact_count × size_of::<Float>()`; caller-owned computation, prepared reuse and rejection, and streaming ticks allocate nothing. Only the rolling `AVGDEV` stream allocates its fixed-period ring buffer during construction.
+
+### Full timing evidence
+
+Caller-owned fields report current / configuration / prepared. Owned fields report legacy Aligned Output / configuration Compact Output.
+
+| Indicator | Observations / period | Caller-owned medians | Config / current | Prepared / current | Owned medians | Compact / legacy |
+|---|---:|---:|---:|---:|---:|---:|
+| AVGDEV | 64 / 14 | 392.59 ns / 392.49 ns / 392.17 ns | -0.02% | -0.11% | 449.75 ns / 417.94 ns | -7.07% |
+| AVGDEV | 4,096 / 14 | 30.492 µs / 30.456 µs / 30.671 µs | -0.12% | +0.58% | 31.920 µs / 31.195 µs | -2.27% |
+| AVGDEV | 4,096 / 512 | 2.8520 ms / 2.8543 ms / 2.8507 ms | +0.08% | -0.04% | 2.8559 ms / 2.8564 ms | +0.02% |
+| AVGDEV | 65,536 / 14 | 491.210 µs / 491.119 µs / 495.015 µs | -0.02% | +0.77% | 536.180 µs / 496.486 µs | -7.40% |
+| AVGDEV | 65,536 / 512 | 51.8864 ms / 51.8787 ms / 51.8470 ms | -0.01% | -0.08% | 51.9613 ms / 51.8978 ms | -0.12% |
+| AVGPRICE | 64 | 124.68 ns / 116.28 ns / 117.54 ns | -6.74% | -5.73% | 182.01 ns / 140.42 ns | -22.85% |
+| AVGPRICE | 4,096 | 7.504 µs / 7.473 µs / 7.604 µs | -0.42% | +1.34% | 10.592 µs / 8.106 µs | -23.48% |
+| AVGPRICE | 65,536 | 129.554 µs / 129.451 µs / 130.723 µs | -0.08% | +0.90% | 166.859 µs / 135.027 µs | -19.08% |
+| MEDPRICE | 64 | 66.68 ns / 63.15 ns / 63.05 ns | -5.29% | -5.44% | 123.35 ns / 73.90 ns | -40.09% |
+| MEDPRICE | 4,096 | 3.725 µs / 3.880 µs / 3.722 µs | +4.17% | -0.09% | 5.646 µs / 4.407 µs | -21.95% |
+| MEDPRICE | 65,536 | 67.360 µs / 68.538 µs / 67.661 µs | +1.75% | +0.45% | 92.676 µs / 72.378 µs | -21.90% |
+| TYPPRICE | 64 | 82.65 ns / 83.75 ns / 82.90 ns | +1.33% | +0.31% | 146.54 ns / 103.44 ns | -29.41% |
+| TYPPRICE | 4,096 | 5.748 µs / 5.808 µs / 5.648 µs | +1.03% | -1.74% | 7.937 µs / 6.344 µs | -20.07% |
+| TYPPRICE | 65,536 | 100.391 µs / 99.705 µs / 98.485 µs | -0.68% | -1.90% | 129.457 µs / 103.850 µs | -19.78% |
+| WCLPRICE | 64 | 82.35 ns / 83.11 ns / 83.13 ns | +0.92% | +0.95% | 145.64 ns / 107.10 ns | -26.46% |
+| WCLPRICE | 4,096 | 5.695 µs / 5.552 µs / 5.556 µs | -2.50% | -2.45% | 7.764 µs / 5.984 µs | -22.93% |
+| WCLPRICE | 65,536 | 100.887 µs / 98.512 µs / 98.521 µs | -2.35% | -2.35% | 129.582 µs / 103.727 µs | -19.95% |
+
+### Repeated and streaming evidence
+
+Universe and parameter-sweep rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured. Fixtures and caller-owned buffers are identical within each comparison; construction and reset remain outside measured operations. Parameter sweep applies only to parameterized `AVGDEV`.
+
+| Indicator / workload | Medians | Same-run deltas |
+|---|---:|---:|
+| AVGDEV Universe, 128 × 4,096 | 3.9150 ms / 3.9126 ms / 3.9118 ms | config/current -0.06%; prepared/current -0.08% |
+| AVGDEV Sweep, 4 × 4,096 | 1.1518 ms / 1.1513 ms / 1.1522 ms | config/current -0.05%; prepared/current +0.03% |
+| AVGDEV Per-worker, 4 × 4,096 | 122.393 µs / 122.089 µs | candidate/reference -0.25% |
+| AVGDEV Streaming, 16 × 4,096 | 659.997 µs / 660.608 µs | candidate/reference +0.09% |
+| AVGPRICE Universe, 128 × 4,096 | 984.175 µs / 987.446 µs / 979.345 µs | config/current +0.33%; prepared/current -0.49% |
+| AVGPRICE Per-worker, 4 × 4,096 | 30.223 µs / 30.667 µs | candidate/reference +1.47% |
+| AVGPRICE Streaming, 16 × 4,096 | 238.092 µs / 242.484 µs | candidate/reference +1.84% |
+| MEDPRICE Universe, 128 × 4,096 | 486.662 µs / 502.929 µs / 486.485 µs | config/current +3.34%; prepared/current -0.04% |
+| MEDPRICE Per-worker, 4 × 4,096 | 15.402 µs / 15.096 µs | candidate/reference -1.99% |
+| MEDPRICE Streaming, 16 × 4,096 | 236.424 µs / 236.434 µs | candidate/reference +0.00% |
+| TYPPRICE Universe, 128 × 4,096 | 763.223 µs / 750.199 µs / 751.567 µs | config/current -1.71%; prepared/current -1.53% |
+| TYPPRICE Per-worker, 4 × 4,096 | 22.993 µs / 22.645 µs | candidate/reference -1.52% |
+| TYPPRICE Streaming, 16 × 4,096 | 260.233 µs / 260.162 µs | candidate/reference -0.03% |
+| WCLPRICE Universe, 128 × 4,096 | 757.675 µs / 777.185 µs / 740.212 µs | config/current +2.57%; prepared/current -2.30% |
+| WCLPRICE Per-worker, 4 × 4,096 | 22.584 µs / 22.437 µs | candidate/reference -0.65% |
+| WCLPRICE Streaming, 16 × 4,096 | 255.631 µs / 256.196 µs | candidate/reference +0.22% |
+
+### Gate conclusion
+
+All allocation gates clear exactly. No configuration caller-owned, prepared, repeated-workload, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path except `AVGDEV` at the two period-512 cases, where it remained within +0.02%. These are host-local default-`f64` qualification results, not portable speedup claims.

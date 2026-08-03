@@ -17,7 +17,11 @@ use ta_core::{
         SMAStream, T3Config, T3Stream, TEMAConfig, TEMAStream, TRIMAConfig, TRIMAStream, WMAConfig,
         WMAStream, DEMA, EMA, MA, SMA, T3, T3_DEFAULT_VFACTOR, TEMA, TRIMA, WMA,
     },
-    price_transform::{AVGPRICEInput, AVGPRICE},
+    price_transform::{
+        AVGDEVConfig, AVGDEVStream, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig,
+        MEDPRICEInput, MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig,
+        WCLPRICEInput, WCLPRICETick, AVGDEV, AVGPRICE,
+    },
     Float, Indicator, IndicatorConfig, OutputRange, PreparedBatchRunner, Resettable,
     StreamingComputation, StreamingIndicator, TalibError,
 };
@@ -1901,6 +1905,907 @@ fn single_extrema_streams_preserve_option_reset_parity_and_legacy_adapters() {
     assert_eq!(
         core::mem::size_of::<MAXINDEX>(),
         core::mem::size_of::<MAXINDEXStream>()
+    );
+}
+
+#[test]
+fn named_price_configs_cover_owned_and_caller_owned_compact_execution() {
+    let open = [1.0 as Float, 2.0, 3.0];
+    let high = [2.0 as Float, 4.0, 6.0];
+    let low = [0.0 as Float, 1.0, 2.0];
+    let close = [1.0 as Float, 3.0, 5.0];
+    let avg_input = AVGPRICEInput {
+        open: &open,
+        high: &high,
+        low: &low,
+        close: &close,
+    };
+    let med_input = MEDPRICEInput {
+        high: &high,
+        low: &low,
+    };
+    let typ_input = TYPPRICEInput {
+        high: &high,
+        low: &low,
+        close: &close,
+    };
+    let wcl_input = WCLPRICEInput {
+        high: &high,
+        low: &low,
+        close: &close,
+    };
+
+    let avg_config = AVGPRICEConfig::new();
+    let med_config = MEDPRICEConfig::new();
+    let typ_config = TYPPRICEConfig::new();
+    let wcl_config = WCLPRICEConfig::new();
+    let avg_owned = IndicatorConfig::compute(&avg_config, avg_input).unwrap();
+    let med_owned = IndicatorConfig::compute(&med_config, med_input).unwrap();
+    let typ_owned = IndicatorConfig::compute(&typ_config, typ_input).unwrap();
+    let wcl_owned = IndicatorConfig::compute(&wcl_config, wcl_input).unwrap();
+
+    for output in [&avg_owned, &med_owned, &typ_owned, &wcl_owned] {
+        assert_eq!(output.source_len(), 3);
+        assert_eq!(output.range(), OutputRange::new(0, 3));
+    }
+    assert_float_slice_close(avg_owned.values(), &[1.0, 2.5, 4.0]);
+    assert_float_slice_close(med_owned.values(), &[1.0, 2.5, 4.0]);
+    assert_float_slice_close(typ_owned.values(), &[1.0, 8.0 / 3.0, 13.0 / 3.0]);
+    assert_float_slice_close(wcl_owned.values(), &[1.0, 2.75, 4.5]);
+
+    let mut avg_output = [FLOAT_SENTINEL; 4];
+    let mut med_output = [FLOAT_SENTINEL; 4];
+    let mut typ_output = [FLOAT_SENTINEL; 4];
+    let mut wcl_output = [FLOAT_SENTINEL; 4];
+    assert_eq!(
+        IndicatorConfig::compute_into(&avg_config, avg_input, &mut avg_output).unwrap(),
+        avg_owned.range()
+    );
+    assert_eq!(
+        IndicatorConfig::compute_into(&med_config, med_input, &mut med_output).unwrap(),
+        med_owned.range()
+    );
+    assert_eq!(
+        IndicatorConfig::compute_into(&typ_config, typ_input, &mut typ_output).unwrap(),
+        typ_owned.range()
+    );
+    assert_eq!(
+        IndicatorConfig::compute_into(&wcl_config, wcl_input, &mut wcl_output).unwrap(),
+        wcl_owned.range()
+    );
+    assert_float_slice_close(&avg_output[..3], avg_owned.values());
+    assert_float_slice_close(&med_output[..3], med_owned.values());
+    assert_float_slice_close(&typ_output[..3], typ_owned.values());
+    assert_float_slice_close(&wcl_output[..3], wcl_owned.values());
+    assert_eq!(
+        [avg_output[3], med_output[3], typ_output[3], wcl_output[3]],
+        [FLOAT_SENTINEL; 4]
+    );
+}
+
+#[test]
+fn named_price_configs_cover_prepared_and_streaming_execution() {
+    let open = [1.0 as Float, 2.0, 3.0];
+    let high = [2.0 as Float, 4.0, 6.0];
+    let low = [0.0 as Float, 1.0, 2.0];
+    let close = [1.0 as Float, 3.0, 5.0];
+    let avg_config = AVGPRICEConfig::new();
+    let med_config = MEDPRICEConfig::new();
+    let typ_config = TYPPRICEConfig::new();
+    let wcl_config = WCLPRICEConfig::new();
+    let mut avg_runner = IndicatorConfig::prepare_batch(&avg_config, 3).unwrap();
+    let mut med_runner = IndicatorConfig::prepare_batch(&med_config, 3).unwrap();
+    let mut typ_runner = IndicatorConfig::prepare_batch(&typ_config, 3).unwrap();
+    let mut wcl_runner = IndicatorConfig::prepare_batch(&wcl_config, 3).unwrap();
+    let mut avg_output = [FLOAT_SENTINEL; 3];
+    let mut med_output = [FLOAT_SENTINEL; 3];
+    let mut typ_output = [FLOAT_SENTINEL; 3];
+    let mut wcl_output = [FLOAT_SENTINEL; 3];
+
+    PreparedBatchRunner::<AVGPRICEConfig>::compute_into(
+        &mut avg_runner,
+        AVGPRICEInput {
+            open: &open,
+            high: &high,
+            low: &low,
+            close: &close,
+        },
+        &mut avg_output,
+    )
+    .unwrap();
+    PreparedBatchRunner::<MEDPRICEConfig>::compute_into(
+        &mut med_runner,
+        MEDPRICEInput {
+            high: &high,
+            low: &low,
+        },
+        &mut med_output,
+    )
+    .unwrap();
+    PreparedBatchRunner::<TYPPRICEConfig>::compute_into(
+        &mut typ_runner,
+        TYPPRICEInput {
+            high: &high,
+            low: &low,
+            close: &close,
+        },
+        &mut typ_output,
+    )
+    .unwrap();
+    PreparedBatchRunner::<WCLPRICEConfig>::compute_into(
+        &mut wcl_runner,
+        WCLPRICEInput {
+            high: &high,
+            low: &low,
+            close: &close,
+        },
+        &mut wcl_output,
+    )
+    .unwrap();
+    assert_float_slice_close(&avg_output, &[1.0, 2.5, 4.0]);
+    assert_float_slice_close(&med_output, &[1.0, 2.5, 4.0]);
+    assert_float_slice_close(&typ_output, &[1.0, 8.0 / 3.0, 13.0 / 3.0]);
+    assert_float_slice_close(&wcl_output, &[1.0, 2.75, 4.5]);
+
+    let mut avg_stream = IndicatorConfig::stream(&avg_config).unwrap();
+    let mut med_stream = IndicatorConfig::stream(&med_config).unwrap();
+    let mut typ_stream = IndicatorConfig::stream(&typ_config).unwrap();
+    let mut wcl_stream = IndicatorConfig::stream(&wcl_config).unwrap();
+    for idx in 0..3 {
+        assert_float_close(
+            StreamingComputation::<AVGPRICEConfig>::next(
+                &mut avg_stream,
+                AVGPRICETick {
+                    open: open[idx],
+                    high: high[idx],
+                    low: low[idx],
+                    close: close[idx],
+                },
+            )
+            .unwrap()
+            .unwrap(),
+            avg_output[idx],
+        );
+        assert_float_close(
+            StreamingComputation::<MEDPRICEConfig>::next(
+                &mut med_stream,
+                MEDPRICETick {
+                    high: high[idx],
+                    low: low[idx],
+                },
+            )
+            .unwrap()
+            .unwrap(),
+            med_output[idx],
+        );
+        assert_float_close(
+            StreamingComputation::<TYPPRICEConfig>::next(
+                &mut typ_stream,
+                TYPPRICETick {
+                    high: high[idx],
+                    low: low[idx],
+                    close: close[idx],
+                },
+            )
+            .unwrap()
+            .unwrap(),
+            typ_output[idx],
+        );
+        assert_float_close(
+            StreamingComputation::<WCLPRICEConfig>::next(
+                &mut wcl_stream,
+                WCLPRICETick {
+                    high: high[idx],
+                    low: low[idx],
+                    close: close[idx],
+                },
+            )
+            .unwrap()
+            .unwrap(),
+            wcl_output[idx],
+        );
+    }
+}
+
+#[test]
+fn named_price_streams_match_legacy_reject_ticks_reset_replay_and_are_independent() {
+    let open = [1.0 as Float, 2.0, 3.0];
+    let high = [2.0 as Float, 4.0, 6.0];
+    let low = [0.0 as Float, 1.0, 2.0];
+    let close = [1.0 as Float, 3.0, 5.0];
+    let avg_config = AVGPRICEConfig::new();
+    let med_config = MEDPRICEConfig::new();
+    let typ_config = TYPPRICEConfig::new();
+    let wcl_config = WCLPRICEConfig::new();
+    let mut avg_stream = IndicatorConfig::stream(&avg_config).unwrap();
+    let mut med_stream = IndicatorConfig::stream(&med_config).unwrap();
+    let mut typ_stream = IndicatorConfig::stream(&typ_config).unwrap();
+    let mut wcl_stream = IndicatorConfig::stream(&wcl_config).unwrap();
+    let mut legacy_avg = AVGPRICE::new().unwrap();
+    let mut legacy_med = ta_core::price_transform::MEDPRICE::new().unwrap();
+    let mut legacy_typ = ta_core::price_transform::TYPPRICE::new().unwrap();
+    let mut legacy_wcl = ta_core::price_transform::WCLPRICE::new().unwrap();
+
+    macro_rules! assert_tick_parity {
+        ($config_ty:ty, $stream:expr, $legacy:expr, $tick:expr) => {{
+            let tick = $tick;
+            let configured = StreamingComputation::<$config_ty>::next($stream, tick)
+                .unwrap()
+                .unwrap();
+            let legacy = StreamingIndicator::next($legacy, tick).unwrap().unwrap();
+            assert_float_close(configured, legacy);
+        }};
+    }
+
+    for idx in 0..open.len() {
+        assert_tick_parity!(
+            AVGPRICEConfig,
+            &mut avg_stream,
+            &mut legacy_avg,
+            AVGPRICETick {
+                open: open[idx],
+                high: high[idx],
+                low: low[idx],
+                close: close[idx],
+            }
+        );
+        assert_tick_parity!(
+            MEDPRICEConfig,
+            &mut med_stream,
+            &mut legacy_med,
+            MEDPRICETick {
+                high: high[idx],
+                low: low[idx],
+            }
+        );
+        assert_tick_parity!(
+            TYPPRICEConfig,
+            &mut typ_stream,
+            &mut legacy_typ,
+            TYPPRICETick {
+                high: high[idx],
+                low: low[idx],
+                close: close[idx],
+            }
+        );
+        assert_tick_parity!(
+            WCLPRICEConfig,
+            &mut wcl_stream,
+            &mut legacy_wcl,
+            WCLPRICETick {
+                high: high[idx],
+                low: low[idx],
+                close: close[idx],
+            }
+        );
+    }
+
+    assert!(StreamingComputation::<AVGPRICEConfig>::next(
+        &mut avg_stream,
+        AVGPRICETick {
+            open: Float::NAN,
+            high: 1.0,
+            low: 1.0,
+            close: 1.0,
+        },
+    )
+    .is_err());
+    assert!(StreamingComputation::<MEDPRICEConfig>::next(
+        &mut med_stream,
+        MEDPRICETick {
+            high: 1.0,
+            low: Float::INFINITY,
+        },
+    )
+    .is_err());
+    assert!(StreamingComputation::<TYPPRICEConfig>::next(
+        &mut typ_stream,
+        TYPPRICETick {
+            high: 1.0,
+            low: 1.0,
+            close: Float::NAN,
+        },
+    )
+    .is_err());
+    assert!(StreamingComputation::<WCLPRICEConfig>::next(
+        &mut wcl_stream,
+        WCLPRICETick {
+            high: Float::INFINITY,
+            low: 1.0,
+            close: 1.0,
+        },
+    )
+    .is_err());
+
+    assert_some_float_close(
+        StreamingComputation::<AVGPRICEConfig>::next(
+            &mut avg_stream,
+            AVGPRICETick {
+                open: 2.0,
+                high: 2.0,
+                low: 2.0,
+                close: 2.0,
+            },
+        )
+        .unwrap(),
+        2.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<MEDPRICEConfig>::next(
+            &mut med_stream,
+            MEDPRICETick {
+                high: 2.0,
+                low: 2.0,
+            },
+        )
+        .unwrap(),
+        2.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<TYPPRICEConfig>::next(
+            &mut typ_stream,
+            TYPPRICETick {
+                high: 2.0,
+                low: 2.0,
+                close: 2.0,
+            },
+        )
+        .unwrap(),
+        2.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<WCLPRICEConfig>::next(
+            &mut wcl_stream,
+            WCLPRICETick {
+                high: 2.0,
+                low: 2.0,
+                close: 2.0,
+            },
+        )
+        .unwrap(),
+        2.0,
+    );
+
+    StreamingComputation::<AVGPRICEConfig>::reset(&mut avg_stream);
+    StreamingComputation::<MEDPRICEConfig>::reset(&mut med_stream);
+    StreamingComputation::<TYPPRICEConfig>::reset(&mut typ_stream);
+    StreamingComputation::<WCLPRICEConfig>::reset(&mut wcl_stream);
+    legacy_avg = AVGPRICE::new().unwrap();
+    legacy_med = ta_core::price_transform::MEDPRICE::new().unwrap();
+    legacy_typ = ta_core::price_transform::TYPPRICE::new().unwrap();
+    legacy_wcl = ta_core::price_transform::WCLPRICE::new().unwrap();
+    for idx in 0..open.len() {
+        assert_tick_parity!(
+            AVGPRICEConfig,
+            &mut avg_stream,
+            &mut legacy_avg,
+            AVGPRICETick {
+                open: open[idx],
+                high: high[idx],
+                low: low[idx],
+                close: close[idx],
+            }
+        );
+        assert_tick_parity!(
+            MEDPRICEConfig,
+            &mut med_stream,
+            &mut legacy_med,
+            MEDPRICETick {
+                high: high[idx],
+                low: low[idx],
+            }
+        );
+        assert_tick_parity!(
+            TYPPRICEConfig,
+            &mut typ_stream,
+            &mut legacy_typ,
+            TYPPRICETick {
+                high: high[idx],
+                low: low[idx],
+                close: close[idx],
+            }
+        );
+        assert_tick_parity!(
+            WCLPRICEConfig,
+            &mut wcl_stream,
+            &mut legacy_wcl,
+            WCLPRICETick {
+                high: high[idx],
+                low: low[idx],
+                close: close[idx],
+            }
+        );
+    }
+
+    let mut left = IndicatorConfig::stream(&avg_config).unwrap();
+    let mut right = IndicatorConfig::stream(&avg_config).unwrap();
+    assert_some_float_close(
+        StreamingComputation::<AVGPRICEConfig>::next(
+            &mut left,
+            AVGPRICETick {
+                open: 1.0,
+                high: 1.0,
+                low: 1.0,
+                close: 1.0,
+            },
+        )
+        .unwrap(),
+        1.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<AVGPRICEConfig>::next(
+            &mut right,
+            AVGPRICETick {
+                open: 10.0,
+                high: 10.0,
+                low: 10.0,
+                close: 10.0,
+            },
+        )
+        .unwrap(),
+        10.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<AVGPRICEConfig>::next(
+            &mut left,
+            AVGPRICETick {
+                open: 3.0,
+                high: 3.0,
+                low: 3.0,
+                close: 3.0,
+            },
+        )
+        .unwrap(),
+        3.0,
+    );
+}
+
+#[test]
+fn named_price_prepared_runners_reuse_shorter_series_and_reject_oversize() {
+    let avg_config = AVGPRICEConfig::new();
+    let med_config = MEDPRICEConfig::new();
+    let typ_config = TYPPRICEConfig::new();
+    let wcl_config = WCLPRICEConfig::new();
+    let mut avg_runner = IndicatorConfig::prepare_batch(&avg_config, 3).unwrap();
+    let mut med_runner = IndicatorConfig::prepare_batch(&med_config, 3).unwrap();
+    let mut typ_runner = IndicatorConfig::prepare_batch(&typ_config, 3).unwrap();
+    let mut wcl_runner = IndicatorConfig::prepare_batch(&wcl_config, 3).unwrap();
+    let open = [8.0 as Float, 4.0];
+    let high = [10.0 as Float, 6.0];
+    let low = [4.0 as Float, 2.0];
+    let close = [6.0 as Float, 3.0];
+
+    assert_eq!(
+        PreparedBatchRunner::<AVGPRICEConfig>::max_input_len(&avg_runner),
+        3
+    );
+    assert_eq!(
+        PreparedBatchRunner::<MEDPRICEConfig>::max_input_len(&med_runner),
+        3
+    );
+    assert_eq!(
+        PreparedBatchRunner::<TYPPRICEConfig>::max_input_len(&typ_runner),
+        3
+    );
+    assert_eq!(
+        PreparedBatchRunner::<WCLPRICEConfig>::max_input_len(&wcl_runner),
+        3
+    );
+
+    macro_rules! assert_reuse {
+        ($config_ty:ty, $config:expr, $runner:expr, $input:expr) => {{
+            let input = $input;
+            let owned = IndicatorConfig::compute($config, input).unwrap();
+            let mut output = [FLOAT_SENTINEL; 3];
+            let range =
+                PreparedBatchRunner::<$config_ty>::compute_into($runner, input, &mut output)
+                    .unwrap();
+            assert_eq!(range, owned.range());
+            assert_float_slice_close(&output[..owned.values().len()], owned.values());
+            assert_eq!(output[owned.values().len()], FLOAT_SENTINEL);
+        }};
+    }
+
+    assert_reuse!(
+        AVGPRICEConfig,
+        &avg_config,
+        &mut avg_runner,
+        AVGPRICEInput {
+            open: &open,
+            high: &high,
+            low: &low,
+            close: &close,
+        }
+    );
+    assert_reuse!(
+        MEDPRICEConfig,
+        &med_config,
+        &mut med_runner,
+        MEDPRICEInput {
+            high: &high,
+            low: &low,
+        }
+    );
+    assert_reuse!(
+        TYPPRICEConfig,
+        &typ_config,
+        &mut typ_runner,
+        TYPPRICEInput {
+            high: &high,
+            low: &low,
+            close: &close,
+        }
+    );
+    assert_reuse!(
+        WCLPRICEConfig,
+        &wcl_config,
+        &mut wcl_runner,
+        WCLPRICEInput {
+            high: &high,
+            low: &low,
+            close: &close,
+        }
+    );
+
+    let oversized = [Float::NAN; 4];
+    let expected = TalibError::PreparedCapacityExceeded {
+        max_input_len: 3,
+        actual_input_len: 4,
+    };
+    macro_rules! assert_oversize {
+        ($config_ty:ty, $runner:expr, $input:expr) => {{
+            let mut output = [FLOAT_SENTINEL; 4];
+            let error =
+                PreparedBatchRunner::<$config_ty>::compute_into($runner, $input, &mut output)
+                    .unwrap_err();
+            assert_eq!(error, expected);
+            assert_eq!(output, [FLOAT_SENTINEL; 4]);
+        }};
+    }
+
+    assert_oversize!(
+        AVGPRICEConfig,
+        &mut avg_runner,
+        AVGPRICEInput {
+            open: &oversized,
+            high: &oversized,
+            low: &oversized,
+            close: &oversized,
+        }
+    );
+    assert_oversize!(
+        MEDPRICEConfig,
+        &mut med_runner,
+        MEDPRICEInput {
+            high: &oversized,
+            low: &oversized,
+        }
+    );
+    assert_oversize!(
+        TYPPRICEConfig,
+        &mut typ_runner,
+        TYPPRICEInput {
+            high: &oversized,
+            low: &oversized,
+            close: &oversized,
+        }
+    );
+    assert_oversize!(
+        WCLPRICEConfig,
+        &mut wcl_runner,
+        WCLPRICEInput {
+            high: &oversized,
+            low: &oversized,
+            close: &oversized,
+        }
+    );
+}
+
+#[test]
+fn named_price_configs_preserve_length_finite_and_output_validation_order() {
+    let valid = [1.0 as Float, 2.0];
+    let short = [1.0 as Float];
+    let invalid = [1.0 as Float, Float::NAN];
+    let mut output = [FLOAT_SENTINEL; 2];
+    let avg_config = AVGPRICEConfig::new();
+    let med_config = MEDPRICEConfig::new();
+    let typ_config = TYPPRICEConfig::new();
+    let wcl_config = WCLPRICEConfig::new();
+
+    macro_rules! assert_unchanged_error {
+        ($call:expr, $message:literal) => {{
+            assert_eq!($call.unwrap_err().to_string(), $message);
+            assert_eq!(output, [FLOAT_SENTINEL; 2]);
+        }};
+    }
+
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &avg_config,
+            AVGPRICEInput {
+                open: &valid,
+                high: &short,
+                low: &invalid,
+                close: &valid,
+            },
+            &mut output,
+        ),
+        "Invalid input: open and high must have the same length: got 2 and 1"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &med_config,
+            MEDPRICEInput {
+                high: &valid,
+                low: &short,
+            },
+            &mut output,
+        ),
+        "Invalid input: high and low must have the same length: got 2 and 1"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &typ_config,
+            TYPPRICEInput {
+                high: &valid,
+                low: &short,
+                close: &invalid,
+            },
+            &mut output,
+        ),
+        "Invalid input: high and low must have the same length: got 2 and 1"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &wcl_config,
+            WCLPRICEInput {
+                high: &valid,
+                low: &valid,
+                close: &short,
+            },
+            &mut output,
+        ),
+        "Invalid input: high and close must have the same length: got 2 and 1"
+    );
+
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &avg_config,
+            AVGPRICEInput {
+                open: &valid,
+                high: &valid,
+                low: &invalid,
+                close: &valid,
+            },
+            &mut output[..0],
+        ),
+        "Invalid input: low[1] must be finite, got NaN"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &med_config,
+            MEDPRICEInput {
+                high: &valid,
+                low: &invalid,
+            },
+            &mut output[..0],
+        ),
+        "Invalid input: low[1] must be finite, got NaN"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &typ_config,
+            TYPPRICEInput {
+                high: &valid,
+                low: &valid,
+                close: &invalid,
+            },
+            &mut output[..0],
+        ),
+        "Invalid input: close[1] must be finite, got NaN"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &wcl_config,
+            WCLPRICEInput {
+                high: &valid,
+                low: &valid,
+                close: &invalid,
+            },
+            &mut output[..0],
+        ),
+        "Invalid input: close[1] must be finite, got NaN"
+    );
+
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &avg_config,
+            AVGPRICEInput {
+                open: &valid,
+                high: &valid,
+                low: &valid,
+                close: &valid,
+            },
+            &mut output[..1],
+        ),
+        "Invalid input: AVGPRICE output buffer too small: need 2, got 1"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &med_config,
+            MEDPRICEInput {
+                high: &valid,
+                low: &valid,
+            },
+            &mut output[..1],
+        ),
+        "Invalid input: MEDPRICE output buffer too small: need 2, got 1"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &typ_config,
+            TYPPRICEInput {
+                high: &valid,
+                low: &valid,
+                close: &valid,
+            },
+            &mut output[..1],
+        ),
+        "Invalid input: TYPPRICE output buffer too small: need 2, got 1"
+    );
+    assert_unchanged_error!(
+        IndicatorConfig::compute_into(
+            &wcl_config,
+            WCLPRICEInput {
+                high: &valid,
+                low: &valid,
+                close: &valid,
+            },
+            &mut output[..1],
+        ),
+        "Invalid input: WCLPRICE output buffer too small: need 2, got 1"
+    );
+}
+
+#[test]
+fn avgdev_config_covers_reusable_prepared_validated_and_independent_stream_execution() {
+    let input = [1.0 as Float, 2.0, 4.0, 8.0];
+    let config = AVGDEVConfig::new(2).unwrap();
+    assert_eq!(config.period(), 2);
+    assert_eq!(IndicatorConfig::lookback(&config), 1);
+
+    let owned = IndicatorConfig::compute(&config, &input).unwrap();
+    assert_eq!(owned.source_len(), input.len());
+    assert_eq!(owned.range(), OutputRange::new(1, 3));
+    assert_float_slice_close(owned.values(), &[0.5, 1.0, 2.0]);
+
+    let mut output = [FLOAT_SENTINEL; 4];
+    let range = IndicatorConfig::compute_into(&config, &input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_float_slice_close(&output[..3], owned.values());
+    assert_eq!(output[3], FLOAT_SENTINEL);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, input.len()).unwrap();
+    assert_eq!(
+        PreparedBatchRunner::<AVGDEVConfig>::max_input_len(&runner),
+        input.len()
+    );
+    output.fill(FLOAT_SENTINEL);
+    let prepared_range =
+        PreparedBatchRunner::<AVGDEVConfig>::compute_into(&mut runner, &input, &mut output)
+            .unwrap();
+    assert_eq!(prepared_range, owned.range());
+    assert_float_slice_close(&output[..3], owned.values());
+    assert_eq!(output[3], FLOAT_SENTINEL);
+
+    let shorter = [2.0 as Float, 6.0, 10.0];
+    let shorter_owned = IndicatorConfig::compute(&config, &shorter).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    let shorter_range =
+        PreparedBatchRunner::<AVGDEVConfig>::compute_into(&mut runner, &shorter, &mut output)
+            .unwrap();
+    assert_eq!(shorter_range, shorter_owned.range());
+    assert_float_slice_close(&output[..2], shorter_owned.values());
+    assert_eq!(&output[2..], &[FLOAT_SENTINEL; 2]);
+
+    let oversized = [Float::NAN; 5];
+    output.fill(FLOAT_SENTINEL);
+    assert_eq!(
+        PreparedBatchRunner::<AVGDEVConfig>::compute_into(&mut runner, &oversized, &mut output)
+            .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: 4,
+            actual_input_len: 5,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 4]);
+
+    let invalid = [1.0 as Float, Float::NAN];
+    assert_eq!(
+        IndicatorConfig::compute_into(&config, &invalid, &mut output[..0])
+            .unwrap_err()
+            .to_string(),
+        "Invalid input: real[1] must be finite, got NaN"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 4]);
+    assert_eq!(
+        IndicatorConfig::compute_into(&config, &[1.0 as Float, 2.0], &mut output[..0])
+            .unwrap_err()
+            .to_string(),
+        "Invalid input: AVGDEV output buffer too small: need 1, got 0"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 4]);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut legacy = AVGDEV::new(2).unwrap();
+    let mut streamed = Vec::new();
+    let mut legacy_streamed = Vec::new();
+    for tick in input {
+        if let Some(value) = StreamingComputation::<AVGDEVConfig>::next(&mut stream, tick).unwrap()
+        {
+            streamed.push(value);
+        }
+        if let Some(value) = StreamingIndicator::next(&mut legacy, tick).unwrap() {
+            legacy_streamed.push(value);
+        }
+    }
+    assert_float_slice_close(&streamed, owned.values());
+    assert_float_slice_close(&legacy_streamed, owned.values());
+
+    assert!(StreamingComputation::<AVGDEVConfig>::next(&mut stream, Float::NAN).is_err());
+    assert!(StreamingIndicator::next(&mut legacy, Float::NAN).is_err());
+    let configured_after_rejection = StreamingComputation::<AVGDEVConfig>::next(&mut stream, 10.0)
+        .unwrap()
+        .unwrap();
+    let legacy_after_rejection = StreamingIndicator::next(&mut legacy, 10.0)
+        .unwrap()
+        .unwrap();
+    assert_float_close(configured_after_rejection, legacy_after_rejection);
+    assert_float_close(configured_after_rejection, 1.0);
+
+    let mut left = IndicatorConfig::stream(&config).unwrap();
+    let mut right = IndicatorConfig::stream(&config).unwrap();
+    assert_eq!(
+        StreamingComputation::<AVGDEVConfig>::next(&mut left, 10.0).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<AVGDEVConfig>::next(&mut right, 100.0).unwrap(),
+        None
+    );
+    assert_some_float_close(
+        StreamingComputation::<AVGDEVConfig>::next(&mut left, 20.0).unwrap(),
+        5.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<AVGDEVConfig>::next(&mut right, 200.0).unwrap(),
+        50.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<AVGDEVConfig>::next(&mut left, 30.0).unwrap(),
+        5.0,
+    );
+
+    StreamingComputation::<AVGDEVConfig>::reset(&mut stream);
+    Resettable::reset(&mut legacy);
+    let replayed = input
+        .iter()
+        .filter_map(|&tick| StreamingComputation::<AVGDEVConfig>::next(&mut stream, tick).unwrap())
+        .collect::<Vec<_>>();
+    let legacy_replayed = input
+        .iter()
+        .filter_map(|&tick| StreamingIndicator::next(&mut legacy, tick).unwrap())
+        .collect::<Vec<_>>();
+    assert_float_slice_close(&replayed, owned.values());
+    assert_float_slice_close(&legacy_replayed, owned.values());
+
+    assert_eq!(
+        core::mem::size_of::<AVGDEVConfig>(),
+        core::mem::size_of::<usize>()
+    );
+    assert_eq!(
+        core::mem::size_of::<AVGDEVStream>(),
+        core::mem::size_of::<AVGDEV>()
     );
 }
 

@@ -9,8 +9,20 @@ mod medprice;
 mod typprice;
 mod wclprice;
 
-pub use avgdev::{AVGDEV_vec, AVGDEV};
-pub use avgprice::{AVGPRICEInput, AVGPRICETick, AVGPRICE_vec, AVGPRICE};
-pub use medprice::{MEDPRICEInput, MEDPRICETick, MEDPRICE_vec, MEDPRICE};
-pub use typprice::{TYPPRICEInput, TYPPRICETick, TYPPRICE_vec, TYPPRICE};
-pub use wclprice::{WCLPRICEInput, WCLPRICETick, WCLPRICE_vec, WCLPRICE};
+pub use avgdev::{AVGDEVBatchRunner, AVGDEVConfig, AVGDEVStream, AVGDEV_vec, AVGDEV};
+pub use avgprice::{
+    AVGPRICEBatchRunner, AVGPRICEConfig, AVGPRICEInput, AVGPRICEStream, AVGPRICETick, AVGPRICE_vec,
+    AVGPRICE,
+};
+pub use medprice::{
+    MEDPRICEBatchRunner, MEDPRICEConfig, MEDPRICEInput, MEDPRICEStream, MEDPRICETick, MEDPRICE_vec,
+    MEDPRICE,
+};
+pub use typprice::{
+    TYPPRICEBatchRunner, TYPPRICEConfig, TYPPRICEInput, TYPPRICEStream, TYPPRICETick, TYPPRICE_vec,
+    TYPPRICE,
+};
+pub use wclprice::{
+    WCLPRICEBatchRunner, WCLPRICEConfig, WCLPRICEInput, WCLPRICEStream, WCLPRICETick, WCLPRICE_vec,
+    WCLPRICE,
+};

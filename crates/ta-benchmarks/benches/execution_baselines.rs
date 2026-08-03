@@ -23,7 +23,11 @@ use ta_core::{
         DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
         WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
     },
-    price_transform::{AVGPRICEInput, AVGPRICE},
+    price_transform::{
+        AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
+        MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
+        WCLPRICETick, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
+    },
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
     StreamingIndicator,
 };
@@ -1922,6 +1926,316 @@ macro_rules! define_single_output_benchmark {
         }
     };
 }
+macro_rules! define_named_price_benchmarks {
+    (
+        $matrix_name:ident,
+        $workloads_name:ident,
+        $matrix_group:literal,
+        $workloads_group:literal,
+        $indicator:ident,
+        $config:ident,
+        $input:ident,
+        $tick:ident,
+        [$($field:ident),+ $(,)?]
+    ) => {
+        fn $matrix_name(c: &mut Criterion) {
+            let mut group = c.benchmark_group($matrix_group);
+            for &size in SIZES {
+                group.throughput(Throughput::Elements(size as u64));
+
+                group.bench_with_input(
+                    BenchmarkId::new("current_caller_compact", size),
+                    &size,
+                    |b, &size| {
+                        let ohlc = ohlc_fixture(size);
+                        let indicator = $indicator::new().expect("valid price configuration");
+                        let mut output = vec![0.0 as Float; size];
+                        b.iter(|| {
+                            let range = Indicator::compute(
+                                black_box(&indicator),
+                                black_box($input {
+                                    $($field: ohlc.$field.as_slice()),+
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect("valid current price fixture");
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+
+                group.bench_with_input(
+                    BenchmarkId::new("config_caller_compact", size),
+                    &size,
+                    |b, &size| {
+                        let ohlc = ohlc_fixture(size);
+                        let config = $config::new();
+                        let mut output = vec![0.0 as Float; size];
+                        b.iter(|| {
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&config),
+                                black_box($input {
+                                    $($field: ohlc.$field.as_slice()),+
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect("valid configured price fixture");
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+
+                group.bench_with_input(
+                    BenchmarkId::new("prepared_runner", size),
+                    &size,
+                    |b, &size| {
+                        let ohlc = ohlc_fixture(size);
+                        let config = $config::new();
+                        let mut runner = IndicatorConfig::prepare_batch(&config, size)
+                            .expect("valid prepared price capacity");
+                        let mut output = vec![0.0 as Float; size];
+                        b.iter(|| {
+                            let range = PreparedBatchRunner::<$config>::compute_into(
+                                black_box(&mut runner),
+                                black_box($input {
+                                    $($field: ohlc.$field.as_slice()),+
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect("valid prepared price fixture");
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+
+                group.bench_with_input(
+                    BenchmarkId::new("legacy_owned_aligned", size),
+                    &size,
+                    |b, &size| {
+                        let ohlc = ohlc_fixture(size);
+                        let indicator = $indicator::new().expect("valid price configuration");
+                        b.iter_batched(
+                            || (),
+                            |_| {
+                                let output = Indicator::compute_to_vec(
+                                    black_box(&indicator),
+                                    black_box($input {
+                                        $($field: ohlc.$field.as_slice()),+
+                                    }),
+                                )
+                                .expect("valid legacy owned price fixture");
+                                black_box(output)
+                            },
+                            BatchSize::LargeInput,
+                        );
+                    },
+                );
+
+                group.bench_with_input(
+                    BenchmarkId::new("config_owned_compact", size),
+                    &size,
+                    |b, &size| {
+                        let ohlc = ohlc_fixture(size);
+                        let config = $config::new();
+                        b.iter_batched(
+                            || (),
+                            |_| {
+                                let output = IndicatorConfig::compute(
+                                    black_box(&config),
+                                    black_box($input {
+                                        $($field: ohlc.$field.as_slice()),+
+                                    }),
+                                )
+                                .expect("valid configured owned price fixture");
+                                black_box(output)
+                            },
+                            BatchSize::LargeInput,
+                        );
+                    },
+                );
+            }
+            group.finish();
+        }
+
+        fn $workloads_name(c: &mut Criterion) {
+            let mut group = c.benchmark_group($workloads_group);
+
+            group.throughput(Throughput::Elements(
+                (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("universe/current_caller_compact", |b| {
+                let universe = (0..UNIVERSE_INSTRUMENTS)
+                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .collect::<Vec<_>>();
+                let indicator = $indicator::new().expect("valid price configuration");
+                let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+                b.iter(|| {
+                    for ohlc in &universe {
+                        let range = Indicator::compute(
+                            black_box(&indicator),
+                            black_box($input {
+                                $($field: ohlc.$field.as_slice()),+
+                            }),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect("valid current price Universe");
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("universe/config_caller_compact", |b| {
+                let universe = (0..UNIVERSE_INSTRUMENTS)
+                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .collect::<Vec<_>>();
+                let config = $config::new();
+                let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+                b.iter(|| {
+                    for ohlc in &universe {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(&config),
+                            black_box($input {
+                                $($field: ohlc.$field.as_slice()),+
+                            }),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect("valid configured price Universe");
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("universe/prepared_runner", |b| {
+                let universe = (0..UNIVERSE_INSTRUMENTS)
+                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .collect::<Vec<_>>();
+                let config = $config::new();
+                let mut runner =
+                    IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN).unwrap();
+                let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+                b.iter(|| {
+                    for ohlc in &universe {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(&mut runner),
+                            black_box($input {
+                                $($field: ohlc.$field.as_slice()),+
+                            }),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect("valid prepared price Universe");
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements(
+                (WORKERS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("per_worker/current_instances", |b| {
+                let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+                let indicators = (0..WORKERS)
+                    .map(|_| $indicator::new().expect("valid price configuration"))
+                    .collect::<Vec<_>>();
+                let mut outputs =
+                    vec![vec![0.0 as Float; REPEATED_SERIES_LEN]; WORKERS];
+                b.iter(|| {
+                    for (indicator, output) in indicators.iter().zip(outputs.iter_mut()) {
+                        let range = Indicator::compute(
+                            black_box(indicator),
+                            black_box($input {
+                                $($field: ohlc.$field.as_slice()),+
+                            }),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect("valid current per-worker price fixture");
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("per_worker/prepared_runners", |b| {
+                let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+                let config = $config::new();
+                let mut runners = (0..WORKERS)
+                    .map(|_| IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN).unwrap())
+                    .collect::<Vec<_>>();
+                let mut outputs =
+                    vec![vec![0.0 as Float; REPEATED_SERIES_LEN]; WORKERS];
+                b.iter(|| {
+                    for (runner, output) in runners.iter_mut().zip(outputs.iter_mut()) {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(runner),
+                            black_box($input {
+                                $($field: ohlc.$field.as_slice()),+
+                            }),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect("valid prepared per-worker price fixture");
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements(
+                (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("streaming/legacy_instances", |b| {
+                let inputs = (0..STREAM_INSTRUMENTS)
+                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .collect::<Vec<_>>();
+                b.iter_batched_ref(
+                    || {
+                        (0..STREAM_INSTRUMENTS)
+                            .map(|_| $indicator::new().expect("valid price configuration"))
+                            .collect::<Vec<_>>()
+                    },
+                    |streams| {
+                        for idx in 0..REPEATED_SERIES_LEN {
+                            for (stream, ohlc) in streams.iter_mut().zip(inputs.iter()) {
+                                let output = StreamingIndicator::next(
+                                    black_box(stream),
+                                    black_box($tick {
+                                        $($field: ohlc.$field[idx]),+
+                                    }),
+                                )
+                                .expect("valid legacy price stream");
+                                black_box(output);
+                            }
+                        }
+                    },
+                    BatchSize::LargeInput,
+                );
+            });
+            group.bench_function("streaming/config_streams", |b| {
+                let inputs = (0..STREAM_INSTRUMENTS)
+                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .collect::<Vec<_>>();
+                let config = $config::new();
+                b.iter_batched_ref(
+                    || {
+                        (0..STREAM_INSTRUMENTS)
+                            .map(|_| IndicatorConfig::stream(&config).unwrap())
+                            .collect::<Vec<_>>()
+                    },
+                    |streams| {
+                        for idx in 0..REPEATED_SERIES_LEN {
+                            for (stream, ohlc) in streams.iter_mut().zip(inputs.iter()) {
+                                let output = StreamingComputation::<$config>::next(
+                                    black_box(stream),
+                                    black_box($tick {
+                                        $($field: ohlc.$field[idx]),+
+                                    }),
+                                )
+                                .expect("valid configured price stream");
+                                black_box(output);
+                            }
+                        }
+                    },
+                    BatchSize::LargeInput,
+                );
+            });
+
+            group.finish();
+        }
+    };
+}
 
 define_single_output_benchmark!(
     bench_min_qualified_scratch_matrix,
@@ -2160,6 +2474,77 @@ define_single_output_benchmark!(
     0.0 as Float
 );
 
+define_single_output_benchmark!(
+    bench_avgdev_qualified_matrix,
+    "indicator_execution/expanded/price_transform/AVGDEV",
+    AVGDEV,
+    AVGDEVConfig,
+    AVGDEV::new,
+    AVGDEVConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_avgdev_repeated_and_streaming,
+    "indicator_execution/expanded/price_transform_workloads/AVGDEV",
+    AVGDEV,
+    AVGDEVConfig,
+    AVGDEV::new,
+    AVGDEVConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_named_price_benchmarks!(
+    bench_avgprice_qualified_matrix,
+    bench_avgprice_repeated_and_streaming,
+    "indicator_execution/expanded/price_transform/AVGPRICE",
+    "indicator_execution/expanded/price_transform_workloads/AVGPRICE",
+    AVGPRICE,
+    AVGPRICEConfig,
+    AVGPRICEInput,
+    AVGPRICETick,
+    [open, high, low, close]
+);
+define_named_price_benchmarks!(
+    bench_medprice_qualified_matrix,
+    bench_medprice_repeated_and_streaming,
+    "indicator_execution/expanded/price_transform/MEDPRICE",
+    "indicator_execution/expanded/price_transform_workloads/MEDPRICE",
+    MEDPRICE,
+    MEDPRICEConfig,
+    MEDPRICEInput,
+    MEDPRICETick,
+    [high, low]
+);
+define_named_price_benchmarks!(
+    bench_typprice_qualified_matrix,
+    bench_typprice_repeated_and_streaming,
+    "indicator_execution/expanded/price_transform/TYPPRICE",
+    "indicator_execution/expanded/price_transform_workloads/TYPPRICE",
+    TYPPRICE,
+    TYPPRICEConfig,
+    TYPPRICEInput,
+    TYPPRICETick,
+    [high, low, close]
+);
+define_named_price_benchmarks!(
+    bench_wclprice_qualified_matrix,
+    bench_wclprice_repeated_and_streaming,
+    "indicator_execution/expanded/price_transform/WCLPRICE",
+    "indicator_execution/expanded/price_transform_workloads/WCLPRICE",
+    WCLPRICE,
+    WCLPRICEConfig,
+    WCLPRICEInput,
+    WCLPRICETick,
+    [high, low, close]
+);
+
 criterion_group!(
     benches,
     bench_sma_one_shot,
@@ -2199,5 +2584,15 @@ criterion_group!(
     bench_prepared_parameter_sweep,
     bench_prepared_per_worker,
     bench_multi_instrument_streaming,
+    bench_avgdev_qualified_matrix,
+    bench_avgprice_qualified_matrix,
+    bench_medprice_qualified_matrix,
+    bench_typprice_qualified_matrix,
+    bench_wclprice_qualified_matrix,
+    bench_avgdev_repeated_and_streaming,
+    bench_avgprice_repeated_and_streaming,
+    bench_medprice_repeated_and_streaming,
+    bench_typprice_repeated_and_streaming,
+    bench_wclprice_repeated_and_streaming,
 );
 criterion_main!(benches);

@@ -27,7 +27,11 @@ use ta_core::{
         DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
         WMAConfig, SMA,
     },
-    price_transform::{AVGPRICEInput, AVGPRICE},
+    price_transform::{
+        AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
+        MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
+        WCLPRICETick, AVGPRICE,
+    },
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
     StreamingIndicator,
 };
@@ -1034,6 +1038,177 @@ fn profile_single_output_execution() {
         0,
         0
     );
+    profile_single_output_indicator!(
+        "AVGDEV",
+        AVGDEVConfig,
+        AVGDEVConfig::new(PERIOD).expect("valid period"),
+        1,
+        STREAM_BYTES
+    );
+}
+
+macro_rules! profile_named_price_indicator {
+    (
+        $label:literal,
+        $config:ty,
+        $new_config:expr,
+        $input:ident,
+        $tick:ident,
+        [$($field:ident),+ $(,)?]
+    ) => {{
+        let ohlc = ohlc_fixture(PROFILE_SIZE);
+        let scenario = format!("setup/{}Config/parameters", $label);
+        let profile = print_profile(&scenario, || $new_config);
+        assert_zero_allocations(&scenario, profile);
+
+        let config: $config = $new_config;
+        let output_bytes = PROFILE_SIZE * core::mem::size_of::<Float>();
+        let mut output = vec![0.0 as Float; PROFILE_SIZE];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(
+                &config,
+                $input {
+                    $($field: ohlc.$field.as_slice()),+
+                },
+                output.as_mut_slice(),
+            )
+            .expect("valid caller-owned price fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(
+                &config,
+                $input {
+                    $($field: ohlc.$field.as_slice()),+
+                },
+            )
+            .expect("valid owned price fixture")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let empty = ohlc_fixture(0);
+        let scenario = format!("one_shot/{}Config/owned_compact/count_0", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(
+                &config,
+                $input {
+                    $($field: empty.$field.as_slice()),+
+                },
+            )
+            .expect("valid empty price fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut runner =
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity");
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $label);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    $input {
+                        $($field: ohlc.$field.as_slice()),+
+                    },
+                    output.as_mut_slice(),
+                )
+                .expect("valid prepared price fixture")
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized = ohlc_fixture(PROFILE_SIZE + 1);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $label,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                $input {
+                    $($field: oversized.$field.as_slice()),+
+                },
+                output.as_mut_slice(),
+            )
+            .expect_err("oversized price input must be rejected")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}Config/stream", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::stream(&config).expect("valid price stream")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut stream = IndicatorConfig::stream(&config).expect("valid price stream");
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            let mut last = None;
+            for idx in 0..PROFILE_SIZE {
+                last = StreamingComputation::<$config>::next(
+                    &mut stream,
+                    $tick {
+                        $($field: ohlc.$field[idx]),+
+                    },
+                )
+                .expect("valid price stream tick");
+                black_box(last);
+            }
+            last
+        });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
+fn profile_named_price_execution() {
+    profile_named_price_indicator!(
+        "AVGPRICE",
+        AVGPRICEConfig,
+        AVGPRICEConfig::new(),
+        AVGPRICEInput,
+        AVGPRICETick,
+        [open, high, low, close]
+    );
+    profile_named_price_indicator!(
+        "MEDPRICE",
+        MEDPRICEConfig,
+        MEDPRICEConfig::new(),
+        MEDPRICEInput,
+        MEDPRICETick,
+        [high, low]
+    );
+    profile_named_price_indicator!(
+        "TYPPRICE",
+        TYPPRICEConfig,
+        TYPPRICEConfig::new(),
+        TYPPRICEInput,
+        TYPPRICETick,
+        [high, low, close]
+    );
+    profile_named_price_indicator!(
+        "WCLPRICE",
+        WCLPRICEConfig,
+        WCLPRICEConfig::new(),
+        WCLPRICEInput,
+        WCLPRICETick,
+        [high, low, close]
+    );
 }
 
 fn profile_small_owned_compact_counts() {
@@ -1280,6 +1455,7 @@ fn main() {
     profile_extrema_execution();
     profile_single_extrema_execution();
     profile_single_output_execution();
+    profile_named_price_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }
