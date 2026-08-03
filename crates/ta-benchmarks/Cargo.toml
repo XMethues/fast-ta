@@ -18,6 +18,14 @@ harness = false
 name = "first_tranche"
 harness = false
 
+[[bench]]
+name = "execution_baselines"
+harness = false
+
+[[bench]]
+name = "execution_allocations"
+harness = false
+
 [dependencies]
 ta-core = { path = "../ta-core" }
 
