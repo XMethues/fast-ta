@@ -25,7 +25,7 @@ fn validate_sma_batch(real: &[Float], timeperiod: usize) -> Result<(usize, usize
 }
 
 #[inline]
-fn sma_kernel(
+pub(super) fn sma_kernel(
     real: &[Float],
     timeperiod: usize,
     inv_period: Float,

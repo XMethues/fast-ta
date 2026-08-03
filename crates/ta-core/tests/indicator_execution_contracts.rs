@@ -13,7 +13,9 @@ use ta_core::{
         MINMAXValuesMut, MINStream, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
     overlap::{
-        SMAConfig, SMAStream, TRIMAConfig, TRIMAStream, WMAConfig, WMAStream, SMA, TRIMA, WMA,
+        DEMAConfig, DEMAStream, EMAConfig, EMAStream, MAConfig, MAStream, MAType, SMAConfig,
+        SMAStream, T3Config, T3Stream, TEMAConfig, TEMAStream, TRIMAConfig, TRIMAStream, WMAConfig,
+        WMAStream, DEMA, EMA, MA, SMA, T3, T3_DEFAULT_VFACTOR, TEMA, TRIMA, WMA,
     },
     price_transform::{AVGPRICEInput, AVGPRICE},
     Float, Indicator, IndicatorConfig, OutputRange, PreparedBatchRunner, Resettable,
@@ -588,6 +590,321 @@ fn legacy_sma_from_data_clone_reset_and_replay_remain_compatible() {
         SMA::from_data(0, &[Float::NAN]),
         Err(TalibError::InvalidInput { .. })
     ));
+}
+
+#[test]
+fn ema_config_separates_batch_and_streaming_execution() {
+    let input = [1.0 as Float, 2.0, 3.0, 4.0, 5.0];
+    let config = EMAConfig::new(3).unwrap();
+    assert_eq!(config.period(), 3);
+    assert_eq!(IndicatorConfig::lookback(&config), 2);
+    assert_eq!(
+        core::mem::size_of::<EMAConfig>(),
+        core::mem::size_of::<usize>()
+    );
+
+    let owned = IndicatorConfig::compute(&config, &input).unwrap();
+    assert_eq!(owned.source_len(), input.len());
+    assert_eq!(owned.range(), OutputRange::new(2, 3));
+    assert_float_slice_close(owned.values(), &[2.0, 3.0, 4.0]);
+
+    let mut output = [FLOAT_SENTINEL; 4];
+    let range = IndicatorConfig::compute_into(&config, &input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_float_slice_close(&output[..3], owned.values());
+    assert_eq!(output[3], FLOAT_SENTINEL);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, input.len()).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    PreparedBatchRunner::<EMAConfig>::compute_into(&mut runner, &input, &mut output).unwrap();
+    assert_float_slice_close(&output[..3], owned.values());
+    assert_eq!(output[3], FLOAT_SENTINEL);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut independent = IndicatorConfig::stream(&config).unwrap();
+    let mut legacy = EMA::new(3).unwrap();
+    let streamed = input
+        .iter()
+        .filter_map(|&tick| {
+            let value = StreamingComputation::<EMAConfig>::next(&mut stream, tick).unwrap();
+            assert_eq!(StreamingIndicator::next(&mut legacy, tick).unwrap(), value);
+            value
+        })
+        .collect::<Vec<_>>();
+    assert_float_slice_close(&streamed, owned.values());
+
+    assert_eq!(
+        StreamingComputation::<EMAConfig>::next(&mut independent, 10.0).unwrap(),
+        None
+    );
+    assert!(StreamingComputation::<EMAConfig>::next(&mut independent, Float::NAN).is_err());
+    assert_eq!(
+        StreamingComputation::<EMAConfig>::next(&mut independent, 20.0).unwrap(),
+        None
+    );
+    assert_some_float_close(
+        StreamingComputation::<EMAConfig>::next(&mut independent, 30.0).unwrap(),
+        20.0,
+    );
+
+    StreamingComputation::<EMAConfig>::reset(&mut stream);
+    Resettable::reset(&mut legacy);
+    let replayed = input
+        .iter()
+        .filter_map(|&tick| {
+            let value = StreamingComputation::<EMAConfig>::next(&mut stream, tick).unwrap();
+            assert_eq!(StreamingIndicator::next(&mut legacy, tick).unwrap(), value);
+            value
+        })
+        .collect::<Vec<_>>();
+    assert_float_slice_close(&replayed, owned.values());
+    assert_eq!(
+        core::mem::size_of::<EMA>(),
+        core::mem::size_of::<EMAStream>()
+    );
+}
+
+#[test]
+fn dema_and_tema_configs_preserve_recursive_seeds_and_execution_modes() {
+    let input = [1.0 as Float, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
+    let dema_config = DEMAConfig::new(3).unwrap();
+    let tema_config = TEMAConfig::new(3).unwrap();
+    assert_eq!(dema_config.period(), 3);
+    assert_eq!(tema_config.period(), 3);
+    assert_eq!(IndicatorConfig::lookback(&dema_config), 4);
+    assert_eq!(IndicatorConfig::lookback(&tema_config), 6);
+    assert_eq!(
+        core::mem::size_of::<DEMAConfig>(),
+        core::mem::size_of::<usize>()
+    );
+    assert_eq!(
+        core::mem::size_of::<TEMAConfig>(),
+        core::mem::size_of::<usize>()
+    );
+
+    let dema_owned = IndicatorConfig::compute(&dema_config, &input).unwrap();
+    let tema_owned = IndicatorConfig::compute(&tema_config, &input).unwrap();
+    assert_eq!(dema_owned.range(), OutputRange::new(4, 3));
+    assert_eq!(tema_owned.range(), OutputRange::new(6, 1));
+    assert_float_slice_close(dema_owned.values(), &[5.0, 6.0, 7.0]);
+    assert_float_slice_close(tema_owned.values(), &[7.0]);
+
+    let mut dema_output = [FLOAT_SENTINEL; 4];
+    let mut tema_output = [FLOAT_SENTINEL; 2];
+    let mut dema_runner = IndicatorConfig::prepare_batch(&dema_config, input.len()).unwrap();
+    let mut tema_runner = IndicatorConfig::prepare_batch(&tema_config, input.len()).unwrap();
+    PreparedBatchRunner::<DEMAConfig>::compute_into(&mut dema_runner, &input, &mut dema_output)
+        .unwrap();
+    PreparedBatchRunner::<TEMAConfig>::compute_into(&mut tema_runner, &input, &mut tema_output)
+        .unwrap();
+    assert_float_slice_close(&dema_output[..3], dema_owned.values());
+    assert_float_slice_close(&tema_output[..1], tema_owned.values());
+    assert_eq!(dema_output[3], FLOAT_SENTINEL);
+    assert_eq!(tema_output[1], FLOAT_SENTINEL);
+
+    let mut dema_stream = IndicatorConfig::stream(&dema_config).unwrap();
+    let mut tema_stream = IndicatorConfig::stream(&tema_config).unwrap();
+    let mut legacy_dema = DEMA::new(3).unwrap();
+    let mut legacy_tema = TEMA::new(3).unwrap();
+    let mut streamed_dema = Vec::new();
+    let mut streamed_tema = Vec::new();
+    for &tick in &input {
+        let dema_value = StreamingComputation::<DEMAConfig>::next(&mut dema_stream, tick).unwrap();
+        let tema_value = StreamingComputation::<TEMAConfig>::next(&mut tema_stream, tick).unwrap();
+        assert_eq!(
+            StreamingIndicator::next(&mut legacy_dema, tick).unwrap(),
+            dema_value
+        );
+        assert_eq!(
+            StreamingIndicator::next(&mut legacy_tema, tick).unwrap(),
+            tema_value
+        );
+        streamed_dema.extend(dema_value);
+        streamed_tema.extend(tema_value);
+    }
+    assert_float_slice_close(&streamed_dema, dema_owned.values());
+    assert_float_slice_close(&streamed_tema, tema_owned.values());
+
+    StreamingComputation::<DEMAConfig>::reset(&mut dema_stream);
+    StreamingComputation::<TEMAConfig>::reset(&mut tema_stream);
+    assert_eq!(
+        StreamingComputation::<DEMAConfig>::next(&mut dema_stream, 1.0).unwrap(),
+        None
+    );
+    assert!(StreamingComputation::<TEMAConfig>::next(&mut tema_stream, Float::INFINITY).is_err());
+    assert_eq!(
+        StreamingComputation::<TEMAConfig>::next(&mut tema_stream, 1.0).unwrap(),
+        None
+    );
+    StreamingComputation::<DEMAConfig>::reset(&mut dema_stream);
+    StreamingComputation::<TEMAConfig>::reset(&mut tema_stream);
+    let replayed_dema = input
+        .iter()
+        .filter_map(|&tick| {
+            StreamingComputation::<DEMAConfig>::next(&mut dema_stream, tick).unwrap()
+        })
+        .collect::<Vec<_>>();
+    let replayed_tema = input
+        .iter()
+        .filter_map(|&tick| {
+            StreamingComputation::<TEMAConfig>::next(&mut tema_stream, tick).unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_float_slice_close(&replayed_dema, dema_owned.values());
+    assert_float_slice_close(&replayed_tema, tema_owned.values());
+    assert_eq!(
+        core::mem::size_of::<DEMA>(),
+        core::mem::size_of::<DEMAStream>()
+    );
+    assert_eq!(
+        core::mem::size_of::<TEMA>(),
+        core::mem::size_of::<TEMAStream>()
+    );
+}
+
+#[test]
+fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
+    let input = [1.0 as Float, 2.0, 3.0, 4.0];
+    let t3_config = T3Config::new(1, 0.5 as Float).unwrap();
+    let default_t3 = T3Config::with_default_vfactor(1).unwrap();
+    assert_eq!(t3_config.period(), 1);
+    assert_float_close(t3_config.vfactor(), 0.5);
+    assert_float_close(default_t3.vfactor(), T3_DEFAULT_VFACTOR);
+    assert_eq!(IndicatorConfig::lookback(&t3_config), 0);
+
+    let t3_owned = IndicatorConfig::compute(&t3_config, &input).unwrap();
+    assert_eq!(t3_owned.range(), OutputRange::new(0, input.len()));
+    assert_float_slice_close(t3_owned.values(), &input);
+    let mut t3_output = [FLOAT_SENTINEL; 5];
+    let mut t3_runner = IndicatorConfig::prepare_batch(&t3_config, input.len()).unwrap();
+    PreparedBatchRunner::<T3Config>::compute_into(&mut t3_runner, &input, &mut t3_output).unwrap();
+    assert_float_slice_close(&t3_output[..input.len()], &input);
+    assert_eq!(t3_output[input.len()], FLOAT_SENTINEL);
+
+    let mut t3_stream = IndicatorConfig::stream(&t3_config).unwrap();
+    let mut legacy_t3 = T3::new(1, 0.5).unwrap();
+    for &tick in &input {
+        let value = StreamingComputation::<T3Config>::next(&mut t3_stream, tick).unwrap();
+        assert_eq!(
+            StreamingIndicator::next(&mut legacy_t3, tick).unwrap(),
+            value
+        );
+        assert_some_float_close(value, tick);
+    }
+    StreamingComputation::<T3Config>::reset(&mut t3_stream);
+    assert!(StreamingComputation::<T3Config>::next(&mut t3_stream, Float::NAN).is_err());
+    let recursive_input = [1.0 as Float, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let recursive_t3 = T3Config::with_default_vfactor(2).unwrap();
+    assert_eq!(IndicatorConfig::lookback(&recursive_t3), 6);
+    let recursive_batch = IndicatorConfig::compute(&recursive_t3, &recursive_input).unwrap();
+    let mut recursive_stream = IndicatorConfig::stream(&recursive_t3).unwrap();
+    let recursive_values = recursive_input
+        .iter()
+        .filter_map(|&tick| {
+            StreamingComputation::<T3Config>::next(&mut recursive_stream, tick).unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_float_slice_close(&recursive_values, recursive_batch.values());
+    StreamingComputation::<T3Config>::reset(&mut recursive_stream);
+    let replayed_recursive = recursive_input
+        .iter()
+        .filter_map(|&tick| {
+            StreamingComputation::<T3Config>::next(&mut recursive_stream, tick).unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_float_slice_close(&replayed_recursive, recursive_batch.values());
+    assert_eq!(core::mem::size_of::<T3>(), core::mem::size_of::<T3Stream>());
+
+    const SUPPORTED: [MAType; 7] = [
+        MAType::SMA,
+        MAType::EMA,
+        MAType::WMA,
+        MAType::DEMA,
+        MAType::TEMA,
+        MAType::TRIMA,
+        MAType::T3,
+    ];
+    for ma_type in SUPPORTED {
+        let config = MAConfig::new(1, ma_type).unwrap();
+        assert_eq!(config.period(), 1);
+        assert_eq!(config.ma_type(), ma_type);
+        assert_eq!(IndicatorConfig::lookback(&config), 0);
+        let owned = IndicatorConfig::compute(&config, &input).unwrap();
+        assert_eq!(owned.range(), OutputRange::new(0, input.len()));
+        assert_float_slice_close(owned.values(), &input);
+
+        let mut stream = IndicatorConfig::stream(&config).unwrap();
+        let mut legacy = MA::new(1, ma_type).unwrap();
+        for &tick in &input {
+            let value = StreamingComputation::<MAConfig>::next(&mut stream, tick).unwrap();
+            assert_eq!(StreamingIndicator::next(&mut legacy, tick).unwrap(), value);
+            assert_some_float_close(value, tick);
+        }
+        StreamingComputation::<MAConfig>::reset(&mut stream);
+        let replayed = input
+            .iter()
+            .filter_map(|&tick| StreamingComputation::<MAConfig>::next(&mut stream, tick).unwrap())
+            .collect::<Vec<_>>();
+        assert_float_slice_close(&replayed, owned.values());
+    }
+
+    let ema_dispatch = MAConfig::new(3, MAType::EMA).unwrap();
+    assert_eq!(IndicatorConfig::lookback(&ema_dispatch), 2);
+    let mut ma_runner = IndicatorConfig::prepare_batch(&ema_dispatch, input.len()).unwrap();
+    let mut ma_output = [FLOAT_SENTINEL; 3];
+    PreparedBatchRunner::<MAConfig>::compute_into(&mut ma_runner, &input, &mut ma_output).unwrap();
+    assert_float_slice_close(&ma_output[..2], &[2.0, 3.0]);
+    assert_eq!(ma_output[2], FLOAT_SENTINEL);
+
+    assert!(matches!(
+        MAConfig::new(3, MAType::KAMA),
+        Err(TalibError::NotImplemented { .. })
+    ));
+    assert!(matches!(
+        MAConfig::new(3, MAType::MAMA),
+        Err(TalibError::NotImplemented { .. })
+    ));
+    assert_eq!(core::mem::size_of::<MA>(), core::mem::size_of::<MAStream>());
+}
+
+#[test]
+fn recursive_configs_reject_non_finite_ema_intermediates() {
+    let input = [Float::MAX; 7];
+    let mut output = [FLOAT_SENTINEL; 7];
+    let dema_config = DEMAConfig::new(2).unwrap();
+    let tema_config = TEMAConfig::new(2).unwrap();
+    let t3_config = T3Config::with_default_vfactor(2).unwrap();
+    let ma_config = MAConfig::new(2, MAType::T3).unwrap();
+
+    assert!(IndicatorConfig::compute_into(&dema_config, &input, &mut output).is_err());
+    assert!(IndicatorConfig::compute_into(&tema_config, &input, &mut output).is_err());
+    assert!(IndicatorConfig::compute_into(&t3_config, &input, &mut output).is_err());
+    assert!(IndicatorConfig::compute_into(&ma_config, &input, &mut output).is_err());
+
+    let mut dema_stream = IndicatorConfig::stream(&dema_config).unwrap();
+    let mut tema_stream = IndicatorConfig::stream(&tema_config).unwrap();
+    let mut t3_stream = IndicatorConfig::stream(&t3_config).unwrap();
+    let mut ma_stream = IndicatorConfig::stream(&ma_config).unwrap();
+    assert_eq!(
+        StreamingComputation::<DEMAConfig>::next(&mut dema_stream, Float::MAX).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<TEMAConfig>::next(&mut tema_stream, Float::MAX).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<T3Config>::next(&mut t3_stream, Float::MAX).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<MAConfig>::next(&mut ma_stream, Float::MAX).unwrap(),
+        None
+    );
+    assert!(StreamingComputation::<DEMAConfig>::next(&mut dema_stream, Float::MAX).is_err());
+    assert!(StreamingComputation::<TEMAConfig>::next(&mut tema_stream, Float::MAX).is_err());
+    assert!(StreamingComputation::<T3Config>::next(&mut t3_stream, Float::MAX).is_err());
+    assert!(StreamingComputation::<MAConfig>::next(&mut ma_stream, Float::MAX).is_err());
 }
 
 #[test]

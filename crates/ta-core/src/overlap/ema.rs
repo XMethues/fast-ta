@@ -7,8 +7,9 @@
 
 use crate::{
     compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, Float, Indicator, OutputRange, Resettable, Result,
-    StreamingIndicator,
+    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
+    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -31,19 +32,23 @@ pub(super) fn ema_step(previous: Float, input: Float, multiplier: Float) -> Floa
     (input - previous) * multiplier + previous
 }
 
-/// TA-Lib-style Exponential Moving Average batch function.
-///
-/// Valid outputs are written compactly starting at `out_real[0]`. The returned
-/// range maps those compact values back to their original input positions.
-#[allow(non_snake_case)]
-pub fn EMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
+fn validate_ema_input(real: &[Float], timeperiod: usize) -> Result<(usize, usize)> {
     let lookback = period_lookback("timeperiod", timeperiod)?;
     validate_finite_slice("real", real)?;
     let count = validate_input_len(real.len(), lookback)?;
-    validate_output_len("EMA", out_real.len(), count)?;
+    Ok((lookback, count))
+}
 
+#[inline]
+pub(super) fn ema_kernel(
+    real: &[Float],
+    timeperiod: usize,
+    lookback: usize,
+    count: usize,
+    out_real: &mut [Float],
+) -> OutputRange {
     if count == 0 {
-        return Ok(OutputRange::empty());
+        return OutputRange::empty();
     }
 
     let multiplier = ema_multiplier(timeperiod);
@@ -56,7 +61,18 @@ pub fn EMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<
         out_real[output_idx] = ema;
     }
 
-    Ok(OutputRange::new(lookback, count))
+    OutputRange::new(lookback, count)
+}
+
+/// TA-Lib-style Exponential Moving Average batch function.
+///
+/// Valid outputs are written compactly starting at `out_real[0]`. The returned
+/// range maps those compact values back to their original input positions.
+#[allow(non_snake_case)]
+pub fn EMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
+    let (lookback, count) = validate_ema_input(real, timeperiod)?;
+    validate_output_len("EMA", out_real.len(), count)?;
+    Ok(ema_kernel(real, timeperiod, lookback, count, out_real))
 }
 
 /// Computes EMA into a full-length vector padded with `Float::NAN` before the lookback.
@@ -71,9 +87,111 @@ pub fn EMA_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
     ))
 }
 
-/// Exponential Moving Average indicator.
+/// Immutable Exponential Moving Average Indicator Configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EMAConfig {
+    period: usize,
+}
+
+impl EMAConfig {
+    /// Creates a configuration for `timeperiod` observations.
+    pub fn new(timeperiod: usize) -> Result<Self> {
+        period_lookback("timeperiod", timeperiod)?;
+        Ok(Self { period: timeperiod })
+    }
+
+    /// Returns the configured Period.
+    #[inline]
+    pub const fn period(&self) -> usize {
+        self.period
+    }
+}
+
+impl crate::traits::sealed::Sealed for EMAConfig {}
+
+impl IndicatorConfig for EMAConfig {
+    type Input<'a> = &'a [Float];
+    type Output = Vec<Float>;
+    type OutputMut<'a> = &'a mut [Float];
+    type BatchRunner = EMABatchRunner;
+    type Stream = EMAStream;
+
+    #[inline]
+    fn lookback(&self) -> usize {
+        self.period - 1
+    }
+
+    fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
+        let (lookback, count) = validate_ema_input(input, self.period)?;
+        let mut values = Vec::with_capacity(count);
+        values.resize(count, 0.0 as Float);
+        let range = ema_kernel(input, self.period, lookback, count, &mut values);
+        CompactOutput::new(input.len(), range, values)
+    }
+
+    #[inline]
+    fn compute_into<'a>(
+        &self,
+        input: Self::Input<'a>,
+        output: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
+        EMA(input, self.period, output)
+    }
+
+    #[inline]
+    fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
+        Ok(EMABatchRunner {
+            config: *self,
+            max_input_len,
+        })
+    }
+
+    #[inline]
+    fn stream(&self) -> Result<Self::Stream> {
+        EMAStream::new(self.period)
+    }
+}
+
+/// Prepared Batch Runner for Exponential Moving Average.
+///
+/// EMA needs no heap scratch, so preparation stores only the configuration and
+/// declared source capacity.
 #[derive(Debug, Clone)]
-pub struct EMA {
+pub struct EMABatchRunner {
+    config: EMAConfig,
+    max_input_len: usize,
+}
+
+impl crate::traits::sealed::Sealed for EMABatchRunner {}
+
+impl PreparedBatchRunner<EMAConfig> for EMABatchRunner {
+    #[inline]
+    fn max_input_len(&self) -> usize {
+        self.max_input_len
+    }
+
+    #[inline]
+    fn compute_into<'a>(
+        &mut self,
+        input: <EMAConfig as IndicatorConfig>::Input<'a>,
+        output: <EMAConfig as IndicatorConfig>::OutputMut<'a>,
+    ) -> Result<OutputRange>
+    where
+        EMAConfig: 'a,
+    {
+        if input.len() > self.max_input_len {
+            return Err(TalibError::prepared_capacity_exceeded(
+                self.max_input_len,
+                input.len(),
+            ));
+        }
+        IndicatorConfig::compute_into(&self.config, input, output)
+    }
+}
+
+/// Independent Streaming Computation state for Exponential Moving Average.
+#[derive(Debug, Clone)]
+pub struct EMAStream {
     period: usize,
     multiplier: Float,
     count: usize,
@@ -81,17 +199,81 @@ pub struct EMA {
     value: Float,
 }
 
-impl EMA {
-    /// Creates a new EMA indicator.
-    pub fn new(timeperiod: usize) -> Result<Self> {
-        period_lookback("timeperiod", timeperiod)?;
+impl EMAStream {
+    pub(super) fn new(period: usize) -> Result<Self> {
+        period_lookback("timeperiod", period)?;
         Ok(Self {
-            period: timeperiod,
-            multiplier: ema_multiplier(timeperiod),
+            period,
+            multiplier: ema_multiplier(period),
             count: 0,
             sum: 0.0 as Float,
             value: 0.0 as Float,
         })
+    }
+
+    #[inline]
+    const fn period(&self) -> usize {
+        self.period
+    }
+
+    #[inline]
+    pub(super) fn next_unchecked(&mut self, input: Float) -> Option<Float> {
+        if self.count < self.period {
+            self.sum += input;
+            self.count += 1;
+
+            if self.count < self.period {
+                return None;
+            }
+
+            self.value = self.sum / self.period as Float;
+            return Some(self.value);
+        }
+
+        self.value = ema_step(self.value, input, self.multiplier);
+        Some(self.value)
+    }
+
+    pub(super) fn reset_state(&mut self) {
+        self.count = 0;
+        self.sum = 0.0 as Float;
+        self.value = 0.0 as Float;
+    }
+}
+
+impl crate::traits::sealed::Sealed for EMAStream {}
+
+impl StreamingComputation<EMAConfig> for EMAStream {
+    type Tick = Float;
+    type TickOutput = Float;
+
+    #[inline]
+    fn next(&mut self, input: Float) -> Result<Option<Float>> {
+        validate_finite_slice("input", &[input])?;
+        Ok(self.next_unchecked(input))
+    }
+
+    #[inline]
+    fn reset(&mut self) {
+        self.reset_state();
+    }
+}
+
+/// Legacy Exponential Moving Average indicator.
+///
+/// This compatibility adapter keeps the historical combined batch/streaming
+/// signatures while storing only its [`EMAStream`] execution state.
+#[derive(Debug, Clone)]
+pub struct EMA {
+    stream: EMAStream,
+}
+
+impl EMA {
+    /// Creates a new legacy EMA indicator.
+    pub fn new(timeperiod: usize) -> Result<Self> {
+        let config = EMAConfig::new(timeperiod)?;
+        let stream = IndicatorConfig::stream(&config)?;
+        Ok(Self { stream })
     }
 
     /// Creates a new EMA indicator seeded by processing `real` in order.
@@ -99,7 +281,7 @@ impl EMA {
         validate_finite_slice("real", real)?;
         let mut ema = Self::new(timeperiod)?;
         for &value in real {
-            let _ = ema.next(value)?;
+            let _ = StreamingIndicator::next(&mut ema, value)?;
         }
         Ok(ema)
     }
@@ -107,24 +289,24 @@ impl EMA {
     /// Returns the configured period.
     #[inline]
     pub const fn period(&self) -> usize {
-        self.period
+        self.stream.period()
     }
 
     /// Computes compact EMA outputs using this indicator's period.
     #[inline]
     pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        EMA(real, self.period, out_real)
+        EMA(real, self.period(), out_real)
     }
 
     /// Computes full-length padded EMA outputs using this indicator's period.
     #[inline]
     pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        EMA_vec(real, self.period)
+        EMA_vec(real, self.period())
     }
 
     /// Checked streaming update that returns `Float::NAN` during warm-up.
     pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
+        Ok(StreamingIndicator::next(self, input)?.unwrap_or(Float::NAN))
     }
 }
 
@@ -135,7 +317,7 @@ impl Indicator for EMA {
 
     #[inline]
     fn lookback(&self) -> usize {
-        self.period - 1
+        self.period() - 1
     }
 
     #[inline]
@@ -144,12 +326,12 @@ impl Indicator for EMA {
         inputs: Self::Input<'a>,
         outputs: Self::OutputMut<'a>,
     ) -> Result<OutputRange> {
-        EMA(inputs, self.period, outputs)
+        EMA(inputs, self.period(), outputs)
     }
 
     #[inline]
     fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        EMA_vec(inputs, self.period)
+        EMA_vec(inputs, self.period())
     }
 }
 
@@ -159,29 +341,13 @@ impl StreamingIndicator for EMA {
 
     #[inline]
     fn next(&mut self, input: Float) -> Result<Option<Float>> {
-        validate_finite_slice("input", &[input])?;
-
-        if self.count < self.period {
-            self.sum += input;
-            self.count += 1;
-
-            if self.count < self.period {
-                return Ok(None);
-            }
-
-            self.value = self.sum / self.period as Float;
-            return Ok(Some(self.value));
-        }
-
-        self.value = ema_step(self.value, input, self.multiplier);
-        Ok(Some(self.value))
+        StreamingComputation::<EMAConfig>::next(&mut self.stream, input)
     }
 }
 
 impl Resettable for EMA {
+    #[inline]
     fn reset(&mut self) {
-        self.count = 0;
-        self.sum = 0.0 as Float;
-        self.value = 0.0 as Float;
+        StreamingComputation::<EMAConfig>::reset(&mut self.stream);
     }
 }

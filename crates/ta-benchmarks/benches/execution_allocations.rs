@@ -23,7 +23,10 @@ use ta_core::{
         MINMAXINDEXOutputMut, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MAX,
         MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
-    overlap::{SMAConfig, TRIMAConfig, WMAConfig, SMA},
+    overlap::{
+        DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
+        WMAConfig, SMA,
+    },
     price_transform::{AVGPRICEInput, AVGPRICE},
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
     StreamingIndicator,
@@ -872,16 +875,22 @@ fn profile_single_extrema_execution() {
     assert_zero_allocations(&scenario, profile);
 }
 
-macro_rules! profile_windowed_overlap_indicator {
-    ($label:literal, $config:ty) => {{
+macro_rules! profile_single_output_indicator {
+    (
+        $label:literal,
+        $config:ty,
+        $new_config:expr,
+        $stream_operations:expr,
+        $stream_bytes:expr
+    ) => {{
         let input = series_fixture(PROFILE_SIZE, 0);
-        let count = output_len(PROFILE_SIZE, PERIOD);
-        let output_bytes = count * core::mem::size_of::<Float>();
-        let scenario = format!("setup/{}Config/period_{PERIOD}", $label);
-        let profile = print_profile(&scenario, || <$config>::new(PERIOD).expect("valid period"));
+        let scenario = format!("setup/{}Config/parameters", $label);
+        let profile = print_profile(&scenario, || $new_config);
         assert_zero_allocations(&scenario, profile);
 
-        let config = <$config>::new(PERIOD).expect("valid period");
+        let config: $config = $new_config;
+        let count = PROFILE_SIZE.saturating_sub(IndicatorConfig::lookback(&config));
+        let output_bytes = count * core::mem::size_of::<Float>();
         let mut output = vec![0.0 as Float; count];
         let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $label);
         let profile = print_profile(&scenario, || {
@@ -946,18 +955,17 @@ macro_rules! profile_windowed_overlap_indicator {
         });
         assert_zero_allocations(&scenario, profile);
 
-        let scenario = format!("setup/{}Config/stream_period_{PERIOD}", $label);
+        let scenario = format!("setup/{}Config/stream", $label);
         let profile = print_profile(&scenario, || {
             IndicatorConfig::stream(&config).expect("valid stream")
         });
-        let stream_bytes = PERIOD * core::mem::size_of::<Float>();
         assert_profile(
             &scenario,
             profile,
-            1,
-            stream_bytes,
-            stream_bytes,
-            stream_bytes,
+            $stream_operations,
+            $stream_bytes,
+            $stream_bytes,
+            $stream_bytes,
         );
 
         let mut stream = IndicatorConfig::stream(&config).expect("valid stream");
@@ -975,9 +983,57 @@ macro_rules! profile_windowed_overlap_indicator {
     }};
 }
 
-fn profile_windowed_overlap_execution() {
-    profile_windowed_overlap_indicator!("WMA", WMAConfig);
-    profile_windowed_overlap_indicator!("TRIMA", TRIMAConfig);
+fn profile_single_output_execution() {
+    const STREAM_BYTES: usize = PERIOD * core::mem::size_of::<Float>();
+    profile_single_output_indicator!(
+        "WMA",
+        WMAConfig,
+        WMAConfig::new(PERIOD).expect("valid period"),
+        1,
+        STREAM_BYTES
+    );
+    profile_single_output_indicator!(
+        "TRIMA",
+        TRIMAConfig,
+        TRIMAConfig::new(PERIOD).expect("valid period"),
+        1,
+        STREAM_BYTES
+    );
+    profile_single_output_indicator!(
+        "EMA",
+        EMAConfig,
+        EMAConfig::new(PERIOD).expect("valid period"),
+        0,
+        0
+    );
+    profile_single_output_indicator!(
+        "DEMA",
+        DEMAConfig,
+        DEMAConfig::new(PERIOD).expect("valid period"),
+        0,
+        0
+    );
+    profile_single_output_indicator!(
+        "TEMA",
+        TEMAConfig,
+        TEMAConfig::new(PERIOD).expect("valid period"),
+        0,
+        0
+    );
+    profile_single_output_indicator!(
+        "T3",
+        T3Config,
+        T3Config::with_default_vfactor(PERIOD).expect("valid parameters"),
+        0,
+        0
+    );
+    profile_single_output_indicator!(
+        "MA_EMA",
+        MAConfig,
+        MAConfig::new(PERIOD, MAType::EMA).expect("valid parameters"),
+        0,
+        0
+    );
 }
 
 fn profile_small_owned_compact_counts() {
@@ -1223,7 +1279,7 @@ fn main() {
     profile_one_shot();
     profile_extrema_execution();
     profile_single_extrema_execution();
-    profile_windowed_overlap_execution();
+    profile_single_output_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }

@@ -59,7 +59,7 @@ fn validate_trima_input(real: &[Float], timeperiod: usize) -> Result<(usize, usi
     Ok((lookback, count))
 }
 
-fn trima_kernel(
+pub(super) fn trima_kernel(
     real: &[Float],
     timeperiod: usize,
     lookback: usize,

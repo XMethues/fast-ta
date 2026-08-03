@@ -19,7 +19,10 @@ use ta_core::{
         MINMAXINDEXOutputMut, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MAX,
         MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
-    overlap::{SMAConfig, TRIMAConfig, WMAConfig, SMA, TRIMA, WMA},
+    overlap::{
+        DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
+        WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
+    },
     price_transform::{AVGPRICEInput, AVGPRICE},
     Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
     StreamingIndicator,
@@ -33,6 +36,14 @@ const EXECUTION_MATRIX: &[(usize, usize)] = &[
     (65_536, 14),
     (65_536, 512),
 ];
+
+fn ma_ema_indicator(period: usize) -> ta_core::Result<MA> {
+    MA::new(period, MAType::EMA)
+}
+
+fn ma_ema_config(period: usize) -> ta_core::Result<MAConfig> {
+    MAConfig::new(period, MAType::EMA)
+}
 
 fn bench_sma_one_shot(c: &mut Criterion) {
     let mut group = c.benchmark_group("indicator_execution/current/one_shot/SMA");
@@ -1389,16 +1400,22 @@ fn bench_minmaxindex_repeated_and_streaming(c: &mut Criterion) {
     group.finish();
 }
 
-fn single_output_sweep_outputs<T: Copy>(initial: T) -> Vec<Vec<T>> {
+fn single_output_len(input_len: usize, period: usize, lookback_multiplier: usize) -> usize {
+    input_len.saturating_sub((period - 1).saturating_mul(lookback_multiplier))
+}
+
+fn single_output_sweep_outputs<T: Copy>(initial: T, lookback_multiplier: usize) -> Vec<Vec<T>> {
     SWEEP_PERIODS
         .iter()
-        .map(|&period| vec![initial; output_len(REPEATED_SERIES_LEN, period)])
+        .map(|&period| {
+            vec![initial; single_output_len(REPEATED_SERIES_LEN, period, lookback_multiplier)]
+        })
         .collect()
 }
 
-fn single_output_worker_outputs<T: Copy>(initial: T) -> Vec<Vec<T>> {
+fn single_output_worker_outputs<T: Copy>(initial: T, lookback_multiplier: usize) -> Vec<Vec<T>> {
     (0..WORKERS)
-        .map(|_| vec![initial; output_len(REPEATED_SERIES_LEN, PERIOD)])
+        .map(|_| vec![initial; single_output_len(REPEATED_SERIES_LEN, PERIOD, lookback_multiplier)])
         .collect()
 }
 
@@ -1408,6 +1425,9 @@ macro_rules! define_single_output_workloads {
         $group_name:literal,
         $indicator:ident,
         $config:ident,
+        $current_new:path,
+        $config_new:path,
+        $lookback_multiplier:expr,
         $current_type:ty,
         $current_initial:expr,
         $config_type:ty,
@@ -1421,9 +1441,12 @@ macro_rules! define_single_output_workloads {
             ));
             group.bench_function("universe/current_caller_compact", |b| {
                 let universe = universe_fixtures();
-                let indicator = $indicator::new(PERIOD).expect("valid period");
+                let indicator = $current_new(PERIOD).expect("valid period");
                 let mut output: Vec<$current_type> =
-                    vec![$current_initial; output_len(REPEATED_SERIES_LEN, PERIOD)];
+                    vec![
+                        $current_initial;
+                        single_output_len(REPEATED_SERIES_LEN, PERIOD, $lookback_multiplier,)
+                    ];
                 b.iter(|| {
                     for input in &universe {
                         let range = Indicator::compute(
@@ -1442,9 +1465,12 @@ macro_rules! define_single_output_workloads {
             });
             group.bench_function("universe/config_caller_compact", |b| {
                 let universe = universe_fixtures();
-                let config = $config::new(PERIOD).expect("valid period");
+                let config = $config_new(PERIOD).expect("valid period");
                 let mut output: Vec<$config_type> =
-                    vec![$config_initial; output_len(REPEATED_SERIES_LEN, PERIOD)];
+                    vec![
+                        $config_initial;
+                        single_output_len(REPEATED_SERIES_LEN, PERIOD, $lookback_multiplier,)
+                    ];
                 b.iter(|| {
                     for input in &universe {
                         let range = IndicatorConfig::compute_into(
@@ -1463,11 +1489,14 @@ macro_rules! define_single_output_workloads {
             });
             group.bench_function("universe/prepared_runner", |b| {
                 let universe = universe_fixtures();
-                let config = $config::new(PERIOD).expect("valid period");
+                let config = $config_new(PERIOD).expect("valid period");
                 let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
                     .expect("valid prepared capacity");
                 let mut output: Vec<$config_type> =
-                    vec![$config_initial; output_len(REPEATED_SERIES_LEN, PERIOD)];
+                    vec![
+                        $config_initial;
+                        single_output_len(REPEATED_SERIES_LEN, PERIOD, $lookback_multiplier,)
+                    ];
                 b.iter(|| {
                     for input in &universe {
                         let range = PreparedBatchRunner::<$config>::compute_into(
@@ -1492,9 +1521,12 @@ macro_rules! define_single_output_workloads {
                 let input = series_fixture(REPEATED_SERIES_LEN, 0);
                 let indicators = SWEEP_PERIODS
                     .iter()
-                    .map(|&period| $indicator::new(period).expect("valid sweep period"))
+                    .map(|&period| $current_new(period).expect("valid sweep period"))
                     .collect::<Vec<_>>();
-                let mut outputs = single_output_sweep_outputs::<$current_type>($current_initial);
+                let mut outputs = single_output_sweep_outputs::<$current_type>(
+                    $current_initial,
+                    $lookback_multiplier,
+                );
                 b.iter(|| {
                     for (indicator, output) in indicators.iter().zip(outputs.iter_mut()) {
                         let range = Indicator::compute(
@@ -1515,9 +1547,12 @@ macro_rules! define_single_output_workloads {
                 let input = series_fixture(REPEATED_SERIES_LEN, 0);
                 let configs = SWEEP_PERIODS
                     .iter()
-                    .map(|&period| $config::new(period).expect("valid sweep period"))
+                    .map(|&period| $config_new(period).expect("valid sweep period"))
                     .collect::<Vec<_>>();
-                let mut outputs = single_output_sweep_outputs::<$config_type>($config_initial);
+                let mut outputs = single_output_sweep_outputs::<$config_type>(
+                    $config_initial,
+                    $lookback_multiplier,
+                );
                 b.iter(|| {
                     for (config, output) in configs.iter().zip(outputs.iter_mut()) {
                         let range = IndicatorConfig::compute_into(
@@ -1538,7 +1573,7 @@ macro_rules! define_single_output_workloads {
                 let input = series_fixture(REPEATED_SERIES_LEN, 0);
                 let configs = SWEEP_PERIODS
                     .iter()
-                    .map(|&period| $config::new(period).expect("valid sweep period"))
+                    .map(|&period| $config_new(period).expect("valid sweep period"))
                     .collect::<Vec<_>>();
                 let mut runners = configs
                     .iter()
@@ -1547,7 +1582,10 @@ macro_rules! define_single_output_workloads {
                             .expect("valid prepared capacity")
                     })
                     .collect::<Vec<_>>();
-                let mut outputs = single_output_sweep_outputs::<$config_type>($config_initial);
+                let mut outputs = single_output_sweep_outputs::<$config_type>(
+                    $config_initial,
+                    $lookback_multiplier,
+                );
                 b.iter(|| {
                     for (runner, output) in runners.iter_mut().zip(outputs.iter_mut()) {
                         let range = PreparedBatchRunner::<$config>::compute_into(
@@ -1568,10 +1606,13 @@ macro_rules! define_single_output_workloads {
             group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
             group.bench_function("per_worker/current_instances", |b| {
                 let indicators = (0..WORKERS)
-                    .map(|_| $indicator::new(PERIOD).expect("valid period"))
+                    .map(|_| $current_new(PERIOD).expect("valid period"))
                     .collect::<Vec<_>>();
                 let inputs = worker_fixtures();
-                let mut outputs = single_output_worker_outputs::<$current_type>($current_initial);
+                let mut outputs = single_output_worker_outputs::<$current_type>(
+                    $current_initial,
+                    $lookback_multiplier,
+                );
                 b.iter(|| {
                     for ((indicator, input), output) in
                         indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
@@ -1591,7 +1632,7 @@ macro_rules! define_single_output_workloads {
                 });
             });
             group.bench_function("per_worker/prepared_runners", |b| {
-                let config = $config::new(PERIOD).expect("valid period");
+                let config = $config_new(PERIOD).expect("valid period");
                 let mut runners = (0..WORKERS)
                     .map(|_| {
                         IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
@@ -1599,7 +1640,10 @@ macro_rules! define_single_output_workloads {
                     })
                     .collect::<Vec<_>>();
                 let inputs = worker_fixtures();
-                let mut outputs = single_output_worker_outputs::<$config_type>($config_initial);
+                let mut outputs = single_output_worker_outputs::<$config_type>(
+                    $config_initial,
+                    $lookback_multiplier,
+                );
                 b.iter(|| {
                     for ((runner, input), output) in runners
                         .iter_mut()
@@ -1629,7 +1673,7 @@ macro_rules! define_single_output_workloads {
                 b.iter_batched_ref(
                     || {
                         (0..STREAM_INSTRUMENTS)
-                            .map(|_| $indicator::new(PERIOD).expect("valid period"))
+                            .map(|_| $current_new(PERIOD).expect("valid period"))
                             .collect::<Vec<_>>()
                     },
                     |streams| {
@@ -1647,7 +1691,7 @@ macro_rules! define_single_output_workloads {
                     BatchSize::LargeInput,
                 );
             });
-            let config = $config::new(PERIOD).expect("valid period");
+            let config = $config_new(PERIOD).expect("valid period");
             group.bench_function("streaming/config_streams", |b| {
                 b.iter_batched_ref(
                     || {
@@ -1683,6 +1727,9 @@ define_single_output_workloads!(
     "indicator_execution/expanded/single_extrema_workloads/MIN",
     MIN,
     MINConfig,
+    MIN::new,
+    MINConfig::new,
+    1,
     Float,
     0.0 as Float,
     Float,
@@ -1693,6 +1740,9 @@ define_single_output_workloads!(
     "indicator_execution/expanded/single_extrema_workloads/MAX",
     MAX,
     MAXConfig,
+    MAX::new,
+    MAXConfig::new,
+    1,
     Float,
     0.0 as Float,
     Float,
@@ -1703,6 +1753,9 @@ define_single_output_workloads!(
     "indicator_execution/expanded/single_extrema_workloads/MININDEX",
     MININDEX,
     MININDEXConfig,
+    MININDEX::new,
+    MININDEXConfig::new,
+    1,
     i32,
     0_i32,
     usize,
@@ -1713,6 +1766,9 @@ define_single_output_workloads!(
     "indicator_execution/expanded/single_extrema_workloads/MAXINDEX",
     MAXINDEX,
     MAXINDEXConfig,
+    MAXINDEX::new,
+    MAXINDEXConfig::new,
+    1,
     i32,
     0_i32,
     usize,
@@ -1725,6 +1781,9 @@ macro_rules! define_single_output_benchmark {
         $group_name:literal,
         $indicator:ident,
         $config:ident,
+        $current_new:path,
+        $config_new:path,
+        $lookback_multiplier:expr,
         $current_type:ty,
         $current_initial:expr,
         $config_type:ty,
@@ -1733,6 +1792,9 @@ macro_rules! define_single_output_benchmark {
         fn $name(c: &mut Criterion) {
             let mut group = c.benchmark_group($group_name);
             for (case_index, &(size, period)) in EXECUTION_MATRIX.iter().enumerate() {
+                if single_output_len(size, period, $lookback_multiplier) == 0 {
+                    continue;
+                }
                 group.throughput(Throughput::Elements(size as u64));
                 let parameter = format!("n={size}/period={period}");
                 for path in rotated_execution_paths(case_index) {
@@ -1743,9 +1805,12 @@ macro_rules! define_single_output_benchmark {
                             |b, &(size, period)| {
                                 let input = series_fixture(size, 0);
                                 let indicator =
-                                    $indicator::new(black_box(period)).expect("valid period");
+                                    $current_new(black_box(period)).expect("valid period");
                                 let mut output: Vec<$current_type> =
-                                    vec![$current_initial; output_len(size, period)];
+                                    vec![
+                                        $current_initial;
+                                        single_output_len(size, period, $lookback_multiplier)
+                                    ];
                                 b.iter(|| {
                                     let range = Indicator::compute(
                                         black_box(&indicator),
@@ -1762,9 +1827,12 @@ macro_rules! define_single_output_benchmark {
                             &(size, period),
                             |b, &(size, period)| {
                                 let input = series_fixture(size, 0);
-                                let config = $config::new(black_box(period)).expect("valid period");
+                                let config = $config_new(black_box(period)).expect("valid period");
                                 let mut output: Vec<$config_type> =
-                                    vec![$config_initial; output_len(size, period)];
+                                    vec![
+                                        $config_initial;
+                                        single_output_len(size, period, $lookback_multiplier)
+                                    ];
                                 b.iter(|| {
                                     let range = IndicatorConfig::compute_into(
                                         black_box(&config),
@@ -1781,11 +1849,14 @@ macro_rules! define_single_output_benchmark {
                             &(size, period),
                             |b, &(size, period)| {
                                 let input = series_fixture(size, 0);
-                                let config = $config::new(black_box(period)).expect("valid period");
+                                let config = $config_new(black_box(period)).expect("valid period");
                                 let mut runner = IndicatorConfig::prepare_batch(&config, size)
                                     .expect("valid prepared capacity");
                                 let mut output: Vec<$config_type> =
-                                    vec![$config_initial; output_len(size, period)];
+                                    vec![
+                                        $config_initial;
+                                        single_output_len(size, period, $lookback_multiplier)
+                                    ];
                                 b.iter(|| {
                                     let range = PreparedBatchRunner::<$config>::compute_into(
                                         black_box(&mut runner),
@@ -1803,7 +1874,7 @@ macro_rules! define_single_output_benchmark {
                             |b, &(size, period)| {
                                 let input = series_fixture(size, 0);
                                 let indicator =
-                                    $indicator::new(black_box(period)).expect("valid period");
+                                    $current_new(black_box(period)).expect("valid period");
                                 b.iter_batched(
                                     || (),
                                     |_| {
@@ -1826,7 +1897,7 @@ macro_rules! define_single_output_benchmark {
                             &(size, period),
                             |b, &(size, period)| {
                                 let input = series_fixture(size, 0);
-                                let config = $config::new(black_box(period)).expect("valid period");
+                                let config = $config_new(black_box(period)).expect("valid period");
                                 b.iter_batched(
                                     || (),
                                     |_| {
@@ -1857,6 +1928,9 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/single_extrema/MIN",
     MIN,
     MINConfig,
+    MIN::new,
+    MINConfig::new,
+    1,
     Float,
     0.0 as Float,
     Float,
@@ -1867,6 +1941,9 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/single_extrema/MAX",
     MAX,
     MAXConfig,
+    MAX::new,
+    MAXConfig::new,
+    1,
     Float,
     0.0 as Float,
     Float,
@@ -1877,6 +1954,9 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/single_extrema/MININDEX",
     MININDEX,
     MININDEXConfig,
+    MININDEX::new,
+    MININDEXConfig::new,
+    1,
     i32,
     0_i32,
     usize,
@@ -1887,6 +1967,9 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/single_extrema/MAXINDEX",
     MAXINDEX,
     MAXINDEXConfig,
+    MAXINDEX::new,
+    MAXINDEXConfig::new,
+    1,
     i32,
     0_i32,
     usize,
@@ -1898,6 +1981,9 @@ define_single_output_workloads!(
     "indicator_execution/expanded/windowed_overlap_workloads/WMA",
     WMA,
     WMAConfig,
+    WMA::new,
+    WMAConfig::new,
+    1,
     Float,
     0.0 as Float,
     Float,
@@ -1908,6 +1994,9 @@ define_single_output_workloads!(
     "indicator_execution/expanded/windowed_overlap_workloads/TRIMA",
     TRIMA,
     TRIMAConfig,
+    TRIMA::new,
+    TRIMAConfig::new,
+    1,
     Float,
     0.0 as Float,
     Float,
@@ -1918,6 +2007,9 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/windowed_overlap/WMA",
     WMA,
     WMAConfig,
+    WMA::new,
+    WMAConfig::new,
+    1,
     Float,
     0.0 as Float,
     Float,
@@ -1928,6 +2020,140 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/windowed_overlap/TRIMA",
     TRIMA,
     TRIMAConfig,
+    TRIMA::new,
+    TRIMAConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+
+define_single_output_workloads!(
+    bench_ema_repeated_and_streaming,
+    "indicator_execution/expanded/recursive_overlap_workloads/EMA",
+    EMA,
+    EMAConfig,
+    EMA::new,
+    EMAConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_dema_repeated_and_streaming,
+    "indicator_execution/expanded/recursive_overlap_workloads/DEMA",
+    DEMA,
+    DEMAConfig,
+    DEMA::new,
+    DEMAConfig::new,
+    2,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_tema_repeated_and_streaming,
+    "indicator_execution/expanded/recursive_overlap_workloads/TEMA",
+    TEMA,
+    TEMAConfig,
+    TEMA::new,
+    TEMAConfig::new,
+    3,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_t3_repeated_and_streaming,
+    "indicator_execution/expanded/recursive_overlap_workloads/T3",
+    T3,
+    T3Config,
+    T3::with_default_vfactor,
+    T3Config::with_default_vfactor,
+    6,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_ma_ema_repeated_and_streaming,
+    "indicator_execution/expanded/recursive_overlap_workloads/MA_EMA",
+    MA,
+    MAConfig,
+    ma_ema_indicator,
+    ma_ema_config,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_ema_qualified_matrix,
+    "indicator_execution/expanded/recursive_overlap/EMA",
+    EMA,
+    EMAConfig,
+    EMA::new,
+    EMAConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_dema_qualified_matrix,
+    "indicator_execution/expanded/recursive_overlap/DEMA",
+    DEMA,
+    DEMAConfig,
+    DEMA::new,
+    DEMAConfig::new,
+    2,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_tema_qualified_matrix,
+    "indicator_execution/expanded/recursive_overlap/TEMA",
+    TEMA,
+    TEMAConfig,
+    TEMA::new,
+    TEMAConfig::new,
+    3,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_t3_qualified_matrix,
+    "indicator_execution/expanded/recursive_overlap/T3",
+    T3,
+    T3Config,
+    T3::with_default_vfactor,
+    T3Config::with_default_vfactor,
+    6,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_ma_ema_qualified_matrix,
+    "indicator_execution/expanded/recursive_overlap/MA_EMA",
+    MA,
+    MAConfig,
+    ma_ema_indicator,
+    ma_ema_config,
+    1,
     Float,
     0.0 as Float,
     Float,
@@ -1954,6 +2180,16 @@ criterion_group!(
     bench_trima_qualified_matrix,
     bench_wma_repeated_and_streaming,
     bench_trima_repeated_and_streaming,
+    bench_ema_qualified_matrix,
+    bench_dema_qualified_matrix,
+    bench_tema_qualified_matrix,
+    bench_t3_qualified_matrix,
+    bench_ma_ema_qualified_matrix,
+    bench_ema_repeated_and_streaming,
+    bench_dema_repeated_and_streaming,
+    bench_tema_repeated_and_streaming,
+    bench_t3_repeated_and_streaming,
+    bench_ma_ema_repeated_and_streaming,
     bench_minmax_repeated_and_streaming,
     bench_minmaxindex_repeated_and_streaming,
     bench_universe,

@@ -234,15 +234,26 @@ pub fn validate_all_same_len(lengths: &[(&str, usize)]) -> Result<usize> {
     Ok(first_len)
 }
 
+#[cold]
+#[inline(never)]
+fn non_finite_value_error(name: &str, idx: usize, value: Float) -> TalibError {
+    TalibError::invalid_input(format!("{name}[{idx}] must be finite, got {value}"))
+}
+
+/// Validates one input value without putting error formatting on the hot path.
+#[inline(always)]
+pub(crate) fn validate_finite_value(name: &str, idx: usize, value: Float) -> Result<()> {
+    if value.is_finite() {
+        Ok(())
+    } else {
+        Err(non_finite_value_error(name, idx, value))
+    }
+}
+
 /// Validates that every input value is finite.
 pub fn validate_finite_slice(name: &str, values: &[Float]) -> Result<()> {
-    for (idx, value) in values.iter().enumerate() {
-        if !value.is_finite() {
-            return Err(TalibError::invalid_input(format!(
-                "{}[{}] must be finite, got {}",
-                name, idx, value
-            )));
-        }
+    for (idx, &value) in values.iter().enumerate() {
+        validate_finite_value(name, idx, value)?;
     }
     Ok(())
 }

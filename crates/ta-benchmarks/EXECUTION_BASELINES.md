@@ -9,8 +9,10 @@ issue_3_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines"
 issue_4_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/extrema"
 issue_4_extrema_workloads_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/extrema_workloads"
 issue_4_streaming_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/extrema_workloads/.*/streaming'"
+issue_7_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/recursive_overlap"
+issue_7_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/recursive_overlap/MA_EMA'"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
-status: issue-4-adapters-and-owned-qualified
+status: issue-7-recursive-overlap-qualified
 ---
 
 # Indicator Execution Baselines
@@ -551,3 +553,85 @@ Universe and parameter-sweep rows report current / configuration / prepared. Per
 ### Gate conclusion
 
 Allocation gates clear exactly: both caller-owned and prepared paths are allocation-free, owned output allocates one exact compact payload, and streaming allocates only at construction. No timing regression above approximately five percent reproduced across both full runs. The non-reproduced Run A regressions were WMA Universe configuration/current (+7.65%), TRIMA Universe prepared/current (+8.95%) and prepared/configuration (+8.72%), and TRIMA sweep configuration/current (+28.32%) and prepared/current (+7.17%); their Run B counterparts ranged from -0.44% to +1.99%. They are not stable regressions. These are host-local `f64` results, not portable speedup claims.
+
+## Issue #7 recursive overlap qualification
+
+Issue #7 adds parameter-only `EMAConfig`, `DEMAConfig`, `TEMAConfig`, `T3Config`, and `MAConfig` types with owned and caller-owned Compact Output, reusable Prepared Batch Runners, and independent Streaming Computations. Uppercase compatibility indicators retain the existing legacy batch, padded-owned, streaming, reset, and `MAType` dispatch behavior. The qualified `MA` benchmark uses `MAType::EMA`; the other supported dispatch kinds are covered by correctness tests.
+
+The benchmark command is `cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/recursive_overlap`. The valid matrix crosses observations 64/4,096/65,536 with periods 14/512. T3 omits 64/14 because its 78-observation lookback exceeds that input. Values below are Criterion median point estimates from the full 100-sample qualification run.
+
+### Allocation evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports:
+
+| Indicator | Configuration | Caller-owned | Owned Compact Output | Prepared setup / first / repeated / oversize | Stream setup / ticks |
+|---|---:|---:|---:|---:|---:|
+| EMA | 0 / 0 B | 0 / 0 B | 1 / 32,664 B | 0 / 0 B in every phase | 0 / 0 B |
+| DEMA | 0 / 0 B | 0 / 0 B | 1 / 32,560 B | 0 / 0 B in every phase | 0 / 0 B |
+| TEMA | 0 / 0 B | 0 / 0 B | 1 / 32,456 B | 0 / 0 B in every phase | 0 / 0 B |
+| T3 | 0 / 0 B | 0 / 0 B | 1 / 32,144 B | 0 / 0 B in every phase | 0 / 0 B |
+| MA (EMA) | 0 / 0 B | 0 / 0 B | 1 / 32,664 B | 0 / 0 B in every phase | 0 / 0 B |
+
+Owned byte counts are exactly `compact_count × size_of::<Float>()`. Caller-owned computation, prepared reuse and rejection, and streaming ticks allocate nothing. Recursive streams retain fixed scalar state, so construction also allocates nothing.
+
+### Full timing evidence
+
+Caller-owned fields report current / configuration / prepared. Owned fields report legacy Aligned Output / configuration Compact Output.
+
+| Indicator | Observations / period | Caller-owned medians | Config / current | Prepared / current | Owned medians | Compact / legacy |
+|---|---:|---:|---:|---:|---:|---:|
+| EMA | 64 / 14 | 173.64 ns / 174.03 ns / 174.37 ns | +0.22% | +0.42% | 225.68 ns / 189.72 ns | -15.93% |
+| EMA | 4096 / 14 | 13.721 µs / 13.711 µs / 14.001 µs | -0.07% | +2.05% | 15.200 µs / 14.207 µs | -6.54% |
+| EMA | 4096 / 512 | 12.683 µs / 12.675 µs / 12.959 µs | -0.06% | +2.18% | 14.113 µs / 13.103 µs | -7.16% |
+| EMA | 65536 / 14 | 220.281 µs / 220.199 µs / 224.543 µs | -0.04% | +1.93% | 264.577 µs / 225.242 µs | -14.87% |
+| EMA | 65536 / 512 | 219.247 µs / 219.149 µs / 223.488 µs | -0.04% | +1.93% | 261.146 µs / 224.411 µs | -14.07% |
+| DEMA | 64 / 14 | 185.77 ns / 185.75 ns / 185.60 ns | -0.01% | -0.09% | 235.56 ns / 201.41 ns | -14.49% |
+| DEMA | 4096 / 14 | 14.273 µs / 14.280 µs / 14.285 µs | +0.05% | +0.09% | 15.727 µs / 14.994 µs | -4.67% |
+| DEMA | 4096 / 512 | 13.188 µs / 13.192 µs / 13.203 µs | +0.03% | +0.12% | 14.541 µs / 13.774 µs | -5.27% |
+| DEMA | 65536 / 14 | 229.245 µs / 229.211 µs / 231.862 µs | -0.01% | +1.14% | 270.407 µs / 234.286 µs | -13.36% |
+| DEMA | 65536 / 512 | 228.105 µs / 228.247 µs / 230.655 µs | +0.06% | +1.12% | 268.503 µs / 233.192 µs | -13.15% |
+| TEMA | 64 / 14 | 356.02 ns / 356.03 ns / 356.31 ns | +0.00% | +0.08% | 409.28 ns / 370.52 ns | -9.47% |
+| TEMA | 4096 / 14 | 24.700 µs / 24.673 µs / 24.698 µs | -0.11% | -0.01% | 26.033 µs / 25.177 µs | -3.29% |
+| TEMA | 4096 / 512 | 23.659 µs / 23.667 µs / 23.671 µs | +0.03% | +0.05% | 25.006 µs / 23.952 µs | -4.22% |
+| TEMA | 65536 / 14 | 396.109 µs / 396.340 µs / 397.160 µs | +0.06% | +0.27% | 434.813 µs / 399.283 µs | -8.17% |
+| TEMA | 65536 / 512 | 395.154 µs / 394.610 µs / 395.604 µs | -0.14% | +0.11% | 435.056 µs / 398.468 µs | -8.41% |
+| T3 | 4096 / 14 | 26.654 µs / 26.608 µs / 26.598 µs | -0.17% | -0.21% | 27.890 µs / 26.867 µs | -3.67% |
+| T3 | 4096 / 512 | 24.287 µs / 24.257 µs / 24.256 µs | -0.12% | -0.13% | 25.382 µs / 24.448 µs | -3.68% |
+| T3 | 65536 / 14 | 429.153 µs / 428.730 µs / 426.604 µs | -0.10% | -0.59% | 464.896 µs / 426.233 µs | -8.32% |
+| T3 | 65536 / 512 | 426.744 µs / 426.377 µs / 424.393 µs | -0.09% | -0.55% | 462.170 µs / 424.395 µs | -8.17% |
+| MA (EMA) | 64 / 14 | 174.73 ns / 174.69 ns / 174.77 ns | -0.02% | +0.02% | 226.00 ns / 191.99 ns | -15.05% |
+| MA (EMA) | 4096 / 14 | 13.754 µs / 13.754 µs / 13.872 µs | +0.01% | +0.86% | 15.420 µs / 14.212 µs | -7.83% |
+| MA (EMA) | 4096 / 512 | 12.743 µs / 12.743 µs / 12.864 µs | -0.00% | +0.95% | 14.343 µs / 13.129 µs | -8.46% |
+| MA (EMA) | 65536 / 14 | 221.097 µs / 220.860 µs / 223.448 µs | -0.11% | +1.06% | 261.834 µs / 224.692 µs | -14.19% |
+| MA (EMA) | 65536 / 512 | 220.343 µs / 220.405 µs / 222.397 µs | +0.03% | +0.93% | 263.795 µs / 223.472 µs | -15.29% |
+
+### Repeated and streaming evidence
+
+Universe and parameter-sweep rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured. Fixtures and caller-owned buffers are identical within each comparison; construction and reset remain outside measured operations.
+
+| Indicator / workload | Run A medians | Same-run deltas |
+|---|---:|---:|
+| EMA Universe, 128 × 4,096 | 1.7578 ms / 1.7580 ms / 1.7571 ms | config/current +0.01%; prepared/current -0.04%; prepared/config -0.05% |
+| EMA Sweep, 4 × 4,096 | 54.467 µs / 54.454 µs / 54.431 µs | config/current -0.02%; prepared/current -0.07%; prepared/config -0.04% |
+| EMA Per-worker, 4 × 4,096 | 56.054 µs / 54.830 µs | candidate/reference -2.18% |
+| EMA Streaming, 16 × 4,096 | 116.064 µs / 116.111 µs | candidate/reference +0.04% |
+| DEMA Universe, 128 × 4,096 | 1.8374 ms / 1.8376 ms / 1.8299 ms | config/current +0.01%; prepared/current -0.41%; prepared/config -0.42% |
+| DEMA Sweep, 4 × 4,096 | 56.622 µs / 56.629 µs / 56.662 µs | config/current +0.01%; prepared/current +0.07%; prepared/config +0.06% |
+| DEMA Per-worker, 4 × 4,096 | 57.441 µs / 57.315 µs | candidate/reference -0.22% |
+| DEMA Streaming, 16 × 4,096 | 230.173 µs / 229.674 µs | candidate/reference -0.22% |
+| TEMA Universe, 128 × 4,096 | 3.1639 ms / 3.1651 ms / 3.1792 ms | config/current +0.04%; prepared/current +0.48%; prepared/config +0.44% |
+| TEMA Sweep, 4 × 4,096 | 99.313 µs / 99.365 µs / 98.513 µs | config/current +0.05%; prepared/current -0.81%; prepared/config -0.86% |
+| TEMA Per-worker, 4 × 4,096 | 99.219 µs / 99.278 µs | candidate/reference +0.06% |
+| TEMA Streaming, 16 × 4,096 | 280.791 µs / 279.258 µs | candidate/reference -0.55% |
+| T3 Universe, 128 × 4,096 | 3.4103 ms / 3.4104 ms / 3.4426 ms | config/current +0.00%; prepared/current +0.95%; prepared/config +0.94% |
+| T3 Sweep, 4 × 4,096 | 105.542 µs / 105.534 µs / 105.728 µs | config/current -0.01%; prepared/current +0.18%; prepared/config +0.18% |
+| T3 Per-worker, 4 × 4,096 | 106.633 µs / 107.211 µs | candidate/reference +0.54% |
+| T3 Streaming, 16 × 4,096 | 578.938 µs / 579.006 µs | candidate/reference +0.01% |
+| MA (EMA) Universe, 128 × 4,096 | 1.7642 ms / 1.7639 ms / 1.7572 ms | config/current -0.02%; prepared/current -0.40%; prepared/config -0.38% |
+| MA (EMA) Sweep, 4 × 4,096 | 54.647 µs / 54.660 µs / 54.457 µs | config/current +0.02%; prepared/current -0.35%; prepared/config -0.37% |
+| MA (EMA) Per-worker, 4 × 4,096 | 55.237 µs / 54.937 µs | candidate/reference -0.54% |
+| MA (EMA) Streaming, 16 × 4,096 | 144.027 µs / 136.320 µs | candidate/reference -5.35% |
+
+### Gate conclusion
+
+All allocation gates clear exactly. In the full qualification run, no configuration caller-owned, prepared, repeated-workload, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path. These are host-local default-`f64` qualification results, not portable speedup claims.

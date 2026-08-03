@@ -27,7 +27,7 @@ fn validate_wma_input(real: &[Float], timeperiod: usize) -> Result<(usize, usize
     Ok((lookback, count))
 }
 
-fn wma_kernel(
+pub(super) fn wma_kernel(
     real: &[Float],
     timeperiod: usize,
     lookback: usize,
