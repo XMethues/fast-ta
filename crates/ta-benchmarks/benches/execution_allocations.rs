@@ -32,6 +32,10 @@ use ta_core::{
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
         WCLPRICETick, AVGPRICE,
     },
+    volatility::{
+        ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
+        TRANGETick,
+    },
     volume::{
         ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
     },
@@ -1050,7 +1054,7 @@ fn profile_single_output_execution() {
     );
 }
 
-macro_rules! profile_named_price_indicator {
+macro_rules! profile_named_input_indicator {
     (
         $label:literal,
         $config:ty,
@@ -1077,7 +1081,7 @@ macro_rules! profile_named_price_indicator {
                 },
                 output.as_mut_slice(),
             )
-            .expect("valid caller-owned price fixture")
+            .expect("valid caller-owned multi-series fixture")
         });
         assert_zero_allocations(&scenario, profile);
 
@@ -1089,7 +1093,7 @@ macro_rules! profile_named_price_indicator {
                     $($field: ohlc.$field.as_slice()),+
                 },
             )
-            .expect("valid owned price fixture")
+            .expect("valid owned multi-series fixture")
         });
         assert_profile(
             &scenario,
@@ -1109,7 +1113,7 @@ macro_rules! profile_named_price_indicator {
                     $($field: empty.$field.as_slice()),+
                 },
             )
-            .expect("valid empty price fixture")
+            .expect("valid empty multi-series fixture")
         });
         assert_zero_allocations(&scenario, profile);
 
@@ -1131,7 +1135,7 @@ macro_rules! profile_named_price_indicator {
                     },
                     output.as_mut_slice(),
                 )
-                .expect("valid prepared price fixture")
+                .expect("valid prepared multi-series fixture")
             });
             assert_zero_allocations(&scenario, profile);
         }
@@ -1150,17 +1154,17 @@ macro_rules! profile_named_price_indicator {
                 },
                 output.as_mut_slice(),
             )
-            .expect_err("oversized price input must be rejected")
+            .expect_err("oversized multi-series input must be rejected")
         });
         assert_zero_allocations(&scenario, profile);
 
         let scenario = format!("setup/{}Config/stream", $label);
         let profile = print_profile(&scenario, || {
-            IndicatorConfig::stream(&config).expect("valid price stream")
+            IndicatorConfig::stream(&config).expect("valid multi-series stream")
         });
         assert_zero_allocations(&scenario, profile);
 
-        let mut stream = IndicatorConfig::stream(&config).expect("valid price stream");
+        let mut stream = IndicatorConfig::stream(&config).expect("valid multi-series stream");
         let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $label);
         let profile = print_profile(&scenario, || {
             let mut last = None;
@@ -1171,7 +1175,7 @@ macro_rules! profile_named_price_indicator {
                         $($field: ohlc.$field[idx]),+
                     },
                 )
-                .expect("valid price stream tick");
+                .expect("valid multi-series stream tick");
                 black_box(last);
             }
             last
@@ -1180,8 +1184,8 @@ macro_rules! profile_named_price_indicator {
     }};
 }
 
-fn profile_named_price_execution() {
-    profile_named_price_indicator!(
+fn profile_named_input_execution() {
+    profile_named_input_indicator!(
         "AVGPRICE",
         AVGPRICEConfig,
         AVGPRICEConfig::new(),
@@ -1190,7 +1194,7 @@ fn profile_named_price_execution() {
         [open, high, low, close],
         0
     );
-    profile_named_price_indicator!(
+    profile_named_input_indicator!(
         "MEDPRICE",
         MEDPRICEConfig,
         MEDPRICEConfig::new(),
@@ -1199,7 +1203,7 @@ fn profile_named_price_execution() {
         [high, low],
         0
     );
-    profile_named_price_indicator!(
+    profile_named_input_indicator!(
         "TYPPRICE",
         TYPPRICEConfig,
         TYPPRICEConfig::new(),
@@ -1208,7 +1212,7 @@ fn profile_named_price_execution() {
         [high, low, close],
         0
     );
-    profile_named_price_indicator!(
+    profile_named_input_indicator!(
         "WCLPRICE",
         WCLPRICEConfig,
         WCLPRICEConfig::new(),
@@ -1217,7 +1221,7 @@ fn profile_named_price_execution() {
         [high, low, close],
         0
     );
-    profile_named_price_indicator!(
+    profile_named_input_indicator!(
         "AD",
         ADConfig,
         ADConfig::new(),
@@ -1226,7 +1230,7 @@ fn profile_named_price_execution() {
         [high, low, close, volume],
         0
     );
-    profile_named_price_indicator!(
+    profile_named_input_indicator!(
         "ADOSC",
         ADOSCConfig,
         ADOSCConfig::new(PERIOD / 2, PERIOD).expect("valid ADOSC parameters"),
@@ -1235,7 +1239,7 @@ fn profile_named_price_execution() {
         [high, low, close, volume],
         PERIOD - 1
     );
-    profile_named_price_indicator!(
+    profile_named_input_indicator!(
         "OBV",
         OBVConfig,
         OBVConfig::new(),
@@ -1243,6 +1247,33 @@ fn profile_named_price_execution() {
         OBVTick,
         [close, volume],
         1
+    );
+    profile_named_input_indicator!(
+        "TRANGE",
+        TRANGEConfig,
+        TRANGEConfig::new(),
+        TRANGEInput,
+        TRANGETick,
+        [high, low, close],
+        1
+    );
+    profile_named_input_indicator!(
+        "ATR",
+        ATRConfig,
+        ATRConfig::new(PERIOD).expect("valid ATR period"),
+        ATRInput,
+        ATRTick,
+        [high, low, close],
+        PERIOD
+    );
+    profile_named_input_indicator!(
+        "NATR",
+        NATRConfig,
+        NATRConfig::new(PERIOD).expect("valid NATR period"),
+        NATRInput,
+        NATRTick,
+        [high, low, close],
+        PERIOD
     );
 }
 
@@ -1490,7 +1521,7 @@ fn main() {
     profile_extrema_execution();
     profile_single_extrema_execution();
     profile_single_output_execution();
-    profile_named_price_execution();
+    profile_named_input_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }

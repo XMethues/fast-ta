@@ -28,6 +28,10 @@ use ta_core::{
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
         WCLPRICETick, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
     },
+    volatility::{
+        ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
+        TRANGETick, ATR, NATR, TRANGE,
+    },
     volume::{
         ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
         OBVTick, AD, ADOSC, OBV,
@@ -1930,7 +1934,7 @@ macro_rules! define_single_output_benchmark {
         }
     };
 }
-macro_rules! define_named_price_benchmarks {
+macro_rules! define_named_input_benchmarks {
     (
         $matrix_name:ident,
         $workloads_name:ident,
@@ -1965,7 +1969,7 @@ macro_rules! define_named_price_benchmarks {
                                 }),
                                 black_box(output.as_mut_slice()),
                             )
-                            .expect("valid current price fixture");
+                            .expect("valid current multi-series fixture");
                             black_box((range, output.as_slice()));
                         });
                     },
@@ -1986,7 +1990,7 @@ macro_rules! define_named_price_benchmarks {
                                 }),
                                 black_box(output.as_mut_slice()),
                             )
-                            .expect("valid configured price fixture");
+                            .expect("valid configured multi-series fixture");
                             black_box((range, output.as_slice()));
                         });
                     },
@@ -1999,7 +2003,7 @@ macro_rules! define_named_price_benchmarks {
                         let ohlc = ohlc_fixture(size);
                         let config = ($config_ctor)();
                         let mut runner = IndicatorConfig::prepare_batch(&config, size)
-                            .expect("valid prepared price capacity");
+                            .expect("valid prepared multi-series capacity");
                         let mut output = vec![0.0 as Float; size];
                         b.iter(|| {
                             let range = PreparedBatchRunner::<$config>::compute_into(
@@ -2009,7 +2013,7 @@ macro_rules! define_named_price_benchmarks {
                                 }),
                                 black_box(output.as_mut_slice()),
                             )
-                            .expect("valid prepared price fixture");
+                            .expect("valid prepared multi-series fixture");
                             black_box((range, output.as_slice()));
                         });
                     },
@@ -2031,7 +2035,7 @@ macro_rules! define_named_price_benchmarks {
                                         $($field: ohlc.$field.as_slice()),+
                                     }),
                                 )
-                                .expect("valid legacy owned price fixture");
+                                .expect("valid legacy owned multi-series fixture");
                                 black_box(output)
                             },
                             BatchSize::LargeInput,
@@ -2054,7 +2058,7 @@ macro_rules! define_named_price_benchmarks {
                                         $($field: ohlc.$field.as_slice()),+
                                     }),
                                 )
-                                .expect("valid configured owned price fixture");
+                                .expect("valid configured owned multi-series fixture");
                                 black_box(output)
                             },
                             BatchSize::LargeInput,
@@ -2086,7 +2090,7 @@ macro_rules! define_named_price_benchmarks {
                             }),
                             black_box(output.as_mut_slice()),
                         )
-                        .expect("valid current price Universe");
+                        .expect("valid current multi-series Universe");
                         black_box((range, output.as_slice()));
                     }
                 });
@@ -2106,7 +2110,7 @@ macro_rules! define_named_price_benchmarks {
                             }),
                             black_box(output.as_mut_slice()),
                         )
-                        .expect("valid configured price Universe");
+                        .expect("valid configured multi-series Universe");
                         black_box((range, output.as_slice()));
                     }
                 });
@@ -2128,7 +2132,7 @@ macro_rules! define_named_price_benchmarks {
                             }),
                             black_box(output.as_mut_slice()),
                         )
-                        .expect("valid prepared price Universe");
+                        .expect("valid prepared multi-series Universe");
                         black_box((range, output.as_slice()));
                     }
                 });
@@ -2155,7 +2159,7 @@ macro_rules! define_named_price_benchmarks {
                             }),
                             black_box(output.as_mut_slice()),
                         )
-                        .expect("valid current per-worker price fixture");
+                        .expect("valid current per-worker multi-series fixture");
                         black_box((range, output.as_slice()));
                     }
                 });
@@ -2177,7 +2181,7 @@ macro_rules! define_named_price_benchmarks {
                             }),
                             black_box(output.as_mut_slice()),
                         )
-                        .expect("valid prepared per-worker price fixture");
+                        .expect("valid prepared per-worker multi-series fixture");
                         black_box((range, output.as_slice()));
                     }
                 });
@@ -2207,7 +2211,7 @@ macro_rules! define_named_price_benchmarks {
                                         $($field: ohlc.$field[idx]),+
                                     }),
                                 )
-                                .expect("valid legacy price stream");
+                                .expect("valid legacy multi-series stream");
                                 black_box(output);
                             }
                         }
@@ -2235,7 +2239,7 @@ macro_rules! define_named_price_benchmarks {
                                         $($field: ohlc.$field[idx]),+
                                     }),
                                 )
-                                .expect("valid configured price stream");
+                                .expect("valid configured multi-series stream");
                                 black_box(output);
                             }
                         }
@@ -2512,6 +2516,104 @@ define_single_output_workloads!(
     Float,
     0.0 as Float
 );
+macro_rules! define_hlc_parameter_sweep {
+    (
+        $name:ident,
+        $group_name:literal,
+        $indicator:ident,
+        $config:ident,
+        $input:ident
+    ) => {
+        fn $name(c: &mut Criterion) {
+            let mut group = c.benchmark_group($group_name);
+            let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+            let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+
+            for &period in SWEEP_PERIODS {
+                let indicator = $indicator::new(period).expect("valid volatility sweep period");
+                let config = $config::new(period).expect("valid volatility sweep period");
+                let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                    .expect("valid volatility sweep capacity");
+                group.throughput(Throughput::Elements(REPEATED_SERIES_LEN as u64));
+
+                group.bench_with_input(
+                    BenchmarkId::new("current_caller_compact", period),
+                    &period,
+                    |b, _| {
+                        b.iter(|| {
+                            let range = Indicator::compute(
+                                black_box(&indicator),
+                                black_box($input {
+                                    high: ohlc.high.as_slice(),
+                                    low: ohlc.low.as_slice(),
+                                    close: ohlc.close.as_slice(),
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect("valid current volatility sweep fixture");
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+                group.bench_with_input(
+                    BenchmarkId::new("config_caller_compact", period),
+                    &period,
+                    |b, _| {
+                        b.iter(|| {
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&config),
+                                black_box($input {
+                                    high: ohlc.high.as_slice(),
+                                    low: ohlc.low.as_slice(),
+                                    close: ohlc.close.as_slice(),
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect("valid configured volatility sweep fixture");
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+                group.bench_with_input(
+                    BenchmarkId::new("prepared_runner", period),
+                    &period,
+                    |b, _| {
+                        b.iter(|| {
+                            let range = PreparedBatchRunner::<$config>::compute_into(
+                                black_box(&mut runner),
+                                black_box($input {
+                                    high: ohlc.high.as_slice(),
+                                    low: ohlc.low.as_slice(),
+                                    close: ohlc.close.as_slice(),
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect("valid prepared volatility sweep fixture");
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+            }
+            group.finish();
+        }
+    };
+}
+
+define_hlc_parameter_sweep!(
+    bench_atr_parameter_sweep,
+    "indicator_execution/expanded/volatility_workloads/ATR/parameter_sweep",
+    ATR,
+    ATRConfig,
+    ATRInput
+);
+define_hlc_parameter_sweep!(
+    bench_natr_parameter_sweep,
+    "indicator_execution/expanded/volatility_workloads/NATR/parameter_sweep",
+    NATR,
+    NATRConfig,
+    NATRInput
+);
+
 fn bench_adosc_parameter_sweep(c: &mut Criterion) {
     let mut group =
         c.benchmark_group("indicator_execution/expanded/volume_workloads/ADOSC/parameter_sweep");
@@ -2591,7 +2693,7 @@ fn bench_adosc_parameter_sweep(c: &mut Criterion) {
     group.finish();
 }
 
-define_named_price_benchmarks!(
+define_named_input_benchmarks!(
     bench_avgprice_qualified_matrix,
     bench_avgprice_repeated_and_streaming,
     "indicator_execution/expanded/price_transform/AVGPRICE",
@@ -2604,7 +2706,7 @@ define_named_price_benchmarks!(
     AVGPRICETick,
     [open, high, low, close]
 );
-define_named_price_benchmarks!(
+define_named_input_benchmarks!(
     bench_medprice_qualified_matrix,
     bench_medprice_repeated_and_streaming,
     "indicator_execution/expanded/price_transform/MEDPRICE",
@@ -2617,7 +2719,7 @@ define_named_price_benchmarks!(
     MEDPRICETick,
     [high, low]
 );
-define_named_price_benchmarks!(
+define_named_input_benchmarks!(
     bench_typprice_qualified_matrix,
     bench_typprice_repeated_and_streaming,
     "indicator_execution/expanded/price_transform/TYPPRICE",
@@ -2630,7 +2732,7 @@ define_named_price_benchmarks!(
     TYPPRICETick,
     [high, low, close]
 );
-define_named_price_benchmarks!(
+define_named_input_benchmarks!(
     bench_wclprice_qualified_matrix,
     bench_wclprice_repeated_and_streaming,
     "indicator_execution/expanded/price_transform/WCLPRICE",
@@ -2644,7 +2746,7 @@ define_named_price_benchmarks!(
     [high, low, close]
 );
 
-define_named_price_benchmarks!(
+define_named_input_benchmarks!(
     bench_ad_qualified_matrix,
     bench_ad_repeated_and_streaming,
     "indicator_execution/expanded/volume/AD",
@@ -2657,7 +2759,7 @@ define_named_price_benchmarks!(
     ADTick,
     [high, low, close, volume]
 );
-define_named_price_benchmarks!(
+define_named_input_benchmarks!(
     bench_adosc_qualified_matrix,
     bench_adosc_repeated_and_streaming,
     "indicator_execution/expanded/volume/ADOSC",
@@ -2670,7 +2772,7 @@ define_named_price_benchmarks!(
     ADOSCTick,
     [high, low, close, volume]
 );
-define_named_price_benchmarks!(
+define_named_input_benchmarks!(
     bench_obv_qualified_matrix,
     bench_obv_repeated_and_streaming,
     "indicator_execution/expanded/volume/OBV",
@@ -2682,6 +2784,46 @@ define_named_price_benchmarks!(
     OBVInput,
     OBVTick,
     [close, volume]
+);
+
+define_named_input_benchmarks!(
+    bench_trange_qualified_matrix,
+    bench_trange_repeated_and_streaming,
+    "indicator_execution/expanded/volatility/TRANGE",
+    "indicator_execution/expanded/volatility_workloads/TRANGE",
+    TRANGE,
+    TRANGEConfig,
+    TRANGE::new,
+    TRANGEConfig::new,
+    TRANGEInput,
+    TRANGETick,
+    [high, low, close]
+);
+define_named_input_benchmarks!(
+    bench_atr_qualified_matrix,
+    bench_atr_repeated_and_streaming,
+    "indicator_execution/expanded/volatility/ATR",
+    "indicator_execution/expanded/volatility_workloads/ATR",
+    ATR,
+    ATRConfig,
+    || ATR::new(PERIOD),
+    || ATRConfig::new(PERIOD).expect("valid ATR period"),
+    ATRInput,
+    ATRTick,
+    [high, low, close]
+);
+define_named_input_benchmarks!(
+    bench_natr_qualified_matrix,
+    bench_natr_repeated_and_streaming,
+    "indicator_execution/expanded/volatility/NATR",
+    "indicator_execution/expanded/volatility_workloads/NATR",
+    NATR,
+    NATRConfig,
+    || NATR::new(PERIOD),
+    || NATRConfig::new(PERIOD).expect("valid NATR period"),
+    NATRInput,
+    NATRTick,
+    [high, low, close]
 );
 
 criterion_group!(
@@ -2740,5 +2882,13 @@ criterion_group!(
     bench_adosc_repeated_and_streaming,
     bench_obv_repeated_and_streaming,
     bench_adosc_parameter_sweep,
+    bench_trange_qualified_matrix,
+    bench_atr_qualified_matrix,
+    bench_natr_qualified_matrix,
+    bench_trange_repeated_and_streaming,
+    bench_atr_repeated_and_streaming,
+    bench_natr_repeated_and_streaming,
+    bench_atr_parameter_sweep,
+    bench_natr_parameter_sweep,
 );
 criterion_main!(benches);

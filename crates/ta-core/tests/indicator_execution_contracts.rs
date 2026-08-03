@@ -22,6 +22,10 @@ use ta_core::{
         MEDPRICEInput, MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig,
         WCLPRICEInput, WCLPRICETick, AVGDEV, AVGPRICE,
     },
+    volatility::{
+        ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
+        TRANGETick, ATR, NATR, TRANGE,
+    },
     volume::{
         ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
         OBVTick, AD, ADOSC, OBV,
@@ -3584,6 +3588,806 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
             StreamingIndicator::next(&mut legacy, tick).unwrap(),
             owned.values()[idx - 1],
         );
+    }
+}
+
+#[test]
+fn trange_config_covers_owned_prepared_validation_warmup_and_independent_streams() {
+    let high = [10.0 as Float, 12.0, 11.0, 15.0, 16.0];
+    let low = [8.0 as Float, 8.0, 9.0, 13.0, 14.0];
+    let close = [9.0 as Float, 11.0, 10.0, 14.0, 15.0];
+    let input = TRANGEInput {
+        high: &high,
+        low: &low,
+        close: &close,
+    };
+    let config = TRANGEConfig::new();
+    assert_eq!(IndicatorConfig::lookback(&config), 1);
+
+    let owned = IndicatorConfig::compute(&config, input).unwrap();
+    assert_eq!(owned.source_len(), high.len());
+    assert_eq!(owned.range(), OutputRange::new(1, 4));
+    assert_float_slice_close(owned.values(), &[4.0, 2.0, 5.0, 2.0]);
+
+    let mut output = [FLOAT_SENTINEL; 6];
+    let range = IndicatorConfig::compute_into(&config, input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_float_slice_close(&output[..4], owned.values());
+    assert_eq!(&output[4..], &[FLOAT_SENTINEL; 2]);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, high.len()).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    let prepared =
+        PreparedBatchRunner::<TRANGEConfig>::compute_into(&mut runner, input, &mut output).unwrap();
+    assert_eq!(prepared, owned.range());
+    assert_float_slice_close(&output[..4], owned.values());
+    assert_eq!(&output[4..], &[FLOAT_SENTINEL; 2]);
+
+    let short_input = TRANGEInput {
+        high: &high[..4],
+        low: &low[..4],
+        close: &close[..4],
+    };
+    let short_owned = IndicatorConfig::compute(&config, short_input).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    let short_range =
+        PreparedBatchRunner::<TRANGEConfig>::compute_into(&mut runner, short_input, &mut output)
+            .unwrap();
+    assert_eq!(short_range, short_owned.range());
+    assert_float_slice_close(&output[..3], short_owned.values());
+    assert_eq!(&output[3..], &[FLOAT_SENTINEL; 3]);
+
+    let oversized = [Float::NAN; 6];
+    output.fill(FLOAT_SENTINEL);
+    assert_eq!(
+        PreparedBatchRunner::<TRANGEConfig>::compute_into(
+            &mut runner,
+            TRANGEInput {
+                high: &oversized,
+                low: &oversized,
+                close: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: 5,
+            actual_input_len: 6,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let valid_two = [1.0 as Float, 2.0];
+    let valid_one = [1.0 as Float];
+    let invalid_one = [Float::NAN];
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            TRANGEInput {
+                high: &valid_two,
+                low: &valid_one,
+                close: &valid_two,
+            },
+            &mut output,
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high and low must have the same length: got 2 and 1"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            TRANGEInput {
+                high: &invalid_one,
+                low: &valid_one,
+                close: &valid_one,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high[0] must be finite, got NaN"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            TRANGEInput {
+                high: &valid_one,
+                low: &valid_one,
+                close: &valid_one,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err(),
+        TalibError::InsufficientData {
+            required: 2,
+            actual: 1,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            TRANGEInput {
+                high: &valid_two,
+                low: &valid_two,
+                close: &valid_two,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: TRANGE output buffer too small: need 1, got 0"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut legacy = TRANGE::new().unwrap();
+    let first_tick = TRANGETick {
+        high: high[0],
+        low: low[0],
+        close: close[0],
+    };
+    assert_eq!(
+        StreamingComputation::<TRANGEConfig>::next(&mut stream, first_tick).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingIndicator::next(&mut legacy, first_tick).unwrap(),
+        None
+    );
+    for idx in 1..high.len() {
+        let tick = TRANGETick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+        };
+        assert_some_float_close(
+            StreamingComputation::<TRANGEConfig>::next(&mut stream, tick).unwrap(),
+            owned.values()[idx - 1],
+        );
+        assert_some_float_close(
+            StreamingIndicator::next(&mut legacy, tick).unwrap(),
+            owned.values()[idx - 1],
+        );
+    }
+
+    let invalid_tick = TRANGETick {
+        high: Float::NAN,
+        low: 0.0,
+        close: 1.0,
+    };
+    assert!(StreamingComputation::<TRANGEConfig>::next(&mut stream, invalid_tick).is_err());
+    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
+    let next_tick = TRANGETick {
+        high: 18.0,
+        low: 16.0,
+        close: 17.0,
+    };
+    assert_some_float_close(
+        StreamingComputation::<TRANGEConfig>::next(&mut stream, next_tick).unwrap(),
+        3.0,
+    );
+    assert_some_float_close(
+        StreamingIndicator::next(&mut legacy, next_tick).unwrap(),
+        3.0,
+    );
+
+    let mut left = IndicatorConfig::stream(&config).unwrap();
+    let mut right = IndicatorConfig::stream(&config).unwrap();
+    assert_eq!(
+        StreamingComputation::<TRANGEConfig>::next(
+            &mut left,
+            TRANGETick {
+                high: 11.0,
+                low: 9.0,
+                close: 10.0,
+            },
+        )
+        .unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<TRANGEConfig>::next(
+            &mut right,
+            TRANGETick {
+                high: 101.0,
+                low: 99.0,
+                close: 100.0,
+            },
+        )
+        .unwrap(),
+        None
+    );
+    assert_some_float_close(
+        StreamingComputation::<TRANGEConfig>::next(
+            &mut left,
+            TRANGETick {
+                high: 13.0,
+                low: 11.0,
+                close: 12.0,
+            },
+        )
+        .unwrap(),
+        3.0,
+    );
+    assert_some_float_close(
+        StreamingComputation::<TRANGEConfig>::next(
+            &mut right,
+            TRANGETick {
+                high: 95.0,
+                low: 93.0,
+                close: 94.0,
+            },
+        )
+        .unwrap(),
+        7.0,
+    );
+
+    StreamingComputation::<TRANGEConfig>::reset(&mut stream);
+    Resettable::reset(&mut legacy);
+    assert_eq!(
+        StreamingComputation::<TRANGEConfig>::next(&mut stream, first_tick).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingIndicator::next(&mut legacy, first_tick).unwrap(),
+        None
+    );
+    for idx in 1..high.len() {
+        let tick = TRANGETick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+        };
+        assert_some_float_close(
+            StreamingComputation::<TRANGEConfig>::next(&mut stream, tick).unwrap(),
+            owned.values()[idx - 1],
+        );
+        assert_some_float_close(
+            StreamingIndicator::next(&mut legacy, tick).unwrap(),
+            owned.values()[idx - 1],
+        );
+    }
+}
+
+#[test]
+fn atr_config_preserves_warmup_period_one_validation_and_recursive_stream_state() {
+    let high = [10.0 as Float, 12.0, 11.0, 15.0, 16.0];
+    let low = [8.0 as Float, 8.0, 9.0, 13.0, 14.0];
+    let close = [9.0 as Float, 11.0, 10.0, 14.0, 15.0];
+    let input = ATRInput {
+        high: &high,
+        low: &low,
+        close: &close,
+    };
+    let config = ATRConfig::new(3).unwrap();
+    assert_eq!(config.period(), 3);
+    assert_eq!(IndicatorConfig::lookback(&config), 3);
+    assert!(ATRConfig::new(0).is_err());
+
+    let owned = IndicatorConfig::compute(&config, input).unwrap();
+    assert_eq!(owned.source_len(), high.len());
+    assert_eq!(owned.range(), OutputRange::new(3, 2));
+    assert_float_slice_close(owned.values(), &[11.0 / 3.0, 28.0 / 9.0]);
+
+    let mut output = [FLOAT_SENTINEL; 6];
+    let range = IndicatorConfig::compute_into(&config, input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_float_slice_close(&output[..2], owned.values());
+    assert_eq!(&output[2..], &[FLOAT_SENTINEL; 4]);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, high.len()).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    let prepared =
+        PreparedBatchRunner::<ATRConfig>::compute_into(&mut runner, input, &mut output).unwrap();
+    assert_eq!(prepared, owned.range());
+    assert_float_slice_close(&output[..2], owned.values());
+    assert_eq!(&output[2..], &[FLOAT_SENTINEL; 4]);
+
+    let short_input = ATRInput {
+        high: &high[..4],
+        low: &low[..4],
+        close: &close[..4],
+    };
+    output.fill(FLOAT_SENTINEL);
+    let short_owned = IndicatorConfig::compute(&config, short_input).unwrap();
+    let short_range =
+        PreparedBatchRunner::<ATRConfig>::compute_into(&mut runner, short_input, &mut output)
+            .unwrap();
+    assert_eq!(short_range, short_owned.range());
+    assert_float_slice_close(&output[..1], short_owned.values());
+    assert_eq!(&output[1..], &[FLOAT_SENTINEL; 5]);
+
+    let oversized = [Float::NAN; 6];
+    output.fill(FLOAT_SENTINEL);
+    assert_eq!(
+        PreparedBatchRunner::<ATRConfig>::compute_into(
+            &mut runner,
+            ATRInput {
+                high: &oversized,
+                low: &oversized,
+                close: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: 5,
+            actual_input_len: 6,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let valid_four = [1.0 as Float, 2.0, 3.0, 4.0];
+    let valid_three = [1.0 as Float, 2.0, 3.0];
+    let invalid_three = [1.0 as Float, Float::NAN, 3.0];
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ATRInput {
+                high: &valid_four,
+                low: &valid_three,
+                close: &valid_four,
+            },
+            &mut output,
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high and low must have the same length: got 4 and 3"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ATRInput {
+                high: &invalid_three,
+                low: &valid_three,
+                close: &valid_three,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high[1] must be finite, got NaN"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ATRInput {
+                high: &valid_three,
+                low: &valid_three,
+                close: &valid_three,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err(),
+        TalibError::InsufficientData {
+            required: 4,
+            actual: 3,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            ATRInput {
+                high: &valid_four,
+                low: &valid_four,
+                close: &valid_four,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: ATR output buffer too small: need 1, got 0"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut legacy = ATR::new(3).unwrap();
+    for idx in 0..high.len() {
+        let tick = ATRTick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+        };
+        let configured = StreamingComputation::<ATRConfig>::next(&mut stream, tick).unwrap();
+        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
+        assert_eq!(configured.is_some(), legacy_value.is_some());
+        if idx < 3 {
+            assert_eq!(configured, None);
+        } else {
+            assert_some_float_close(configured, owned.values()[idx - 3]);
+            assert_some_float_close(legacy_value, owned.values()[idx - 3]);
+        }
+    }
+
+    let invalid_tick = ATRTick {
+        high: Float::NAN,
+        low: 0.0,
+        close: 1.0,
+    };
+    assert!(StreamingComputation::<ATRConfig>::next(&mut stream, invalid_tick).is_err());
+    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
+    let next_tick = ATRTick {
+        high: 18.0,
+        low: 16.0,
+        close: 17.0,
+    };
+    let configured_after_rejection =
+        StreamingComputation::<ATRConfig>::next(&mut stream, next_tick)
+            .unwrap()
+            .unwrap();
+    let legacy_after_rejection = StreamingIndicator::next(&mut legacy, next_tick)
+        .unwrap()
+        .unwrap();
+    assert_float_close(configured_after_rejection, 83.0 / 27.0);
+    assert_float_close(configured_after_rejection, legacy_after_rejection);
+
+    let period_one = ATRConfig::new(1).unwrap();
+    let trange_owned = IndicatorConfig::compute(
+        &TRANGEConfig::new(),
+        TRANGEInput {
+            high: &high,
+            low: &low,
+            close: &close,
+        },
+    )
+    .unwrap();
+    let period_one_owned = IndicatorConfig::compute(&period_one, input).unwrap();
+    assert_eq!(period_one_owned.range(), trange_owned.range());
+    assert_float_slice_close(period_one_owned.values(), trange_owned.values());
+
+    let mut period_one_stream = IndicatorConfig::stream(&period_one).unwrap();
+    assert_eq!(
+        StreamingComputation::<ATRConfig>::next(
+            &mut period_one_stream,
+            ATRTick {
+                high: high[0],
+                low: low[0],
+                close: close[0],
+            },
+        )
+        .unwrap(),
+        None
+    );
+    for idx in 1..high.len() {
+        assert_some_float_close(
+            StreamingComputation::<ATRConfig>::next(
+                &mut period_one_stream,
+                ATRTick {
+                    high: high[idx],
+                    low: low[idx],
+                    close: close[idx],
+                },
+            )
+            .unwrap(),
+            trange_owned.values()[idx - 1],
+        );
+    }
+
+    let mut left = IndicatorConfig::stream(&config).unwrap();
+    let mut right = IndicatorConfig::stream(&config).unwrap();
+    for idx in 0..4 {
+        let left_value = StreamingComputation::<ATRConfig>::next(
+            &mut left,
+            ATRTick {
+                high: high[idx],
+                low: low[idx],
+                close: close[idx],
+            },
+        )
+        .unwrap();
+        let right_value = StreamingComputation::<ATRConfig>::next(
+            &mut right,
+            ATRTick {
+                high: high[idx] * 10.0,
+                low: low[idx] * 10.0,
+                close: close[idx] * 10.0,
+            },
+        )
+        .unwrap();
+        if idx < 3 {
+            assert_eq!(left_value, None);
+            assert_eq!(right_value, None);
+        } else {
+            assert_some_float_close(left_value, 11.0 / 3.0);
+            assert_some_float_close(right_value, 110.0 / 3.0);
+        }
+    }
+
+    StreamingComputation::<ATRConfig>::reset(&mut stream);
+    Resettable::reset(&mut legacy);
+    for idx in 0..high.len() {
+        let tick = ATRTick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+        };
+        let configured = StreamingComputation::<ATRConfig>::next(&mut stream, tick).unwrap();
+        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
+        assert_eq!(configured.is_some(), legacy_value.is_some());
+        if idx >= 3 {
+            assert_some_float_close(configured, owned.values()[idx - 3]);
+            assert_some_float_close(legacy_value, owned.values()[idx - 3]);
+        }
+    }
+}
+
+#[test]
+fn natr_config_preserves_normalization_period_one_and_recursive_stream_state() {
+    let high = [10.0 as Float, 12.0, 11.0, 15.0, 16.0];
+    let low = [8.0 as Float, 8.0, 9.0, 13.0, 14.0];
+    let close = [9.0 as Float, 11.0, 10.0, 14.0, 15.0];
+    let input = NATRInput {
+        high: &high,
+        low: &low,
+        close: &close,
+    };
+    let config = NATRConfig::new(3).unwrap();
+    assert_eq!(config.period(), 3);
+    assert_eq!(IndicatorConfig::lookback(&config), 3);
+    assert!(NATRConfig::new(0).is_err());
+
+    let owned = IndicatorConfig::compute(&config, input).unwrap();
+    assert_eq!(owned.source_len(), high.len());
+    assert_eq!(owned.range(), OutputRange::new(3, 2));
+    assert_float_slice_close(owned.values(), &[550.0 / 21.0, 560.0 / 27.0]);
+
+    let mut output = [FLOAT_SENTINEL; 6];
+    let range = IndicatorConfig::compute_into(&config, input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_float_slice_close(&output[..2], owned.values());
+    assert_eq!(&output[2..], &[FLOAT_SENTINEL; 4]);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, high.len()).unwrap();
+    output.fill(FLOAT_SENTINEL);
+    let prepared =
+        PreparedBatchRunner::<NATRConfig>::compute_into(&mut runner, input, &mut output).unwrap();
+    assert_eq!(prepared, owned.range());
+    assert_float_slice_close(&output[..2], owned.values());
+    assert_eq!(&output[2..], &[FLOAT_SENTINEL; 4]);
+
+    let short_input = NATRInput {
+        high: &high[..4],
+        low: &low[..4],
+        close: &close[..4],
+    };
+    output.fill(FLOAT_SENTINEL);
+    let short_owned = IndicatorConfig::compute(&config, short_input).unwrap();
+    let short_range =
+        PreparedBatchRunner::<NATRConfig>::compute_into(&mut runner, short_input, &mut output)
+            .unwrap();
+    assert_eq!(short_range, short_owned.range());
+    assert_float_slice_close(&output[..1], short_owned.values());
+    assert_eq!(&output[1..], &[FLOAT_SENTINEL; 5]);
+
+    let oversized = [Float::NAN; 6];
+    output.fill(FLOAT_SENTINEL);
+    assert_eq!(
+        PreparedBatchRunner::<NATRConfig>::compute_into(
+            &mut runner,
+            NATRInput {
+                high: &oversized,
+                low: &oversized,
+                close: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: 5,
+            actual_input_len: 6,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let valid_four = [1.0 as Float, 2.0, 3.0, 4.0];
+    let valid_three = [1.0 as Float, 2.0, 3.0];
+    let invalid_three = [1.0 as Float, Float::NAN, 3.0];
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            NATRInput {
+                high: &valid_four,
+                low: &valid_three,
+                close: &valid_four,
+            },
+            &mut output,
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high and low must have the same length: got 4 and 3"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            NATRInput {
+                high: &invalid_three,
+                low: &valid_three,
+                close: &valid_three,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: high[1] must be finite, got NaN"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            NATRInput {
+                high: &valid_three,
+                low: &valid_three,
+                close: &valid_three,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err(),
+        TalibError::InsufficientData {
+            required: 4,
+            actual: 3,
+        }
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_eq!(
+        IndicatorConfig::compute_into(
+            &config,
+            NATRInput {
+                high: &valid_four,
+                low: &valid_four,
+                close: &valid_four,
+            },
+            &mut output[..0],
+        )
+        .unwrap_err()
+        .to_string(),
+        "Invalid input: NATR output buffer too small: need 1, got 0"
+    );
+    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut legacy = NATR::new(3).unwrap();
+    for idx in 0..high.len() {
+        let tick = NATRTick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+        };
+        let configured = StreamingComputation::<NATRConfig>::next(&mut stream, tick).unwrap();
+        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
+        assert_eq!(configured.is_some(), legacy_value.is_some());
+        if idx < 3 {
+            assert_eq!(configured, None);
+        } else {
+            assert_some_float_close(configured, owned.values()[idx - 3]);
+            assert_some_float_close(legacy_value, owned.values()[idx - 3]);
+        }
+    }
+
+    let invalid_tick = NATRTick {
+        high: Float::NAN,
+        low: 0.0,
+        close: 1.0,
+    };
+    assert!(StreamingComputation::<NATRConfig>::next(&mut stream, invalid_tick).is_err());
+    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
+    let next_tick = NATRTick {
+        high: 18.0,
+        low: 16.0,
+        close: 17.0,
+    };
+    let configured_after_rejection =
+        StreamingComputation::<NATRConfig>::next(&mut stream, next_tick)
+            .unwrap()
+            .unwrap();
+    let legacy_after_rejection = StreamingIndicator::next(&mut legacy, next_tick)
+        .unwrap()
+        .unwrap();
+    assert_float_close(configured_after_rejection, (83.0 / 27.0) / 17.0 * 100.0);
+    assert_float_close(configured_after_rejection, legacy_after_rejection);
+
+    let period_one = NATRConfig::new(1).unwrap();
+    let trange_owned = IndicatorConfig::compute(
+        &TRANGEConfig::new(),
+        TRANGEInput {
+            high: &high,
+            low: &low,
+            close: &close,
+        },
+    )
+    .unwrap();
+    let period_one_owned = IndicatorConfig::compute(&period_one, input).unwrap();
+    assert_eq!(period_one_owned.range(), trange_owned.range());
+    assert_float_slice_close(period_one_owned.values(), trange_owned.values());
+
+    let near_zero_high = [1.0 as Float, 2.0, 3.0, 4.0];
+    let near_zero_low = [0.0 as Float, 1.0, 2.0, 3.0];
+    let near_zero_close = [0.5 as Float, 1.5, 2.5, 1e-9 as Float];
+    let near_zero_input = NATRInput {
+        high: &near_zero_high,
+        low: &near_zero_low,
+        close: &near_zero_close,
+    };
+    let near_zero_owned = IndicatorConfig::compute(&config, near_zero_input).unwrap();
+    assert_eq!(near_zero_owned.range(), OutputRange::new(3, 1));
+    assert_float_slice_close(near_zero_owned.values(), &[0.0]);
+    let mut near_zero_stream = IndicatorConfig::stream(&config).unwrap();
+    for idx in 0..3 {
+        assert_eq!(
+            StreamingComputation::<NATRConfig>::next(
+                &mut near_zero_stream,
+                NATRTick {
+                    high: near_zero_high[idx],
+                    low: near_zero_low[idx],
+                    close: near_zero_close[idx],
+                },
+            )
+            .unwrap(),
+            None
+        );
+    }
+    assert_some_float_close(
+        StreamingComputation::<NATRConfig>::next(
+            &mut near_zero_stream,
+            NATRTick {
+                high: near_zero_high[3],
+                low: near_zero_low[3],
+                close: near_zero_close[3],
+            },
+        )
+        .unwrap(),
+        0.0,
+    );
+
+    let mut left = IndicatorConfig::stream(&config).unwrap();
+    let mut right = IndicatorConfig::stream(&config).unwrap();
+    for idx in 0..4 {
+        let left_value = StreamingComputation::<NATRConfig>::next(
+            &mut left,
+            NATRTick {
+                high: high[idx],
+                low: low[idx],
+                close: close[idx],
+            },
+        )
+        .unwrap();
+        let right_value = StreamingComputation::<NATRConfig>::next(
+            &mut right,
+            NATRTick {
+                high: high[idx] * 10.0,
+                low: low[idx] * 10.0,
+                close: close[idx] * 10.0,
+            },
+        )
+        .unwrap();
+        assert_eq!(left_value.is_some(), right_value.is_some());
+        if let (Some(left_value), Some(right_value)) = (left_value, right_value) {
+            assert_float_close(left_value, right_value);
+        }
+    }
+
+    StreamingComputation::<NATRConfig>::reset(&mut stream);
+    Resettable::reset(&mut legacy);
+    for idx in 0..high.len() {
+        let tick = NATRTick {
+            high: high[idx],
+            low: low[idx],
+            close: close[idx],
+        };
+        let configured = StreamingComputation::<NATRConfig>::next(&mut stream, tick).unwrap();
+        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
+        assert_eq!(configured.is_some(), legacy_value.is_some());
+        if idx >= 3 {
+            assert_some_float_close(configured, owned.values()[idx - 3]);
+            assert_some_float_close(legacy_value, owned.values()[idx - 3]);
+        }
     }
 }
 

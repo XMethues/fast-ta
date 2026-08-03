@@ -15,8 +15,9 @@ issue_8_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines 
 issue_8_streaming_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/price_transform_workloads/.*/streaming'"
 issue_9_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volume"
 issue_9_streaming_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volume_workloads/ADOSC/streaming"
+issue_10_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volatility"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
-status: issue-9-volume-qualified
+status: issue-10-volatility-qualified
 ---
 
 # Indicator Execution Baselines
@@ -765,3 +766,59 @@ Universe rows report current / configuration / prepared. Per-worker rows report 
 ### Gate conclusion
 
 All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path by 10.61%–26.04%. These are host-local default-`f64` qualification results, not portable speedup claims.
+
+## Issue #10 volatility qualification
+
+Issue #10 adds parameter-only configurations for `TRANGE`, `ATR`, and `NATR`, with owned and caller-owned Compact Output, reusable Prepared Batch Runners, and independent Streaming Computations. Uppercase compatibility indicators retain their existing batch, padded-owned, streaming, warm-up, and reset behavior. Multi-series high/low/close inputs use typed structures.
+
+The full benchmark command is `cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volatility`. The matrix uses observations 64/4,096/65,536; `ATR` and `NATR` use period 14, and their parameter sweeps use periods 5/14/50/200. Values below are Criterion mean point estimates from the 100-sample qualification run.
+
+### Allocation evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports:
+
+| Indicator | Configuration | Caller-owned | Owned Compact Output | Prepared setup / first / repeated / oversize | Stream setup / ticks |
+|---|---:|---:|---:|---:|---:|
+| TRANGE | 0 / 0 B | 0 / 0 B | 1 / 32,760 B | 0 / 0 B in every phase | 0 / 0 B |
+| ATR | 0 / 0 B | 0 / 0 B | 1 / 32,656 B | 0 / 0 B in every phase | 0 / 0 B |
+| NATR | 0 / 0 B | 0 / 0 B | 1 / 32,656 B | 0 / 0 B in every phase | 0 / 0 B |
+
+Entries are allocation operations / gross allocated bytes. Owned byte counts are exactly `compact_count × size_of::<Float>()`; caller-owned computation, prepared reuse and rejection, stream construction, and streaming ticks allocate nothing.
+
+### Full timing evidence
+
+Caller-owned fields report current / configuration / prepared. Owned fields report legacy Aligned Output / configuration Compact Output.
+
+| Indicator | Observations | Caller-owned point estimates | Config / current | Prepared / current | Owned point estimates | Compact / legacy |
+|---|---:|---:|---:|---:|---:|---:|
+| TRANGE | 64 | 86.50 ns / 86.13 ns / 88.56 ns | -0.43% | +2.38% | 147.19 ns / 107.10 ns | -27.24% |
+| TRANGE | 4,096 | 5.796 µs / 5.684 µs / 5.818 µs | -1.94% | +0.38% | 7.820 µs / 6.106 µs | -21.92% |
+| TRANGE | 65,536 | 100.673 µs / 99.002 µs / 100.990 µs | -1.66% | +0.31% | 140.501 µs / 103.396 µs | -26.41% |
+| ATR | 64 | 329.13 ns / 326.32 ns / 327.45 ns | -0.85% | -0.51% | 380.73 ns / 356.97 ns | -6.24% |
+| ATR | 4,096 | 25.666 µs / 25.657 µs / 25.620 µs | -0.03% | -0.18% | 28.485 µs / 26.288 µs | -7.71% |
+| ATR | 65,536 | 411.820 µs / 412.058 µs / 411.098 µs | +0.06% | -0.18% | 454.511 µs / 415.909 µs | -8.49% |
+| NATR | 64 | 333.56 ns / 334.39 ns / 333.31 ns | +0.25% | -0.07% | 385.99 ns / 344.72 ns | -10.69% |
+| NATR | 4,096 | 25.843 µs / 25.846 µs / 25.904 µs | +0.01% | +0.24% | 28.320 µs / 26.320 µs | -7.06% |
+| NATR | 65,536 | 418.601 µs / 416.822 µs / 415.193 µs | -0.43% | -0.81% | 458.409 µs / 420.565 µs | -8.26% |
+
+### Repeated and streaming evidence
+
+Universe and parameter-sweep rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured. Fixtures and caller-owned buffers are identical within each comparison; construction and reset remain outside measured operations. Sweep rows aggregate the four separately measured period point estimates.
+
+| Indicator / workload | Point estimates | Same-run deltas |
+|---|---:|---:|
+| TRANGE Universe, 128 × 4,096 | 747.211 µs / 774.557 µs / 748.167 µs | config/current +3.66%; prepared/current +0.13% |
+| TRANGE Per-worker, 4 × 4,096 | 22.923 µs / 23.728 µs | prepared/current +3.51% |
+| TRANGE Streaming, 16 × 4,096 | 287.426 µs / 289.187 µs | configured/legacy +0.61% |
+| ATR Universe, 128 × 4,096 | 3.2799 ms / 3.2795 ms / 3.3236 ms | config/current -0.01%; prepared/current +1.33% |
+| ATR Sweep, 4 × 4,096 | 101.739 µs / 101.799 µs / 102.955 µs | config/current +0.06%; prepared/current +1.19% |
+| ATR Per-worker, 4 × 4,096 | 103.450 µs / 102.429 µs | prepared/current -0.99% |
+| ATR Streaming, 16 × 4,096 | 330.982 µs / 331.422 µs | configured/legacy +0.13% |
+| NATR Universe, 128 × 4,096 | 3.3201 ms / 3.3159 ms / 3.3453 ms | config/current -0.13%; prepared/current +0.76% |
+| NATR Sweep, 4 × 4,096 | 103.221 µs / 103.427 µs / 102.674 µs | config/current +0.20%; prepared/current -0.53% |
+| NATR Per-worker, 4 × 4,096 | 103.534 µs / 103.497 µs | prepared/current -0.04% |
+| NATR Streaming, 16 × 4,096 | 367.205 µs / 365.349 µs | configured/legacy -0.51% |
+
+### Gate conclusion
+
+All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path by 6.24%–27.24%. These are host-local default-`f64` qualification results, not portable speedup claims.
