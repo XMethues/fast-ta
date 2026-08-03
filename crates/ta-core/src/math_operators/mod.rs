@@ -11,10 +11,15 @@ pub use arithmetic::{
     ADD_vec, BinaryInput, BinaryTick, DIV_vec, MULT_vec, SUB_vec, ADD, DIV, MULT, SUB,
 };
 pub use extrema::{
-    MAXINDEX_vec, MININDEX_vec, MINMAXBatchRunner, MINMAXConfig, MINMAXINDEXBatchRunner,
-    MINMAXINDEXConfig, MINMAXINDEXOutput, MINMAXINDEXOutputMut, MINMAXINDEXStream,
-    MINMAXINDEXStreamValue, MINMAXINDEXValue, MINMAXINDEXValues, MINMAXINDEXValuesMut,
-    MINMAXINDEX_vec, MINMAXOutput, MINMAXOutputMut, MINMAXStream, MINMAXValue, MINMAXValues,
-    MINMAXValuesMut, MINMAX_vec, MAXINDEX, MININDEX, MINMAX, MINMAXINDEX,
+    MAXINDEXBatchRunner, MAXINDEXConfig, MAXINDEXStream, MAXINDEX_vec, MININDEXBatchRunner,
+    MININDEXConfig, MININDEXStream, MININDEX_vec, MINMAXBatchRunner, MINMAXConfig,
+    MINMAXINDEXBatchRunner, MINMAXINDEXConfig, MINMAXINDEXOutput, MINMAXINDEXOutputMut,
+    MINMAXINDEXStream, MINMAXINDEXStreamValue, MINMAXINDEXValue, MINMAXINDEXValues,
+    MINMAXINDEXValuesMut, MINMAXINDEX_vec, MINMAXOutput, MINMAXOutputMut, MINMAXStream,
+    MINMAXValue, MINMAXValues, MINMAXValuesMut, MINMAX_vec, MAXINDEX, MININDEX, MINMAX,
+    MINMAXINDEX,
 };
-pub use rolling::{MAX_vec, MIN_vec, SUM_vec, MAX, MIN, SUM};
+pub use rolling::{
+    MAXBatchRunner, MAXConfig, MAXStream, MAX_vec, MINBatchRunner, MINConfig, MINStream, MIN_vec,
+    SUM_vec, MAX, MIN, SUM,
+};

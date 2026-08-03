@@ -323,8 +323,147 @@ Gate conclusion: no new repeated or streaming candidate has a stable regression 
 
 An ordinary reusable append initially exposed a stable approximately 5–6% index-path delta against the same-run configuration path, so the prescribed fallbacks were tested before the retained-capacity invariant was made optimizer-visible:
 
-- Separate single-extrema append passes were rejected after the quick matrix showed broad regressions, including approximately +7% to +29% for representative value cases and up to +44.6% for index cases.
+- Separate single-extrema append passes as a replacement for each combined-indicator pass were rejected after the quick matrix showed broad regressions, including approximately +7% to +29% for representative value cases and up to +44.6% for index cases.
 - An explicit-branch, no-modulo ring was rejected at +17.7% to +108.9% versus append across the valid index matrix.
 - A bounded compacting deque won one 4,096/14 quick case by 8.3%, but regressed the other valid cases by +6.5% to +55.3%; it was rejected as non-clearing.
 
 The fallback implementations were temporary benchmark candidates and are not retained. The selected production candidate remains reusable append scratch; its private reserved append is justified by the validated capacity invariant and produced the full-run results above.
+
+## Issue #5 remaining extrema qualification
+
+Issue #5 adds parameter-only `MINConfig`, `MAXConfig`, `MININDEXConfig`, and
+`MAXINDEXConfig` types. Each configuration supports owned Compact Output,
+caller-owned Batch Computation, a Prepared Batch Runner, and an independent
+Streaming Computation. Value outputs are compact `Vec<Float>` payloads; index
+outputs are compact `Vec<usize>` payloads containing absolute source indexes.
+Warm-up remains represented by the output range or `Option::None`, never by a
+numeric index.
+
+Every single-sided batch kernel maintains exactly one monotonic index queue.
+One-shot configured and legacy caller-owned paths allocate that one
+input-length queue. Each Prepared Batch Runner reserves and retains one queue
+for its declared maximum input length, then uses the same proven-capacity append
+as the qualified combined-extrema runners. The uppercase compatibility objects
+store only their corresponding configured stream and delegate streaming and
+reset behavior through the Rust-first seam.
+
+The durable commands are:
+
+```text
+cargo bench -p ta-benchmarks --bench execution_allocations
+cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/single_extrema --quick
+cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/single_extrema
+cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/single_extrema_workloads --quick
+cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/single_extrema_workloads
+```
+
+The one-shot matrix uses the same valid observation/period pairs and rotating
+five-path registration order as issue #4. The repeated matrix covers a
+128-instrument Universe, a four-period parameter sweep, one runner per each of
+four workers, and 16 independent streams over 4,096 ticks. Fixtures and
+`black_box` placement match the issue #4 workloads.
+
+### Exact single-extrema allocation profiles
+
+These executable assertions use 4,096 observations, period 14, `Float = f64`,
+and 64-bit `usize`:
+
+| Scenario | Operations | Gross bytes | Peak bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| Construct any single-extrema configuration | 0 | 0 | 0 | 0 |
+| Legacy MIN/MAX/MININDEX/MAXINDEX caller-owned one-shot | 1 | 32,768 | 32,768 | 0 |
+| Configured MIN/MAX/MININDEX/MAXINDEX caller-owned one-shot | 1 | 32,768 | 32,768 | 0 |
+| Configured owned Compact Output, any single-extrema path | 2 | 65,432 | 65,432 | 32,664 |
+| Prepare any single-extrema runner for 4,096 observations | 1 | 32,768 | 32,768 | 32,768 |
+| Prepared first or repeated call, any single-extrema path | 0 | 0 | 0 | 0 |
+| Stream ticks after construction, any single-extrema path | 0 | 0 | 0 | 0 |
+
+Caller-owned output allocation is zero; the one allocation is documented
+algorithm scratch. Owned computation performs exactly one compact output
+allocation and one scratch allocation. The retained 32,664 bytes are exactly
+one output column of 4,083 elements. Prepared construction retains exactly one
+`max_input_len * size_of::<usize>()` queue. These profiles demonstrate that no
+single-sided computation carries an unused opposite-extrema queue.
+
+### Full timing evidence
+
+The command above was run twice at Criterion's default 100 samples. Criterion recorded both latency and element throughput; the tables retain median latency because throughput is its inverse for each fixed-size workload. Negative deltas mean the candidate took less time. The caller-owned tables report current free function / configuration / Prepared Batch Runner.
+
+| Indicator | Observations / period | Run A medians | Run A same-run deltas | Run B medians | Run B same-run deltas |
+|---|---:|---:|---:|---:|---:|
+| MIN | 64 / 14 | 220.80 ns / 233.22 ns / 172.35 ns | config/current +5.62%; prepared/current -21.94%; prepared/config -26.10% | 217.46 ns / 232.96 ns / 172.01 ns | config/current +7.13%; prepared/current -20.90%; prepared/config -26.16% |
+| MIN | 4,096 / 14 | 12.903 µs / 12.461 µs / 11.140 µs | config/current -3.42%; prepared/current -13.66%; prepared/config -10.61% | 14.913 µs / 15.886 µs / 15.273 µs | config/current +6.53%; prepared/current +2.41%; prepared/config -3.86% |
+| MIN | 4,096 / 512 | 15.253 µs / 16.270 µs / 11.017 µs | config/current +6.66%; prepared/current -27.77%; prepared/config -32.28% | 24.673 µs / 30.821 µs / 18.130 µs | config/current +24.92%; prepared/current -26.52%; prepared/config -41.18% |
+| MIN | 65,536 / 14 | 276.798 µs / 314.620 µs / 268.186 µs | config/current +13.66%; prepared/current -3.11%; prepared/config -14.76% | 350.569 µs / 417.730 µs / 420.145 µs | config/current +19.16%; prepared/current +19.85%; prepared/config +0.58% |
+| MIN | 65,536 / 512 | 348.219 µs / 386.586 µs / 303.586 µs | config/current +11.02%; prepared/current -12.82%; prepared/config -21.47% | 467.942 µs / 462.111 µs / 361.204 µs | config/current -1.25%; prepared/current -22.81%; prepared/config -21.84% |
+| MAX | 64 / 14 | 388.37 ns / 367.23 ns / 238.47 ns | config/current -5.44%; prepared/current -38.60%; prepared/config -35.06% | 370.95 ns / 355.91 ns / 282.24 ns | config/current -4.06%; prepared/current -23.92%; prepared/config -20.70% |
+| MAX | 4,096 / 14 | 20.954 µs / 17.933 µs / 18.935 µs | config/current -14.41%; prepared/current -9.64%; prepared/config +5.58% | 31.568 µs / 23.914 µs / 22.220 µs | config/current -24.25%; prepared/current -29.61%; prepared/config -7.08% |
+| MAX | 4,096 / 512 | 20.175 µs / 21.623 µs / 15.228 µs | config/current +7.17%; prepared/current -24.52%; prepared/config -29.58% | 25.723 µs / 20.716 µs / 24.257 µs | config/current -19.46%; prepared/current -5.70%; prepared/config +17.09% |
+| MAX | 65,536 / 14 | 300.102 µs / 569.993 µs / 257.819 µs | config/current +89.93%; prepared/current -14.09%; prepared/config -54.77% | 477.291 µs / 616.450 µs / 585.520 µs | config/current +29.16%; prepared/current +22.68%; prepared/config -5.02% |
+| MAX | 65,536 / 512 | 330.461 µs / 333.746 µs / 301.359 µs | config/current +0.99%; prepared/current -8.81%; prepared/config -9.70% | 757.238 µs / 741.822 µs / 833.299 µs | config/current -2.04%; prepared/current +10.04%; prepared/config +12.33% |
+| MININDEX | 64 / 14 | 316.29 ns / 338.54 ns / 249.04 ns | config/current +7.04%; prepared/current -21.26%; prepared/config -26.44% | 1.587 µs / 1.083 µs / 679.68 ns | config/current -31.77%; prepared/current -57.16%; prepared/config -37.21% |
+| MININDEX | 4,096 / 14 | 20.905 µs / 15.143 µs / 13.198 µs | config/current -27.56%; prepared/current -36.87%; prepared/config -12.85% | 32.468 µs / 34.702 µs / 31.948 µs | config/current +6.88%; prepared/current -1.60%; prepared/config -7.93% |
+| MININDEX | 4,096 / 512 | 16.162 µs / 19.218 µs / 15.210 µs | config/current +18.91%; prepared/current -5.89%; prepared/config -20.86% | 34.046 µs / 29.511 µs / 28.093 µs | config/current -13.32%; prepared/current -17.49%; prepared/config -4.81% |
+| MININDEX | 65,536 / 14 | 324.021 µs / 309.220 µs / 277.086 µs | config/current -4.57%; prepared/current -14.49%; prepared/config -10.39% | 232.919 µs / 228.840 µs / 210.993 µs | config/current -1.75%; prepared/current -9.41%; prepared/config -7.80% |
+| MININDEX | 65,536 / 512 | 336.086 µs / 274.701 µs / 214.607 µs | config/current -18.26%; prepared/current -36.15%; prepared/config -21.88% | 199.964 µs / 195.551 µs / 175.122 µs | config/current -2.21%; prepared/current -12.42%; prepared/config -10.45% |
+| MAXINDEX | 64 / 14 | 241.50 ns / 258.40 ns / 198.24 ns | config/current +7.00%; prepared/current -17.91%; prepared/config -23.28% | 234.58 ns / 219.28 ns / 204.46 ns | config/current -6.52%; prepared/current -12.84%; prepared/config -6.76% |
+| MAXINDEX | 4,096 / 14 | 11.354 µs / 12.987 µs / 11.301 µs | config/current +14.38%; prepared/current -0.46%; prepared/config -12.98% | 11.479 µs / 15.146 µs / 12.566 µs | config/current +31.95%; prepared/current +9.47%; prepared/config -17.03% |
+| MAXINDEX | 4,096 / 512 | 18.423 µs / 17.181 µs / 13.087 µs | config/current -6.74%; prepared/current -28.96%; prepared/config -23.82% | 13.831 µs / 12.452 µs / 11.187 µs | config/current -9.97%; prepared/current -19.12%; prepared/config -10.16% |
+| MAXINDEX | 65,536 / 14 | 225.749 µs / 267.170 µs / 212.291 µs | config/current +18.35%; prepared/current -5.96%; prepared/config -20.54% | 212.302 µs / 228.138 µs / 188.764 µs | config/current +7.46%; prepared/current -11.09%; prepared/config -17.26% |
+| MAXINDEX | 65,536 / 512 | 224.260 µs / 254.226 µs / 221.136 µs | config/current +13.36%; prepared/current -1.39%; prepared/config -13.02% | 240.445 µs / 430.918 µs / 247.509 µs | config/current +79.22%; prepared/current +2.94%; prepared/config -42.56% |
+
+Owned qualification uses legacy owned Aligned Output / configuration owned Compact Output:
+
+| Indicator | Observations / period | Run A medians | Run A delta | Run B medians | Run B delta |
+|---|---:|---:|---:|---:|---:|
+| MIN | 64 / 14 | 288.79 ns / 248.84 ns | -13.83% | 316.94 ns / 293.99 ns | -7.24% |
+| MIN | 4,096 / 14 | 13.860 µs / 13.181 µs | -4.90% | 15.400 µs / 16.044 µs | +4.18% |
+| MIN | 4,096 / 512 | 14.183 µs / 13.543 µs | -4.51% | 27.243 µs / 28.722 µs | +5.43% |
+| MIN | 65,536 / 14 | 329.475 µs / 251.645 µs | -23.62% | 541.806 µs / 345.153 µs | -36.30% |
+| MIN | 65,536 / 512 | 507.022 µs / 350.458 µs | -30.88% | 396.060 µs / 393.615 µs | -0.62% |
+| MAX | 64 / 14 | 413.33 ns / 352.67 ns | -14.68% | 589.04 ns / 404.01 ns | -31.41% |
+| MAX | 4,096 / 14 | 24.433 µs / 18.687 µs | -23.52% | 31.935 µs / 28.956 µs | -9.33% |
+| MAX | 4,096 / 512 | 23.232 µs / 22.222 µs | -4.35% | 35.805 µs / 30.109 µs | -15.91% |
+| MAX | 65,536 / 14 | 411.472 µs / 286.341 µs | -30.41% | 379.376 µs / 362.215 µs | -4.52% |
+| MAX | 65,536 / 512 | 398.959 µs / 345.911 µs | -13.30% | 1.6139 ms / 771.585 µs | -52.19% |
+| MININDEX | 64 / 14 | 363.41 ns / 397.08 ns | +9.27% | 1.229 µs / 996.22 ns | -18.97% |
+| MININDEX | 4,096 / 14 | 19.104 µs / 16.982 µs | -11.11% | 34.400 µs / 34.566 µs | +0.48% |
+| MININDEX | 4,096 / 512 | 17.472 µs / 16.863 µs | -3.49% | 35.531 µs / 33.097 µs | -6.85% |
+| MININDEX | 65,536 / 14 | 317.310 µs / 279.028 µs | -12.06% | 268.824 µs / 248.572 µs | -7.53% |
+| MININDEX | 65,536 / 512 | 277.581 µs / 300.139 µs | +8.13% | 235.266 µs / 234.177 µs | -0.46% |
+| MAXINDEX | 64 / 14 | 265.73 ns / 320.75 ns | +20.71% | 249.15 ns / 333.00 ns | +33.65% |
+| MAXINDEX | 4,096 / 14 | 12.573 µs / 14.492 µs | +15.26% | 12.864 µs / 23.501 µs | +82.69% |
+| MAXINDEX | 4,096 / 512 | 15.142 µs / 25.025 µs | +65.27% | 13.039 µs / 18.676 µs | +43.23% |
+| MAXINDEX | 65,536 / 14 | 232.148 µs / 326.873 µs | +40.80% | 196.703 µs / 286.947 µs | +45.88% |
+| MAXINDEX | 65,536 / 512 | 242.921 µs / 318.238 µs | +31.00% | 532.993 µs / 358.698 µs | -32.70% |
+
+### Repeated and streaming evidence
+
+Universe and parameter-sweep timing columns are current / configuration / prepared. Per-worker columns are current / prepared, and streaming columns are legacy / configured. Fixtures and output buffers are identical within each comparison; construction/reset stays outside the measured operation.
+
+| Indicator / workload | Run A medians | Run A same-run deltas | Run B medians | Run B same-run deltas |
+|---|---:|---:|---:|---:|
+| MIN Universe, 128 × 4,096 | 1.9384 ms / 1.8868 ms / 1.6781 ms | config/current -2.66%; prepared/current -13.43%; prepared/config -11.06% | 1.9450 ms / 1.8736 ms / 1.9159 ms | config/current -3.67%; prepared/current -1.49%; prepared/config +2.26% |
+| MIN sweep, 4 × 4,096 | 62.537 µs / 64.086 µs / 56.631 µs | config/current +2.48%; prepared/current -9.44%; prepared/config -11.63% | 59.589 µs / 58.610 µs / 56.998 µs | config/current -1.64%; prepared/current -4.35%; prepared/config -2.75% |
+| MIN per-worker, 4 × 4,096 | 60.061 µs / 48.022 µs | candidate/reference -20.04% | 98.715 µs / 115.430 µs | candidate/reference +16.93% |
+| MIN streaming, 16 × 4,096 | 577.029 µs / 604.292 µs | candidate/reference +4.72% | 924.289 µs / 755.175 µs | candidate/reference -18.30% |
+| MAX Universe, 128 × 4,096 | 1.8344 ms / 1.8522 ms / 1.6408 ms | config/current +0.97%; prepared/current -10.55%; prepared/config -11.41% | 2.5447 ms / 2.5338 ms / 1.9395 ms | config/current -0.43%; prepared/current -23.78%; prepared/config -23.46% |
+| MAX sweep, 4 × 4,096 | 59.211 µs / 61.308 µs / 51.467 µs | config/current +3.54%; prepared/current -13.08%; prepared/config -16.05% | 87.853 µs / 78.112 µs / 70.285 µs | config/current -11.09%; prepared/current -20.00%; prepared/config -10.02% |
+| MAX per-worker, 4 × 4,096 | 64.009 µs / 56.230 µs | candidate/reference -12.15% | 60.538 µs / 56.216 µs | candidate/reference -7.14% |
+| MAX streaming, 16 × 4,096 | 621.998 µs / 540.419 µs | candidate/reference -13.12% | 606.706 µs / 1.2450 ms | candidate/reference +105.21% |
+| MININDEX Universe, 128 × 4,096 | 1.7480 ms / 1.8964 ms / 1.6191 ms | config/current +8.49%; prepared/current -7.38%; prepared/config -14.62% | 4.0954 ms / 4.4446 ms / 4.6486 ms | config/current +8.53%; prepared/current +13.51%; prepared/config +4.59% |
+| MININDEX sweep, 4 × 4,096 | 58.169 µs / 57.410 µs / 50.835 µs | config/current -1.30%; prepared/current -12.61%; prepared/config -11.45% | 177.465 µs / 189.862 µs / 147.229 µs | config/current +6.99%; prepared/current -17.04%; prepared/config -22.45% |
+| MININDEX per-worker, 4 × 4,096 | 55.749 µs / 47.566 µs | candidate/reference -14.68% | 171.045 µs / 150.498 µs | candidate/reference -12.01% |
+| MININDEX streaming, 16 × 4,096 | 1.0649 ms / 1.2333 ms | candidate/reference +15.82% | 3.5267 ms / 3.9296 ms | candidate/reference +11.42% |
+| MAXINDEX Universe, 128 × 4,096 | 1.5888 ms / 1.8323 ms / 1.7101 ms | config/current +15.32%; prepared/current +7.63%; prepared/config -6.67% | 4.8160 ms / 5.0314 ms / 4.2729 ms | config/current +4.47%; prepared/current -11.28%; prepared/config -15.08% |
+| MAXINDEX sweep, 4 × 4,096 | 63.190 µs / 65.903 µs / 61.685 µs | config/current +4.29%; prepared/current -2.38%; prepared/config -6.40% | 144.822 µs / 151.814 µs / 129.199 µs | config/current +4.83%; prepared/current -10.79%; prepared/config -14.90% |
+| MAXINDEX per-worker, 4 × 4,096 | 56.861 µs / 58.267 µs | candidate/reference +2.47% | 138.846 µs / 100.333 µs | candidate/reference -27.74% |
+| MAXINDEX streaming, 16 × 4,096 | 1.1466 ms / 1.0550 ms | candidate/reference -7.99% | 1.2154 ms / 1.2430 ms | candidate/reference +2.27% |
+
+### Gate conclusion
+
+The exact allocation assertions clear the caller-owned, prepared-reuse, and streaming allocation gates. Each single-sided runner retains one index queue and never carries the opposite-extrema queue.
+
+The two timing runs are recorded, but the host was not idle: a separate `huge-trading` workspace continuously compiled throughout both acceptance runs, and medians drifted substantially between Run A and Run B. The compared implementations also differ: current MIN/MAX free functions use a period-bounded queue, current index functions use their legacy single-index kernel, and configuration/prepared paths use append scratch. These results therefore do not isolate host contention from implementation differences. Prepared execution was usually faster but not uniformly so. The values qualify benchmark coverage, not portable speedups or a stable code-path regression.
+
+Per the explicit issue #5 implementation decision, residual timing regressions and uncertainty are accepted in favor of the clean, idiomatic single-queue implementation. No fallback implementation or second execution convention is retained. Future uncontended qualification can rerun the two durable commands without changing benchmark IDs.

@@ -9,9 +9,9 @@ use crate::{
 };
 
 #[cfg(not(feature = "std"))]
-use alloc::{vec, vec::Vec};
+use alloc::{format, vec, vec::Vec};
 #[cfg(feature = "std")]
-use std::{vec, vec::Vec};
+use std::{format, vec, vec::Vec};
 
 /// Full-length MINMAX output vectors.
 #[derive(Debug, Clone, PartialEq)]
@@ -145,19 +145,47 @@ where
     OutputRange::new(lookback, count)
 }
 
+fn rolling_single_index<F>(
+    real: &[Float],
+    timeperiod: usize,
+    lookback: usize,
+    count: usize,
+    out_integer: &mut [i32],
+    mut is_better: F,
+) -> OutputRange
+where
+    F: FnMut(Float, Float) -> bool,
+{
+    if count == 0 {
+        return OutputRange::empty();
+    }
+
+    let mut deque = Vec::with_capacity(real.len());
+    let mut head = 0usize;
+    for idx in 0..real.len() {
+        while head < deque.len() && deque[head] + timeperiod <= idx {
+            head += 1;
+        }
+        push_extreme_index(&mut deque, head, real, idx, &mut is_better);
+        if idx + 1 >= timeperiod {
+            out_integer[idx + 1 - timeperiod] = deque[head] as i32;
+        }
+    }
+    OutputRange::new(lookback, count)
+}
+
 /// TA-Lib-style rolling minimum index.
 #[allow(non_snake_case)]
 pub fn MININDEX(real: &[Float], timeperiod: usize, out_integer: &mut [i32]) -> Result<OutputRange> {
     let (lookback, count) = validate_window(real, timeperiod)?;
     validate_output_len("MININDEX", out_integer.len(), count)?;
-    Ok(rolling_min_max(
+    Ok(rolling_single_index(
         real,
         timeperiod,
         lookback,
         count,
-        |output_idx, _, _, min_idx, _| {
-            out_integer[output_idx] = min_idx;
-        },
+        out_integer,
+        |candidate, current| candidate < current,
     ))
 }
 
@@ -178,14 +206,13 @@ pub fn MININDEX_vec(real: &[Float], timeperiod: usize) -> Result<Vec<i32>> {
 pub fn MAXINDEX(real: &[Float], timeperiod: usize, out_integer: &mut [i32]) -> Result<OutputRange> {
     let (lookback, count) = validate_window(real, timeperiod)?;
     validate_output_len("MAXINDEX", out_integer.len(), count)?;
-    Ok(rolling_min_max(
+    Ok(rolling_single_index(
         real,
         timeperiod,
         lookback,
         count,
-        |output_idx, _, _, _, max_idx| {
-            out_integer[output_idx] = max_idx;
-        },
+        out_integer,
+        |candidate, current| candidate > current,
     ))
 }
 
@@ -532,6 +559,317 @@ fn rolling_min_max_indexes_append<const RESERVED_PUSH: bool>(
 
     OutputRange::new(lookback, count)
 }
+
+#[inline(always)]
+fn rolling_single_extreme_index_append<const MINIMUM: bool, const RESERVED_PUSH: bool>(
+    real: &[Float],
+    period: usize,
+    lookback: usize,
+    count: usize,
+    output: &mut [usize],
+    queue: &mut Vec<usize>,
+) -> OutputRange {
+    queue.clear();
+    if count == 0 {
+        return OutputRange::empty();
+    }
+
+    let mut head = 0usize;
+    for idx in 0..real.len() {
+        if idx >= period {
+            let expired_through = idx - period;
+            while head < queue.len() && queue[head] <= expired_through {
+                head += 1;
+            }
+        }
+
+        while queue.len() > head {
+            let last_idx = queue[queue.len() - 1];
+            let is_better = if MINIMUM {
+                real[idx] < real[last_idx]
+            } else {
+                real[idx] > real[last_idx]
+            };
+            if is_better {
+                queue.pop();
+            } else {
+                break;
+            }
+        }
+        if RESERVED_PUSH {
+            // SAFETY: prepared queues have source-capacity headroom.
+            unsafe { push_reserved_index(queue, idx) };
+        } else {
+            queue.push(idx);
+        }
+
+        if idx + 1 >= period {
+            output[idx + 1 - period] = queue[head];
+        }
+    }
+
+    OutputRange::new(lookback, count)
+}
+
+macro_rules! define_single_index_execution {
+    (
+        $config:ident,
+        $runner:ident,
+        $stream:ident,
+        $minimum:literal,
+        $label:literal,
+        $description:literal
+    ) => {
+        #[doc = concat!("Immutable ", $description, " Indicator Configuration.")]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct $config {
+            period: usize,
+        }
+
+        impl $config {
+            /// Creates a configuration for `timeperiod` observations.
+            pub fn new(timeperiod: usize) -> Result<Self> {
+                period_lookback("timeperiod", timeperiod)?;
+                Ok(Self { period: timeperiod })
+            }
+
+            /// Returns the configured Period.
+            #[inline]
+            pub const fn period(&self) -> usize {
+                self.period
+            }
+        }
+
+        impl crate::traits::sealed::Sealed for $config {}
+
+        impl IndicatorConfig for $config {
+            type Input<'a> = &'a [Float];
+            type Output = Vec<usize>;
+            type OutputMut<'a> = &'a mut [usize];
+            type BatchRunner = $runner;
+            type Stream = $stream;
+
+            #[inline]
+            fn lookback(&self) -> usize {
+                self.period - 1
+            }
+
+            fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
+                let (lookback, count) = validate_window(input, self.period)?;
+                let mut values = vec![0; count];
+                let mut queue = Vec::with_capacity(input.len());
+                let range = rolling_single_extreme_index_append::<$minimum, false>(
+                    input,
+                    self.period,
+                    lookback,
+                    count,
+                    &mut values,
+                    &mut queue,
+                );
+                CompactOutput::new(input.len(), range, values)
+            }
+
+            #[doc = concat!(
+                                "Computes into caller-owned Compact Output using one input-length ",
+                                "index queue as algorithm scratch. Use [`",
+                                stringify!($runner),
+                                "`] to retain that queue across calls."
+                            )]
+            fn compute_into<'a>(
+                &self,
+                input: Self::Input<'a>,
+                output: Self::OutputMut<'a>,
+            ) -> Result<OutputRange> {
+                let (lookback, count) = validate_window(input, self.period)?;
+                validate_output_len($label, output.len(), count)?;
+                let mut queue = Vec::with_capacity(input.len());
+                Ok(rolling_single_extreme_index_append::<$minimum, false>(
+                    input,
+                    self.period,
+                    lookback,
+                    count,
+                    output,
+                    &mut queue,
+                ))
+            }
+
+            fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
+                Ok($runner {
+                    config: *self,
+                    max_input_len,
+                    queue: Vec::with_capacity(max_input_len),
+                })
+            }
+
+            fn stream(&self) -> Result<Self::Stream> {
+                $stream::new(self.period)
+            }
+        }
+
+        #[doc = concat!("Prepared Batch Runner for ", $description, ".")]
+        #[derive(Debug)]
+        pub struct $runner {
+            config: $config,
+            max_input_len: usize,
+            queue: Vec<usize>,
+        }
+
+        impl crate::traits::sealed::Sealed for $runner {}
+
+        impl PreparedBatchRunner<$config> for $runner {
+            #[inline]
+            fn max_input_len(&self) -> usize {
+                self.max_input_len
+            }
+
+            fn compute_into<'a>(
+                &mut self,
+                input: <$config as IndicatorConfig>::Input<'a>,
+                output: <$config as IndicatorConfig>::OutputMut<'a>,
+            ) -> Result<OutputRange>
+            where
+                $config: 'a,
+            {
+                if input.len() > self.max_input_len {
+                    return Err(TalibError::prepared_capacity_exceeded(
+                        self.max_input_len,
+                        input.len(),
+                    ));
+                }
+                let (lookback, count) = validate_window(input, self.config.period)?;
+                validate_output_len($label, output.len(), count)?;
+                Ok(rolling_single_extreme_index_append::<$minimum, true>(
+                    input,
+                    self.config.period,
+                    lookback,
+                    count,
+                    output,
+                    &mut self.queue,
+                ))
+            }
+        }
+
+        #[doc = concat!(
+                            "Independent Streaming Computation state for ",
+                            $description,
+                            "."
+                        )]
+        #[derive(Debug, Clone)]
+        pub struct $stream {
+            period: usize,
+            buffer: Vec<Float>,
+            indexes: Vec<usize>,
+            index: usize,
+            count: usize,
+            seen: usize,
+        }
+
+        impl $stream {
+            fn new(period: usize) -> Result<Self> {
+                period_lookback("timeperiod", period)?;
+                Ok(Self {
+                    period,
+                    buffer: vec![0.0 as Float; period],
+                    indexes: vec![0; period],
+                    index: 0,
+                    count: 0,
+                    seen: 0,
+                })
+            }
+
+            #[inline]
+            const fn period(&self) -> usize {
+                self.period
+            }
+
+            fn next_mapped<T, F>(
+                &mut self,
+                input: Float,
+                max_position: usize,
+                map_output: F,
+            ) -> Result<Option<T>>
+            where
+                F: FnOnce(usize) -> Result<T>,
+            {
+                validate_finite_slice("input", &[input])?;
+                if self.seen > max_position {
+                    return Err(TalibError::computation_error(format!(
+                        "{} stream position {} exceeds supported maximum {}",
+                        $label, self.seen, max_position
+                    )));
+                }
+                let next_seen = self.seen.checked_add(1).ok_or_else(|| {
+                    TalibError::computation_error(concat!($label, " stream position overflow"))
+                })?;
+                let next_count = (self.count + 1).min(self.period);
+                let output = if next_count < self.period {
+                    None
+                } else {
+                    let index = select_pending_stream_index(
+                        &self.buffer,
+                        &self.indexes,
+                        next_count,
+                        self.index,
+                        input,
+                        self.seen,
+                        |candidate, current| {
+                            if $minimum {
+                                candidate < current
+                            } else {
+                                candidate > current
+                            }
+                        },
+                    );
+                    Some(map_output(index)?)
+                };
+
+                self.buffer[self.index] = input;
+                self.indexes[self.index] = self.seen;
+                self.seen = next_seen;
+                self.count = next_count;
+                self.index = (self.index + 1) % self.period;
+                Ok(output)
+            }
+        }
+
+        impl crate::traits::sealed::Sealed for $stream {}
+
+        impl StreamingComputation<$config> for $stream {
+            type Tick = Float;
+            type TickOutput = usize;
+
+            #[inline]
+            fn next(&mut self, input: Float) -> Result<Option<usize>> {
+                self.next_mapped(input, usize::MAX, Ok)
+            }
+
+            fn reset(&mut self) {
+                self.buffer.fill(0.0 as Float);
+                self.indexes.fill(0);
+                self.index = 0;
+                self.count = 0;
+                self.seen = 0;
+            }
+        }
+    };
+}
+
+define_single_index_execution!(
+    MININDEXConfig,
+    MININDEXBatchRunner,
+    MININDEXStream,
+    true,
+    "MININDEX",
+    "rolling minimum absolute-index"
+);
+define_single_index_execution!(
+    MAXINDEXConfig,
+    MAXINDEXBatchRunner,
+    MAXINDEXStream,
+    false,
+    "MAXINDEX",
+    "rolling maximum absolute-index"
+);
 
 /// Immutable rolling minimum/maximum value Indicator Configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -899,23 +1237,6 @@ pub struct MINMAXINDEXStreamValue {
     pub max_idx: usize,
 }
 
-fn select_stream_index<F>(values: &[Float], indexes: &[usize], mut is_better: F) -> i32
-where
-    F: FnMut(Float, Float) -> bool,
-{
-    let mut best_value = values[0];
-    let mut best_index = indexes[0];
-
-    for (&value, &index) in values.iter().zip(indexes.iter()).skip(1) {
-        if is_better(value, best_value) || (value == best_value && index < best_index) {
-            best_value = value;
-            best_index = index;
-        }
-    }
-
-    best_index as i32
-}
-
 fn select_pending_stream_index<F>(
     values: &[Float],
     indexes: &[usize],
@@ -1072,50 +1393,38 @@ impl StreamingComputation<MINMAXINDEXConfig> for MINMAXINDEXStream {
     }
 }
 
-macro_rules! define_index_struct {
-    ($name:ident, $vec_name:ident, $is_better:expr) => {
-        #[doc = concat!(stringify!($name), " struct surface.")]
+macro_rules! define_index_adapter {
+    ($name:ident, $vec_name:ident, $config:ident, $stream:ident) => {
+        #[doc = concat!("Legacy ", stringify!($name), " indicator.")]
         #[derive(Debug, Clone)]
         pub struct $name {
-            period: usize,
-            buffer: Vec<Float>,
-            indexes: Vec<usize>,
-            index: usize,
-            count: usize,
-            seen: usize,
+            stream: $stream,
         }
 
         impl $name {
             #[doc = concat!("Creates a ", stringify!($name), " calculator.")]
             pub fn new(timeperiod: usize) -> Result<Self> {
-                period_lookback("timeperiod", timeperiod)?;
-                let mut buffer = Vec::new();
-                buffer.resize(timeperiod, 0.0 as Float);
-                let mut indexes = Vec::new();
-                indexes.resize(timeperiod, 0);
-                Ok(Self {
-                    period: timeperiod,
-                    buffer,
-                    indexes,
-                    index: 0,
-                    count: 0,
-                    seen: 0,
-                })
+                let config = $config::new(timeperiod)?;
+                let stream = IndicatorConfig::stream(&config)?;
+                Ok(Self { stream })
             }
 
-            /// Returns the configured period.
+            /// Returns the configured Period.
+            #[inline]
             pub const fn period(&self) -> usize {
-                self.period
+                self.stream.period()
             }
 
             /// Computes compact outputs.
+            #[inline]
             pub fn compute(&self, real: &[Float], out_integer: &mut [i32]) -> Result<OutputRange> {
-                $name(real, self.period, out_integer)
+                $name(real, self.period(), out_integer)
             }
 
             /// Computes full-length outputs.
+            #[inline]
             pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<i32>> {
-                $vec_name(real, self.period)
+                $vec_name(real, self.period())
             }
         }
 
@@ -1124,20 +1433,23 @@ macro_rules! define_index_struct {
             type OutputMut<'a> = &'a mut [i32];
             type OutputOwned = Vec<i32>;
 
+            #[inline]
             fn lookback(&self) -> usize {
-                self.period - 1
+                self.period() - 1
             }
 
+            #[inline]
             fn compute<'a>(
                 &self,
                 inputs: Self::Input<'a>,
                 outputs: Self::OutputMut<'a>,
             ) -> Result<OutputRange> {
-                $name(inputs, self.period, outputs)
+                $name(inputs, self.period(), outputs)
             }
 
+            #[inline]
             fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-                $vec_name(inputs, self.period)
+                $vec_name(inputs, self.period())
             }
         }
 
@@ -1145,56 +1457,30 @@ macro_rules! define_index_struct {
             type Tick = Float;
             type TickOutput = i32;
 
+            #[inline]
             fn next(&mut self, input: Float) -> Result<Option<i32>> {
-                validate_finite_slice("input", &[input])?;
-
-                self.buffer[self.index] = input;
-                self.indexes[self.index] = self.seen;
-                self.seen = self.seen.saturating_add(1);
-                if self.count < self.period {
-                    self.count += 1;
-                }
-                self.index = (self.index + 1) % self.period;
-
-                if self.count < self.period {
-                    return Ok(None);
-                }
-
-                let is_better = $is_better;
-                Ok(Some(select_stream_index(
-                    &self.buffer[..self.count],
-                    &self.indexes[..self.count],
-                    is_better,
-                )))
+                self.stream.next_mapped(input, i32::MAX as usize, |index| {
+                    i32::try_from(index).map_err(|_| {
+                        TalibError::computation_error(format!(
+                            "{} stream index {index} does not fit legacy i32 output",
+                            stringify!($name)
+                        ))
+                    })
+                })
             }
         }
 
         impl Resettable for $name {
+            #[inline]
             fn reset(&mut self) {
-                for value in &mut self.buffer {
-                    *value = 0.0 as Float;
-                }
-                for index in &mut self.indexes {
-                    *index = 0;
-                }
-                self.index = 0;
-                self.count = 0;
-                self.seen = 0;
+                StreamingComputation::<$config>::reset(&mut self.stream);
             }
         }
     };
 }
 
-define_index_struct!(
-    MININDEX,
-    MININDEX_vec,
-    |candidate: Float, current: Float| candidate < current
-);
-define_index_struct!(
-    MAXINDEX,
-    MAXINDEX_vec,
-    |candidate: Float, current: Float| candidate > current
-);
+define_index_adapter!(MININDEX, MININDEX_vec, MININDEXConfig, MININDEXStream);
+define_index_adapter!(MAXINDEX, MAXINDEX_vec, MAXINDEXConfig, MAXINDEXStream);
 
 /// Legacy MINMAX indicator.
 ///
@@ -1422,6 +1708,50 @@ mod tests {
         assert!(
             StreamingComputation::<MINMAXINDEXConfig>::next(&mut native_position, 1.0,).is_err()
         );
+        assert_eq!(native_position.buffer, before_native_position.buffer);
+        assert_eq!(native_position.indexes, before_native_position.indexes);
+        assert_eq!(native_position.index, before_native_position.index);
+        assert_eq!(native_position.count, before_native_position.count);
+        assert_eq!(native_position.seen, before_native_position.seen);
+    }
+
+    #[test]
+    fn single_index_stream_conversion_and_position_failures_preserve_state() {
+        let mut conversion = MININDEX::new(2).unwrap();
+        conversion
+            .stream
+            .buffer
+            .copy_from_slice(&[0.0 as Float, 10.0]);
+        conversion.stream.indexes[0] = i32::MAX as usize + 1;
+        conversion.stream.indexes[1] = 0;
+        conversion.stream.index = 1;
+        conversion.stream.count = 2;
+        conversion.stream.seen = 1;
+        let before_conversion = conversion.stream.clone();
+        assert!(StreamingIndicator::next(&mut conversion, 20.0).is_err());
+        assert_eq!(conversion.stream.buffer, before_conversion.buffer);
+        assert_eq!(conversion.stream.indexes, before_conversion.indexes);
+        assert_eq!(conversion.stream.index, before_conversion.index);
+        assert_eq!(conversion.stream.count, before_conversion.count);
+        assert_eq!(conversion.stream.seen, before_conversion.seen);
+
+        let mut legacy_position = MAXINDEX::new(1).unwrap();
+        legacy_position.stream.seen = i32::MAX as usize + 1;
+        let before_legacy_position = legacy_position.stream.clone();
+        assert!(StreamingIndicator::next(&mut legacy_position, 1.0).is_err());
+        assert_eq!(legacy_position.stream.buffer, before_legacy_position.buffer);
+        assert_eq!(
+            legacy_position.stream.indexes,
+            before_legacy_position.indexes
+        );
+        assert_eq!(legacy_position.stream.index, before_legacy_position.index);
+        assert_eq!(legacy_position.stream.count, before_legacy_position.count);
+        assert_eq!(legacy_position.stream.seen, before_legacy_position.seen);
+
+        let mut native_position = MAXINDEXStream::new(1).unwrap();
+        native_position.seen = usize::MAX;
+        let before_native_position = native_position.clone();
+        assert!(StreamingComputation::<MAXINDEXConfig>::next(&mut native_position, 1.0).is_err());
         assert_eq!(native_position.buffer, before_native_position.buffer);
         assert_eq!(native_position.indexes, before_native_position.indexes);
         assert_eq!(native_position.index, before_native_position.index);

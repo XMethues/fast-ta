@@ -1,9 +1,9 @@
 //! Indicator execution latency and throughput baselines.
 //!
 //! Historical issue #2 benchmark IDs remain unchanged for longitudinal
-//! comparison. Issue #3 adds SMA owned and caller-owned Compact Output,
-//! Prepared Batch Runner, and independent Streaming Computation workloads
-//! through the public traits.
+//! comparison. Migration workloads add owned and caller-owned Compact Output,
+//! Prepared Batch Runner, repeated-series, and independent Streaming
+//! Computation paths through the public traits.
 
 mod support;
 
@@ -15,8 +15,9 @@ use support::{
 };
 use ta_core::{
     math_operators::{
-        MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXOutputMut, MINMAXINDEXValuesMut,
-        MINMAXOutputMut, MINMAXValuesMut, MINMAX, MINMAXINDEX,
+        MAXConfig, MAXINDEXConfig, MINConfig, MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig,
+        MINMAXINDEXOutputMut, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MAX,
+        MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
     overlap::{SMAConfig, SMA},
     price_transform::{AVGPRICEInput, AVGPRICE},
@@ -1388,6 +1389,510 @@ fn bench_minmaxindex_repeated_and_streaming(c: &mut Criterion) {
     group.finish();
 }
 
+fn single_extrema_sweep_outputs<T: Copy>(initial: T) -> Vec<Vec<T>> {
+    SWEEP_PERIODS
+        .iter()
+        .map(|&period| vec![initial; output_len(REPEATED_SERIES_LEN, period)])
+        .collect()
+}
+
+fn single_extrema_worker_outputs<T: Copy>(initial: T) -> Vec<Vec<T>> {
+    (0..WORKERS)
+        .map(|_| vec![initial; output_len(REPEATED_SERIES_LEN, PERIOD)])
+        .collect()
+}
+
+macro_rules! define_single_extrema_workloads {
+    (
+        $name:ident,
+        $group_name:literal,
+        $indicator:ident,
+        $config:ident,
+        $current_type:ty,
+        $current_initial:expr,
+        $config_type:ty,
+        $config_initial:expr
+    ) => {
+        fn $name(c: &mut Criterion) {
+            let mut group = c.benchmark_group($group_name);
+
+            group.throughput(Throughput::Elements(
+                (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("universe/current_caller_compact", |b| {
+                let universe = universe_fixtures();
+                let indicator = $indicator::new(PERIOD).expect("valid period");
+                let mut output: Vec<$current_type> =
+                    vec![$current_initial; output_len(REPEATED_SERIES_LEN, PERIOD)];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = Indicator::compute(
+                            black_box(&indicator),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!(
+                            "valid current ",
+                            stringify!($indicator),
+                            " Universe"
+                        ));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("universe/config_caller_compact", |b| {
+                let universe = universe_fixtures();
+                let config = $config::new(PERIOD).expect("valid period");
+                let mut output: Vec<$config_type> =
+                    vec![$config_initial; output_len(REPEATED_SERIES_LEN, PERIOD)];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(&config),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!(
+                            "valid configured ",
+                            stringify!($indicator),
+                            " Universe"
+                        ));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("universe/prepared_runner", |b| {
+                let universe = universe_fixtures();
+                let config = $config::new(PERIOD).expect("valid period");
+                let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                    .expect("valid prepared capacity");
+                let mut output: Vec<$config_type> =
+                    vec![$config_initial; output_len(REPEATED_SERIES_LEN, PERIOD)];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(&mut runner),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!(
+                            "valid prepared ",
+                            stringify!($indicator),
+                            " Universe"
+                        ));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements(
+                (SWEEP_PERIODS.len() * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("parameter_sweep/current_caller_compact", |b| {
+                let input = series_fixture(REPEATED_SERIES_LEN, 0);
+                let indicators = SWEEP_PERIODS
+                    .iter()
+                    .map(|&period| $indicator::new(period).expect("valid sweep period"))
+                    .collect::<Vec<_>>();
+                let mut outputs = single_extrema_sweep_outputs::<$current_type>($current_initial);
+                b.iter(|| {
+                    for (indicator, output) in indicators.iter().zip(outputs.iter_mut()) {
+                        let range = Indicator::compute(
+                            black_box(indicator),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!(
+                            "valid current ",
+                            stringify!($indicator),
+                            " parameter sweep"
+                        ));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("parameter_sweep/config_caller_compact", |b| {
+                let input = series_fixture(REPEATED_SERIES_LEN, 0);
+                let configs = SWEEP_PERIODS
+                    .iter()
+                    .map(|&period| $config::new(period).expect("valid sweep period"))
+                    .collect::<Vec<_>>();
+                let mut outputs = single_extrema_sweep_outputs::<$config_type>($config_initial);
+                b.iter(|| {
+                    for (config, output) in configs.iter().zip(outputs.iter_mut()) {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(config),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!(
+                            "valid configured ",
+                            stringify!($indicator),
+                            " parameter sweep"
+                        ));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("parameter_sweep/prepared_runners", |b| {
+                let input = series_fixture(REPEATED_SERIES_LEN, 0);
+                let configs = SWEEP_PERIODS
+                    .iter()
+                    .map(|&period| $config::new(period).expect("valid sweep period"))
+                    .collect::<Vec<_>>();
+                let mut runners = configs
+                    .iter()
+                    .map(|config| {
+                        IndicatorConfig::prepare_batch(config, REPEATED_SERIES_LEN)
+                            .expect("valid prepared capacity")
+                    })
+                    .collect::<Vec<_>>();
+                let mut outputs = single_extrema_sweep_outputs::<$config_type>($config_initial);
+                b.iter(|| {
+                    for (runner, output) in runners.iter_mut().zip(outputs.iter_mut()) {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(runner),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!(
+                            "valid prepared ",
+                            stringify!($indicator),
+                            " parameter sweep"
+                        ));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+            group.bench_function("per_worker/current_instances", |b| {
+                let indicators = (0..WORKERS)
+                    .map(|_| $indicator::new(PERIOD).expect("valid period"))
+                    .collect::<Vec<_>>();
+                let inputs = worker_fixtures();
+                let mut outputs = single_extrema_worker_outputs::<$current_type>($current_initial);
+                b.iter(|| {
+                    for ((indicator, input), output) in
+                        indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
+                    {
+                        let range = Indicator::compute(
+                            black_box(indicator),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!(
+                            "valid current ",
+                            stringify!($indicator),
+                            " per worker"
+                        ));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("per_worker/prepared_runners", |b| {
+                let config = $config::new(PERIOD).expect("valid period");
+                let mut runners = (0..WORKERS)
+                    .map(|_| {
+                        IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                            .expect("valid prepared capacity")
+                    })
+                    .collect::<Vec<_>>();
+                let inputs = worker_fixtures();
+                let mut outputs = single_extrema_worker_outputs::<$config_type>($config_initial);
+                b.iter(|| {
+                    for ((runner, input), output) in runners
+                        .iter_mut()
+                        .zip(inputs.iter())
+                        .zip(outputs.iter_mut())
+                    {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(runner),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!(
+                            "valid prepared ",
+                            stringify!($indicator),
+                            " per worker"
+                        ));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            let inputs = stream_inputs();
+            group.throughput(Throughput::Elements(
+                (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("streaming/legacy_instances", |b| {
+                b.iter_batched_ref(
+                    || {
+                        (0..STREAM_INSTRUMENTS)
+                            .map(|_| $indicator::new(PERIOD).expect("valid period"))
+                            .collect::<Vec<_>>()
+                    },
+                    |streams| {
+                        for_each_stream_sample!(streams, &inputs, |stream, input| {
+                            let output =
+                                StreamingIndicator::next(black_box(stream), black_box(input))
+                                    .expect(concat!(
+                                        "valid legacy ",
+                                        stringify!($indicator),
+                                        " stream"
+                                    ));
+                            black_box(output);
+                        });
+                    },
+                    BatchSize::LargeInput,
+                );
+            });
+            let config = $config::new(PERIOD).expect("valid period");
+            group.bench_function("streaming/config_streams", |b| {
+                b.iter_batched_ref(
+                    || {
+                        (0..STREAM_INSTRUMENTS)
+                            .map(|_| IndicatorConfig::stream(&config).expect("valid period"))
+                            .collect::<Vec<_>>()
+                    },
+                    |streams| {
+                        for_each_stream_sample!(streams, &inputs, |stream, input| {
+                            let output = StreamingComputation::<$config>::next(
+                                black_box(stream),
+                                black_box(input),
+                            )
+                            .expect(concat!(
+                                "valid configured ",
+                                stringify!($indicator),
+                                " stream"
+                            ));
+                            black_box(output);
+                        });
+                    },
+                    BatchSize::LargeInput,
+                );
+            });
+
+            group.finish();
+        }
+    };
+}
+
+define_single_extrema_workloads!(
+    bench_min_repeated_and_streaming,
+    "indicator_execution/expanded/single_extrema_workloads/MIN",
+    MIN,
+    MINConfig,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_extrema_workloads!(
+    bench_max_repeated_and_streaming,
+    "indicator_execution/expanded/single_extrema_workloads/MAX",
+    MAX,
+    MAXConfig,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_extrema_workloads!(
+    bench_minindex_repeated_and_streaming,
+    "indicator_execution/expanded/single_extrema_workloads/MININDEX",
+    MININDEX,
+    MININDEXConfig,
+    i32,
+    0_i32,
+    usize,
+    0_usize
+);
+define_single_extrema_workloads!(
+    bench_maxindex_repeated_and_streaming,
+    "indicator_execution/expanded/single_extrema_workloads/MAXINDEX",
+    MAXINDEX,
+    MAXINDEXConfig,
+    i32,
+    0_i32,
+    usize,
+    0_usize
+);
+
+macro_rules! define_single_extrema_benchmark {
+    (
+        $name:ident,
+        $group_name:literal,
+        $indicator:ident,
+        $config:ident,
+        $current_type:ty,
+        $current_initial:expr,
+        $config_type:ty,
+        $config_initial:expr
+    ) => {
+        fn $name(c: &mut Criterion) {
+            let mut group = c.benchmark_group($group_name);
+            for (case_index, &(size, period)) in EXTREMA_MATRIX.iter().enumerate() {
+                group.throughput(Throughput::Elements(size as u64));
+                let parameter = format!("n={size}/period={period}");
+                for path in rotated_extrema_paths(case_index) {
+                    match path {
+                        ExtremaPath::Current => group.bench_with_input(
+                            BenchmarkId::new("current_caller_compact", &parameter),
+                            &(size, period),
+                            |b, &(size, period)| {
+                                let input = series_fixture(size, 0);
+                                let indicator =
+                                    $indicator::new(black_box(period)).expect("valid period");
+                                let mut output: Vec<$current_type> =
+                                    vec![$current_initial; output_len(size, period)];
+                                b.iter(|| {
+                                    let range = Indicator::compute(
+                                        black_box(&indicator),
+                                        black_box(input.as_slice()),
+                                        black_box(output.as_mut_slice()),
+                                    )
+                                    .expect(concat!("valid current ", stringify!($indicator)));
+                                    black_box((range, output.as_slice()));
+                                });
+                            },
+                        ),
+                        ExtremaPath::Config => group.bench_with_input(
+                            BenchmarkId::new("config_caller_compact", &parameter),
+                            &(size, period),
+                            |b, &(size, period)| {
+                                let input = series_fixture(size, 0);
+                                let config = $config::new(black_box(period)).expect("valid period");
+                                let mut output: Vec<$config_type> =
+                                    vec![$config_initial; output_len(size, period)];
+                                b.iter(|| {
+                                    let range = IndicatorConfig::compute_into(
+                                        black_box(&config),
+                                        black_box(input.as_slice()),
+                                        black_box(output.as_mut_slice()),
+                                    )
+                                    .expect(concat!("valid configured ", stringify!($indicator)));
+                                    black_box((range, output.as_slice()));
+                                });
+                            },
+                        ),
+                        ExtremaPath::Prepared => group.bench_with_input(
+                            BenchmarkId::new("prepared_runner", &parameter),
+                            &(size, period),
+                            |b, &(size, period)| {
+                                let input = series_fixture(size, 0);
+                                let config = $config::new(black_box(period)).expect("valid period");
+                                let mut runner = IndicatorConfig::prepare_batch(&config, size)
+                                    .expect("valid prepared capacity");
+                                let mut output: Vec<$config_type> =
+                                    vec![$config_initial; output_len(size, period)];
+                                b.iter(|| {
+                                    let range = PreparedBatchRunner::<$config>::compute_into(
+                                        black_box(&mut runner),
+                                        black_box(input.as_slice()),
+                                        black_box(output.as_mut_slice()),
+                                    )
+                                    .expect(concat!("valid prepared ", stringify!($indicator)));
+                                    black_box((range, output.as_slice()));
+                                });
+                            },
+                        ),
+                        ExtremaPath::LegacyOwned => group.bench_with_input(
+                            BenchmarkId::new("legacy_owned_aligned", &parameter),
+                            &(size, period),
+                            |b, &(size, period)| {
+                                let input = series_fixture(size, 0);
+                                let indicator =
+                                    $indicator::new(black_box(period)).expect("valid period");
+                                b.iter_batched(
+                                    || (),
+                                    |_| {
+                                        let output = Indicator::compute_to_vec(
+                                            black_box(&indicator),
+                                            black_box(input.as_slice()),
+                                        )
+                                        .expect(concat!(
+                                            "valid legacy owned ",
+                                            stringify!($indicator)
+                                        ));
+                                        black_box(output)
+                                    },
+                                    BatchSize::LargeInput,
+                                );
+                            },
+                        ),
+                        ExtremaPath::ConfigOwned => group.bench_with_input(
+                            BenchmarkId::new("config_owned_compact", &parameter),
+                            &(size, period),
+                            |b, &(size, period)| {
+                                let input = series_fixture(size, 0);
+                                let config = $config::new(black_box(period)).expect("valid period");
+                                b.iter_batched(
+                                    || (),
+                                    |_| {
+                                        let output = IndicatorConfig::compute(
+                                            black_box(&config),
+                                            black_box(input.as_slice()),
+                                        )
+                                        .expect(concat!(
+                                            "valid configured owned ",
+                                            stringify!($indicator)
+                                        ));
+                                        black_box(output)
+                                    },
+                                    BatchSize::LargeInput,
+                                );
+                            },
+                        ),
+                    };
+                }
+            }
+            group.finish();
+        }
+    };
+}
+
+define_single_extrema_benchmark!(
+    bench_min_qualified_scratch_matrix,
+    "indicator_execution/expanded/single_extrema/MIN",
+    MIN,
+    MINConfig,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_extrema_benchmark!(
+    bench_max_qualified_scratch_matrix,
+    "indicator_execution/expanded/single_extrema/MAX",
+    MAX,
+    MAXConfig,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_extrema_benchmark!(
+    bench_minindex_qualified_scratch_matrix,
+    "indicator_execution/expanded/single_extrema/MININDEX",
+    MININDEX,
+    MININDEXConfig,
+    i32,
+    0_i32,
+    usize,
+    0_usize
+);
+define_single_extrema_benchmark!(
+    bench_maxindex_qualified_scratch_matrix,
+    "indicator_execution/expanded/single_extrema/MAXINDEX",
+    MAXINDEX,
+    MAXINDEXConfig,
+    i32,
+    0_i32,
+    usize,
+    0_usize
+);
+
 criterion_group!(
     benches,
     bench_sma_one_shot,
@@ -1396,6 +1901,14 @@ criterion_group!(
     bench_minmaxindex_one_shot,
     bench_minmax_qualified_scratch_matrix,
     bench_minmaxindex_qualified_scratch_matrix,
+    bench_min_qualified_scratch_matrix,
+    bench_max_qualified_scratch_matrix,
+    bench_minindex_qualified_scratch_matrix,
+    bench_maxindex_qualified_scratch_matrix,
+    bench_min_repeated_and_streaming,
+    bench_max_repeated_and_streaming,
+    bench_minindex_repeated_and_streaming,
+    bench_maxindex_repeated_and_streaming,
     bench_minmax_repeated_and_streaming,
     bench_minmaxindex_repeated_and_streaming,
     bench_universe,

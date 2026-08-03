@@ -2,14 +2,15 @@
 
 use crate::{
     compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, Float, Indicator, OutputRange, Resettable, Result,
-    StreamingIndicator,
+    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
+    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    TalibError,
 };
 
 #[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 #[cfg(feature = "std")]
-use std::vec::Vec;
+use std::{vec, vec::Vec};
 
 fn validate_rolling_window(
     name: &str,
@@ -17,19 +18,16 @@ fn validate_rolling_window(
     timeperiod: usize,
     output_len: usize,
 ) -> Result<(usize, usize)> {
-    let lookback = period_lookback("timeperiod", timeperiod)?;
-    validate_finite_slice("real", real)?;
-    let count = validate_input_len(real.len(), lookback)?;
+    let (lookback, count) = validate_rolling_input(real, timeperiod)?;
     validate_output_len(name, output_len, count)?;
     Ok((lookback, count))
 }
 
-fn min_window(window: &[Float]) -> Float {
-    window.iter().copied().fold(window[0], Float::min)
-}
-
-fn max_window(window: &[Float]) -> Float {
-    window.iter().copied().fold(window[0], Float::max)
+fn validate_rolling_input(real: &[Float], timeperiod: usize) -> Result<(usize, usize)> {
+    let lookback = period_lookback("timeperiod", timeperiod)?;
+    validate_finite_slice("real", real)?;
+    let count = validate_input_len(real.len(), lookback)?;
+    Ok((lookback, count))
 }
 
 fn rolling_extreme<F>(
@@ -149,6 +147,289 @@ pub fn MAX_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
     ))
 }
 
+#[inline(always)]
+unsafe fn push_reserved_extreme_index(queue: &mut Vec<usize>, index: usize) {
+    let len = queue.len();
+    debug_assert!(len < queue.capacity());
+    // SAFETY: callers reserve at least the source length before entering the
+    // kernel, and the queue receives at most one push per source observation.
+    unsafe {
+        queue.as_mut_ptr().add(len).write(index);
+        queue.set_len(len + 1);
+    }
+}
+
+#[inline(always)]
+fn rolling_single_extreme_append<const MINIMUM: bool, const RESERVED_PUSH: bool>(
+    real: &[Float],
+    period: usize,
+    lookback: usize,
+    count: usize,
+    output: &mut [Float],
+    queue: &mut Vec<usize>,
+) -> OutputRange {
+    queue.clear();
+    if count == 0 {
+        return OutputRange::empty();
+    }
+
+    let mut head = 0usize;
+    for idx in 0..real.len() {
+        if idx >= period {
+            let expired_through = idx - period;
+            while head < queue.len() && queue[head] <= expired_through {
+                head += 1;
+            }
+        }
+
+        while queue.len() > head {
+            let last_idx = queue[queue.len() - 1];
+            let is_better = if MINIMUM {
+                real[idx] < real[last_idx]
+            } else {
+                real[idx] > real[last_idx]
+            };
+            if is_better {
+                queue.pop();
+            } else {
+                break;
+            }
+        }
+        if RESERVED_PUSH {
+            // SAFETY: prepared queues have source-capacity headroom.
+            unsafe { push_reserved_extreme_index(queue, idx) };
+        } else {
+            queue.push(idx);
+        }
+
+        if idx + 1 >= period {
+            output[idx + 1 - period] = real[queue[head]];
+        }
+    }
+
+    OutputRange::new(lookback, count)
+}
+
+macro_rules! define_extreme_execution {
+    (
+        $config:ident,
+        $runner:ident,
+        $stream:ident,
+        $minimum:literal,
+        $label:literal,
+        $description:literal
+    ) => {
+        #[doc = concat!("Immutable ", $description, " Indicator Configuration.")]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct $config {
+            period: usize,
+        }
+
+        impl $config {
+            /// Creates a configuration for `timeperiod` observations.
+            pub fn new(timeperiod: usize) -> Result<Self> {
+                period_lookback("timeperiod", timeperiod)?;
+                Ok(Self { period: timeperiod })
+            }
+
+            /// Returns the configured Period.
+            #[inline]
+            pub const fn period(&self) -> usize {
+                self.period
+            }
+        }
+
+        impl crate::traits::sealed::Sealed for $config {}
+
+        impl IndicatorConfig for $config {
+            type Input<'a> = &'a [Float];
+            type Output = Vec<Float>;
+            type OutputMut<'a> = &'a mut [Float];
+            type BatchRunner = $runner;
+            type Stream = $stream;
+
+            #[inline]
+            fn lookback(&self) -> usize {
+                self.period - 1
+            }
+
+            fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
+                let (lookback, count) = validate_rolling_input(input, self.period)?;
+                let mut values = vec![0.0 as Float; count];
+                let mut queue = Vec::with_capacity(input.len());
+                let range = rolling_single_extreme_append::<$minimum, false>(
+                    input,
+                    self.period,
+                    lookback,
+                    count,
+                    &mut values,
+                    &mut queue,
+                );
+                CompactOutput::new(input.len(), range, values)
+            }
+
+            #[doc = concat!(
+                                "Computes into caller-owned Compact Output using one input-length ",
+                                "index queue as algorithm scratch. Use [`",
+                                stringify!($runner),
+                                "`] to retain that queue across calls."
+                            )]
+            fn compute_into<'a>(
+                &self,
+                input: Self::Input<'a>,
+                output: Self::OutputMut<'a>,
+            ) -> Result<OutputRange> {
+                let (lookback, count) =
+                    validate_rolling_window($label, input, self.period, output.len())?;
+                let mut queue = Vec::with_capacity(input.len());
+                Ok(rolling_single_extreme_append::<$minimum, false>(
+                    input,
+                    self.period,
+                    lookback,
+                    count,
+                    output,
+                    &mut queue,
+                ))
+            }
+
+            fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
+                Ok($runner {
+                    config: *self,
+                    max_input_len,
+                    queue: Vec::with_capacity(max_input_len),
+                })
+            }
+
+            fn stream(&self) -> Result<Self::Stream> {
+                $stream::new(self.period)
+            }
+        }
+
+        #[doc = concat!("Prepared Batch Runner for ", $description, ".")]
+        #[derive(Debug)]
+        pub struct $runner {
+            config: $config,
+            max_input_len: usize,
+            queue: Vec<usize>,
+        }
+
+        impl crate::traits::sealed::Sealed for $runner {}
+
+        impl PreparedBatchRunner<$config> for $runner {
+            #[inline]
+            fn max_input_len(&self) -> usize {
+                self.max_input_len
+            }
+
+            fn compute_into<'a>(
+                &mut self,
+                input: <$config as IndicatorConfig>::Input<'a>,
+                output: <$config as IndicatorConfig>::OutputMut<'a>,
+            ) -> Result<OutputRange>
+            where
+                $config: 'a,
+            {
+                if input.len() > self.max_input_len {
+                    return Err(TalibError::prepared_capacity_exceeded(
+                        self.max_input_len,
+                        input.len(),
+                    ));
+                }
+                let (lookback, count) =
+                    validate_rolling_window($label, input, self.config.period, output.len())?;
+                Ok(rolling_single_extreme_append::<$minimum, true>(
+                    input,
+                    self.config.period,
+                    lookback,
+                    count,
+                    output,
+                    &mut self.queue,
+                ))
+            }
+        }
+
+        #[doc = concat!("Independent Streaming Computation state for ", $description, ".")]
+        #[derive(Debug, Clone)]
+        pub struct $stream {
+            period: usize,
+            buffer: Vec<Float>,
+            index: usize,
+            count: usize,
+        }
+
+        impl $stream {
+            fn new(period: usize) -> Result<Self> {
+                period_lookback("timeperiod", period)?;
+                Ok(Self {
+                    period,
+                    buffer: vec![0.0 as Float; period],
+                    index: 0,
+                    count: 0,
+                })
+            }
+
+            #[inline]
+            const fn period(&self) -> usize {
+                self.period
+            }
+        }
+
+        impl crate::traits::sealed::Sealed for $stream {}
+
+        impl StreamingComputation<$config> for $stream {
+            type Tick = Float;
+            type TickOutput = Float;
+
+            fn next(&mut self, input: Float) -> Result<Option<Float>> {
+                validate_finite_slice("input", &[input])?;
+                self.buffer[self.index] = input;
+                if self.count < self.period {
+                    self.count += 1;
+                }
+                self.index = (self.index + 1) % self.period;
+                if self.count < self.period {
+                    return Ok(None);
+                }
+
+                let mut extreme = self.buffer[0];
+                for &value in &self.buffer[1..self.count] {
+                    if if $minimum {
+                        value < extreme
+                    } else {
+                        value > extreme
+                    } {
+                        extreme = value;
+                    }
+                }
+                Ok(Some(extreme))
+            }
+
+            fn reset(&mut self) {
+                self.buffer.fill(0.0 as Float);
+                self.index = 0;
+                self.count = 0;
+            }
+        }
+    };
+}
+
+define_extreme_execution!(
+    MINConfig,
+    MINBatchRunner,
+    MINStream,
+    true,
+    "MIN",
+    "rolling minimum"
+);
+define_extreme_execution!(
+    MAXConfig,
+    MAXBatchRunner,
+    MAXStream,
+    false,
+    "MAX",
+    "rolling maximum"
+);
+
 macro_rules! define_rolling_struct {
     ($name:ident, $vec_name:ident, $aggregate:expr) => {
         #[doc = concat!(stringify!($name), " struct surface.")]
@@ -245,9 +526,88 @@ macro_rules! define_rolling_struct {
     };
 }
 
+macro_rules! define_extreme_adapter {
+    ($name:ident, $vec_name:ident, $config:ident, $stream:ident) => {
+        #[doc = concat!("Legacy ", stringify!($name), " indicator.")]
+        #[derive(Debug, Clone)]
+        pub struct $name {
+            stream: $stream,
+        }
+
+        impl $name {
+            #[doc = concat!("Creates a ", stringify!($name), " calculator.")]
+            pub fn new(timeperiod: usize) -> Result<Self> {
+                let config = $config::new(timeperiod)?;
+                let stream = IndicatorConfig::stream(&config)?;
+                Ok(Self { stream })
+            }
+
+            /// Returns the configured Period.
+            #[inline]
+            pub const fn period(&self) -> usize {
+                self.stream.period()
+            }
+
+            /// Computes compact outputs.
+            #[inline]
+            pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
+                $name(real, self.period(), out_real)
+            }
+
+            /// Computes full-length outputs.
+            #[inline]
+            pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
+                $vec_name(real, self.period())
+            }
+        }
+
+        impl Indicator for $name {
+            type Input<'a> = &'a [Float];
+            type OutputMut<'a> = &'a mut [Float];
+            type OutputOwned = Vec<Float>;
+
+            #[inline]
+            fn lookback(&self) -> usize {
+                self.period() - 1
+            }
+
+            #[inline]
+            fn compute<'a>(
+                &self,
+                inputs: Self::Input<'a>,
+                outputs: Self::OutputMut<'a>,
+            ) -> Result<OutputRange> {
+                $name(inputs, self.period(), outputs)
+            }
+
+            #[inline]
+            fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
+                $vec_name(inputs, self.period())
+            }
+        }
+
+        impl StreamingIndicator for $name {
+            type Tick = Float;
+            type TickOutput = Float;
+
+            #[inline]
+            fn next(&mut self, input: Float) -> Result<Option<Float>> {
+                StreamingComputation::<$config>::next(&mut self.stream, input)
+            }
+        }
+
+        impl Resettable for $name {
+            #[inline]
+            fn reset(&mut self) {
+                StreamingComputation::<$config>::reset(&mut self.stream);
+            }
+        }
+    };
+}
+
 define_rolling_struct!(SUM, SUM_vec, |window: &[Float]| window
     .iter()
     .copied()
     .sum());
-define_rolling_struct!(MIN, MIN_vec, min_window);
-define_rolling_struct!(MAX, MAX_vec, max_window);
+define_extreme_adapter!(MIN, MIN_vec, MINConfig, MINStream);
+define_extreme_adapter!(MAX, MAX_vec, MAXConfig, MAXStream);
