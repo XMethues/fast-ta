@@ -822,3 +822,67 @@ Universe and parameter-sweep rows report current / configuration / prepared. Per
 ### Gate conclusion
 
 All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path by 6.24%–27.24%. These are host-local default-`f64` qualification results, not portable speedup claims.
+
+## Issue #11 math-transform qualification
+
+Issue #11 migrates all 15 macro-generated unary math transforms (`ACOS`, `ASIN`, `ATAN`, `CEIL`, `COS`, `COSH`, `EXP`, `FLOOR`, `LN`, `LOG10`, `SIN`, `SINH`, `SQRT`, `TAN`, and `TANH`) through one generated Rust-first execution surface. Each parameter-free configuration provides owned and caller-owned Compact Output, a reusable Prepared Batch Runner, and an independent Streaming Computation while the uppercase compatibility functions and structs retain their existing signatures and padded-owned behavior. Dense input series must remain finite. Finite values outside an operation's conventional real domain are still passed to the underlying IEEE-754 operation so operation-produced `NaN` and infinity results remain valid values.
+
+The full benchmark command is `cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/math_transform`. The matrix uses observations 64/4,096/65,536 and also records Universe (128 × 4,096), per-worker (4 × 4,096), and streaming (16 × 4,096) workloads. Prepared paths were refreshed with `cargo bench -p ta-benchmarks --bench execution_baselines -- 'math_transform.*/prepared_runner'` after the final zero-overhead runner dispatch was selected. Values below are Criterion mean point estimates from the 100-sample qualification runs.
+
+### Allocation evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports the same result for every transform:
+
+| Indicators | Configuration | Caller-owned | Owned Compact Output | Prepared setup / first / repeated / oversize | Stream setup / ticks |
+|---|---:|---:|---:|---:|---:|
+| All 15 unary transforms | 0 / 0 B | 0 / 0 B | 1 / 32,768 B | 0 / 0 B in every phase | 0 / 0 B |
+
+Entries are allocation operations / gross allocated bytes. The owned byte count is exactly `4,096 × size_of::<Float>()`; caller-owned computation, prepared construction, prepared reuse and rejection, stream construction, and streaming ticks allocate nothing.
+
+### One-shot timing evidence
+
+Caller-owned point estimates show current / configuration / prepared for 4,096 observations. Delta ranges include all three measured observation counts. Owned point estimates show legacy Aligned Output / configuration Compact Output for 4,096 observations.
+
+| Indicator | 4,096 caller-owned point estimates | Config / current range | Prepared / current range | 4,096 owned point estimates | Compact / legacy range |
+|---|---:|---:|---:|---:|---:|
+| ACOS | 15.449 µs / 15.482 µs / 15.448 µs | -0.18% to +0.44% | -0.07% to +0.06% | 17.193 µs / 16.119 µs | -16.51% to -6.25% |
+| ASIN | 17.435 µs / 17.452 µs / 17.443 µs | -0.19% to +0.14% | +0.01% to +0.04% | 18.892 µs / 17.908 µs | -14.01% to -5.21% |
+| ATAN | 15.734 µs / 15.797 µs / 15.835 µs | +0.35% to +1.95% | +0.64% to +1.16% | 17.167 µs / 16.180 µs | -17.04% to -5.75% |
+| CEIL | 2.269 µs / 2.136 µs / 2.110 µs | -6.21% to -3.54% | -7.04% to -0.01% | 3.601 µs / 2.358 µs | -49.86% to -34.52% |
+| COS | 15.696 µs / 15.715 µs / 15.689 µs | -3.67% to +0.15% | -3.52% to -0.04% | 17.266 µs / 16.177 µs | -20.33% to -6.31% |
+| COSH | 13.225 µs / 13.215 µs / 13.229 µs | -0.17% to +0.06% | -0.29% to +0.03% | 14.743 µs / 13.717 µs | -18.75% to -6.96% |
+| EXP | 10.441 µs / 10.594 µs / 10.511 µs | +0.32% to +1.47% | +0.40% to +1.02% | 11.747 µs / 10.948 µs | -21.22% to -6.80% |
+| FLOOR | 2.323 µs / 2.168 µs / 2.168 µs | -6.70% to -2.11% | -6.76% to -0.42% | 3.593 µs / 2.365 µs | -49.63% to -34.18% |
+| LN | 12.144 µs / 11.990 µs / 12.270 µs | -1.46% to +0.86% | +0.60% to +2.86% | 13.385 µs / 12.573 µs | -21.46% to -6.07% |
+| LOG10 | 13.225 µs / 13.503 µs / 13.227 µs | +1.39% to +2.10% | -0.10% to +0.44% | 14.732 µs / 13.706 µs | -19.12% to -6.97% |
+| SIN | 15.583 µs / 15.564 µs / 15.556 µs | -0.73% to +0.10% | -0.63% to -0.17% | 17.005 µs / 16.098 µs | -16.88% to -5.34% |
+| SINH | 13.313 µs / 13.300 µs / 13.307 µs | -0.62% to +0.28% | -0.56% to -0.05% | 14.868 µs / 14.574 µs | -12.93% to -1.97% |
+| SQRT | 3.109 µs / 2.827 µs / 2.853 µs | -9.04% to -0.28% | -8.22% to +0.35% | 4.347 µs / 3.247 µs | -47.68% to -25.31% |
+| TAN | 18.710 µs / 18.888 µs / 18.717 µs | +0.02% to +0.95% | -0.08% to +0.05% | 20.190 µs / 19.209 µs | -13.78% to -4.86% |
+| TANH | 10.244 µs / 10.245 µs / 10.237 µs | -0.02% to +0.17% | -0.57% to +0.19% | 11.850 µs / 10.773 µs | -21.61% to -9.08% |
+
+### Repeated and streaming evidence
+
+Universe rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured. Fixtures and caller-owned buffers are identical within each comparison; construction remains outside measured operations.
+
+| Indicator | Universe point estimates | Universe deltas | Per-worker point estimates | Prepared / current | Streaming point estimates | Configured / legacy |
+|---|---:|---:|---:|---:|---:|---:|
+| ACOS | 2.0011 ms / 2.0001 ms / 2.0339 ms | config -0.05%; prepared +1.64% | 62.278 µs / 62.847 µs | +0.91% | 237.273 µs / 236.984 µs | -0.12% |
+| ASIN | 2.2424 ms / 2.2363 ms / 2.2664 ms | config -0.27%; prepared +1.07% | 70.057 µs / 70.594 µs | +0.77% | 265.598 µs / 265.411 µs | -0.07% |
+| ATAN | 2.0481 ms / 2.0221 ms / 2.0632 ms | config -1.27%; prepared +0.74% | 62.971 µs / 64.187 µs | +1.93% | 259.667 µs / 259.525 µs | -0.05% |
+| CEIL | 252.754 µs / 255.363 µs / 252.778 µs | config +1.03%; prepared +0.01% | 8.320 µs / 7.927 µs | -4.73% | 52.424 µs / 52.307 µs | -0.22% |
+| COS | 2.0210 ms / 2.0246 ms / 2.0146 ms | config +0.18%; prepared -0.32% | 63.169 µs / 63.490 µs | +0.51% | 263.610 µs / 262.662 µs | -0.36% |
+| COSH | 1.7133 ms / 1.6971 ms / 1.7307 ms | config -0.94%; prepared +1.01% | 53.248 µs / 53.554 µs | +0.58% | 200.128 µs / 200.476 µs | +0.17% |
+| EXP | 1.3386 ms / 1.3541 ms / 1.3330 ms | config +1.16%; prepared -0.41% | 42.171 µs / 42.264 µs | +0.22% | 181.978 µs / 163.844 µs | -9.96% |
+| FLOOR | 252.842 µs / 253.304 µs / 255.070 µs | config +0.18%; prepared +0.88% | 8.298 µs / 7.895 µs | -4.87% | 52.283 µs / 51.826 µs | -0.87% |
+| LN | 1.5348 ms / 1.5358 ms / 1.5387 ms | config +0.06%; prepared +0.25% | 48.607 µs / 48.258 µs | -0.72% | 215.816 µs / 215.713 µs | -0.05% |
+| LOG10 | 1.7300 ms / 1.7288 ms / 1.6948 ms | config -0.07%; prepared -2.04% | 53.087 µs / 54.049 µs | +1.81% | 216.961 µs / 198.440 µs | -8.54% |
+| SIN | 2.0091 ms / 2.0116 ms / 2.0084 ms | config +0.12%; prepared -0.04% | 62.947 µs / 63.150 µs | +0.32% | 259.264 µs / 259.051 µs | -0.08% |
+| SINH | 1.7299 ms / 1.7106 ms / 1.7458 ms | config -1.11%; prepared +0.92% | 53.694 µs / 54.038 µs | +0.64% | 205.375 µs / 205.392 µs | +0.01% |
+| SQRT | 364.183 µs / 361.637 µs / 363.935 µs | config -0.70%; prepared -0.07% | 11.662 µs / 11.314 µs | -2.98% | 53.954 µs / 55.517 µs | +2.90% |
+| TAN | 2.4084 ms / 2.3948 ms / 2.4359 ms | config -0.56%; prepared +1.14% | 74.848 µs / 75.324 µs | +0.64% | 304.392 µs / 303.676 µs | -0.24% |
+| TANH | 1.3317 ms / 1.3182 ms / 1.3603 ms | config -1.01%; prepared +2.15% | 41.199 µs / 41.458 µs | +0.63% | 158.211 µs / 157.539 µs | -0.43% |
+
+### Gate conclusion
+
+All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, per-worker, or streaming path regressed by approximately five percent against its reference. Every owned Compact Output path improved over the legacy Aligned Output path by 1.97%–49.86%. These are host-local default-`f64` qualification results, not portable speedup claims.

@@ -23,6 +23,11 @@ use ta_core::{
         MINMAXINDEXOutputMut, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MAX,
         MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
+    math_transform::{
+        ACOSConfig, ASINConfig, ATANConfig, CEILConfig, COSConfig, COSHConfig, EXPConfig,
+        FLOORConfig, LNConfig, LOG10Config, SINConfig, SINHConfig, SQRTConfig, TANConfig,
+        TANHConfig,
+    },
     overlap::{
         DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
         WMAConfig, SMA,
@@ -1054,6 +1059,24 @@ fn profile_single_output_execution() {
     );
 }
 
+fn profile_math_transform_execution() {
+    profile_single_output_indicator!("ACOS", ACOSConfig, ACOSConfig::new(), 0, 0);
+    profile_single_output_indicator!("ASIN", ASINConfig, ASINConfig::new(), 0, 0);
+    profile_single_output_indicator!("ATAN", ATANConfig, ATANConfig::new(), 0, 0);
+    profile_single_output_indicator!("CEIL", CEILConfig, CEILConfig::new(), 0, 0);
+    profile_single_output_indicator!("COS", COSConfig, COSConfig::new(), 0, 0);
+    profile_single_output_indicator!("COSH", COSHConfig, COSHConfig::new(), 0, 0);
+    profile_single_output_indicator!("EXP", EXPConfig, EXPConfig::new(), 0, 0);
+    profile_single_output_indicator!("FLOOR", FLOORConfig, FLOORConfig::new(), 0, 0);
+    profile_single_output_indicator!("LN", LNConfig, LNConfig::new(), 0, 0);
+    profile_single_output_indicator!("LOG10", LOG10Config, LOG10Config::new(), 0, 0);
+    profile_single_output_indicator!("SIN", SINConfig, SINConfig::new(), 0, 0);
+    profile_single_output_indicator!("SINH", SINHConfig, SINHConfig::new(), 0, 0);
+    profile_single_output_indicator!("SQRT", SQRTConfig, SQRTConfig::new(), 0, 0);
+    profile_single_output_indicator!("TAN", TANConfig, TANConfig::new(), 0, 0);
+    profile_single_output_indicator!("TANH", TANHConfig, TANHConfig::new(), 0, 0);
+}
+
 macro_rules! profile_named_input_indicator {
     (
         $label:literal,
@@ -1521,6 +1544,7 @@ fn main() {
     profile_extrema_execution();
     profile_single_extrema_execution();
     profile_single_output_execution();
+    profile_math_transform_execution();
     profile_named_input_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();

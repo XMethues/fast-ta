@@ -12,6 +12,13 @@ use ta_core::{
         MINMAXINDEXStreamValue, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXStream,
         MINMAXValuesMut, MINStream, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
+    math_transform::{
+        ACOSConfig, ACOSStream, ASINConfig, ASINStream, ATANConfig, ATANStream, CEILConfig,
+        CEILStream, COSConfig, COSHConfig, COSHStream, COSStream, EXPConfig, EXPStream,
+        FLOORConfig, FLOORStream, LNConfig, LNStream, LOG10Config, LOG10Stream, SINConfig,
+        SINHConfig, SINHStream, SINStream, SQRTConfig, SQRTStream, TANConfig, TANHConfig,
+        TANHStream, TANStream,
+    },
     overlap::{
         DEMAConfig, DEMAStream, EMAConfig, EMAStream, MAConfig, MAStream, MAType, SMAConfig,
         SMAStream, T3Config, T3Stream, TEMAConfig, TEMAStream, TRIMAConfig, TRIMAStream, WMAConfig,
@@ -4389,6 +4396,124 @@ fn natr_config_preserves_normalization_period_one_and_recursive_stream_state() {
             assert_some_float_close(legacy_value, owned.values()[idx - 3]);
         }
     }
+}
+
+macro_rules! assert_math_transform_config {
+    ($config:ty, $stream:ty, $operation:expr) => {{
+        let config = <$config>::new();
+        let input = [0.25 as Float, 0.5, 0.75];
+        let expected = input.map($operation);
+
+        assert_eq!(IndicatorConfig::lookback(&config), 0);
+        assert_eq!(core::mem::size_of::<$config>(), 0);
+        assert_eq!(core::mem::size_of::<$stream>(), 0);
+
+        let owned = IndicatorConfig::compute(&config, &input).unwrap();
+        assert_eq!(owned.range(), OutputRange::new(0, input.len()));
+        assert_eq!(owned.values(), expected.as_slice());
+
+        let mut caller_output = [FLOAT_SENTINEL; 4];
+        let range = IndicatorConfig::compute_into(&config, &input, &mut caller_output).unwrap();
+        assert_eq!(range, owned.range());
+        assert_eq!(&caller_output[..input.len()], expected.as_slice());
+        assert_eq!(caller_output[input.len()], FLOAT_SENTINEL);
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, input.len()).unwrap();
+        let mut prepared_output = [FLOAT_SENTINEL; 4];
+        let range =
+            PreparedBatchRunner::<$config>::compute_into(&mut runner, &input, &mut prepared_output)
+                .unwrap();
+        assert_eq!(range, owned.range());
+        assert_eq!(&prepared_output[..input.len()], expected.as_slice());
+        assert_eq!(prepared_output[input.len()], FLOAT_SENTINEL);
+
+        let oversized = [0.1 as Float, 0.2, 0.3, 0.4];
+        let mut unchanged = [FLOAT_SENTINEL; 4];
+        assert_eq!(
+            PreparedBatchRunner::<$config>::compute_into(&mut runner, &oversized, &mut unchanged,)
+                .unwrap_err(),
+            TalibError::PreparedCapacityExceeded {
+                max_input_len: input.len(),
+                actual_input_len: oversized.len(),
+            }
+        );
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 4]);
+
+        let mut stream = IndicatorConfig::stream(&config).unwrap();
+        for (&value, &expected_value) in input.iter().zip(&expected) {
+            assert_eq!(
+                StreamingComputation::<$config>::next(&mut stream, value).unwrap(),
+                Some(expected_value)
+            );
+        }
+        StreamingComputation::<$config>::reset(&mut stream);
+        assert_eq!(
+            StreamingComputation::<$config>::next(&mut stream, input[0]).unwrap(),
+            Some(expected[0])
+        );
+    }};
+}
+
+#[test]
+fn math_transform_configs_cover_all_generated_execution_modes() {
+    assert_math_transform_config!(ACOSConfig, ACOSStream, |value: Float| value.acos());
+    assert_math_transform_config!(ASINConfig, ASINStream, |value: Float| value.asin());
+    assert_math_transform_config!(ATANConfig, ATANStream, |value: Float| value.atan());
+    assert_math_transform_config!(CEILConfig, CEILStream, |value: Float| value.ceil());
+    assert_math_transform_config!(COSConfig, COSStream, |value: Float| value.cos());
+    assert_math_transform_config!(COSHConfig, COSHStream, |value: Float| value.cosh());
+    assert_math_transform_config!(EXPConfig, EXPStream, |value: Float| value.exp());
+    assert_math_transform_config!(FLOORConfig, FLOORStream, |value: Float| value.floor());
+    assert_math_transform_config!(LNConfig, LNStream, |value: Float| value.ln());
+    assert_math_transform_config!(LOG10Config, LOG10Stream, |value: Float| value.log10());
+    assert_math_transform_config!(SINConfig, SINStream, |value: Float| value.sin());
+    assert_math_transform_config!(SINHConfig, SINHStream, |value: Float| value.sinh());
+    assert_math_transform_config!(SQRTConfig, SQRTStream, |value: Float| value.sqrt());
+    assert_math_transform_config!(TANConfig, TANStream, |value: Float| value.tan());
+    assert_math_transform_config!(TANHConfig, TANHStream, |value: Float| value.tanh());
+}
+
+#[test]
+fn math_transform_configs_preserve_ieee_domain_outputs_and_validation_order() {
+    let outside_unit = [-2.0 as Float, 2.0];
+    for values in [
+        IndicatorConfig::compute(&ACOSConfig::new(), &outside_unit).unwrap(),
+        IndicatorConfig::compute(&ASINConfig::new(), &outside_unit).unwrap(),
+    ] {
+        assert_eq!(values.range(), OutputRange::new(0, 2));
+        assert!(values.values().iter().all(|value| value.is_nan()));
+    }
+
+    let logarithms = [-1.0 as Float, 0.0];
+    for values in [
+        IndicatorConfig::compute(&LNConfig::new(), &logarithms).unwrap(),
+        IndicatorConfig::compute(&LOG10Config::new(), &logarithms).unwrap(),
+    ] {
+        assert!(values.values()[0].is_nan());
+        assert_eq!(values.values()[1], Float::NEG_INFINITY);
+    }
+
+    let square_root = IndicatorConfig::compute(&SQRTConfig::new(), &[-1.0 as Float]).unwrap();
+    assert_eq!(square_root.range(), OutputRange::new(0, 1));
+    assert!(square_root.values()[0].is_nan());
+
+    let mut no_output = [];
+    let invalid_input = [0.0 as Float, Float::NAN];
+    assert_eq!(
+        IndicatorConfig::compute_into(&SINConfig::new(), &invalid_input, &mut no_output)
+            .unwrap_err()
+            .to_string(),
+        "Invalid input: real[1] must be finite, got NaN"
+    );
+    assert_eq!(
+        IndicatorConfig::compute_into(&SINConfig::new(), &[0.0 as Float], &mut no_output)
+            .unwrap_err()
+            .to_string(),
+        "Invalid input: SIN output buffer too small: need 1, got 0"
+    );
+
+    let mut stream = IndicatorConfig::stream(&SINConfig::new()).unwrap();
+    assert!(StreamingComputation::<SINConfig>::next(&mut stream, Float::INFINITY).is_err());
 }
 
 #[test]
