@@ -1,11 +1,9 @@
-//! Current Indicator execution latency and throughput baselines for issue #2.
+//! Indicator execution latency and throughput baselines.
 //!
-//! This benchmark deliberately uses only the public traits and named borrowed
-//! views. It characterizes the legacy seam before ADR-0001 is implemented; in
-//! particular, owned results are currently legacy Aligned Output rather than
-//! target Compact Output, and no Prepared Batch Runner or input-capacity
-//! contract exists yet. The per-worker benchmark is the legacy predecessor to
-//! the target runner seam that issue #3 will implement.
+//! Historical issue #2 benchmark IDs remain unchanged for longitudinal
+//! comparison. Issue #3 adds SMA owned and caller-owned Compact Output,
+//! Prepared Batch Runner, and independent Streaming Computation workloads
+//! through the public traits.
 
 mod support;
 
@@ -17,9 +15,10 @@ use support::{
 };
 use ta_core::{
     math_operators::{MINMAXINDEXOutputMut, MINMAXOutputMut, MINMAX, MINMAXINDEX},
-    overlap::SMA,
+    overlap::{SMAConfig, SMA},
     price_transform::{AVGPRICEInput, AVGPRICE},
-    Float, Indicator, StreamingIndicator,
+    Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
+    StreamingIndicator,
 };
 
 const SIZES: &[usize] = &[64, 4_096, 65_536];
@@ -47,6 +46,48 @@ fn bench_sma_one_shot(c: &mut Criterion) {
                     .expect("valid SMA fixture");
                     black_box((range, output.as_slice()));
                 });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("caller_compact_config", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                let config = SMAConfig::new(black_box(PERIOD)).expect("valid period");
+                let mut output = vec![0.0 as Float; output_len(size, PERIOD)];
+
+                b.iter(|| {
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
+                        black_box(input.as_slice()),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid SMA fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("owned_compact_config", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                let config = SMAConfig::new(black_box(PERIOD)).expect("valid period");
+
+                b.iter_batched(
+                    || (),
+                    |_| {
+                        let output = IndicatorConfig::compute(
+                            black_box(&config),
+                            black_box(input.as_slice()),
+                        )
+                        .expect("valid SMA fixture");
+                        black_box(output)
+                    },
+                    BatchSize::LargeInput,
+                );
             },
         );
 
@@ -341,6 +382,110 @@ fn bench_per_worker_predecessor(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_prepared_universe(c: &mut Criterion) {
+    let universe = (0..UNIVERSE_INSTRUMENTS)
+        .map(|seed| series_fixture(REPEATED_SERIES_LEN, seed))
+        .collect::<Vec<_>>();
+    let config = SMAConfig::new(PERIOD).expect("valid period");
+    let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+        .expect("valid prepared capacity");
+    let mut output = vec![0.0 as Float; output_len(REPEATED_SERIES_LEN, PERIOD)];
+    let mut group = c.benchmark_group("indicator_execution/expanded/repeated");
+    group.throughput(Throughput::Elements(
+        (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+    ));
+
+    group.bench_function("universe/SMA/prepared_runner", |b| {
+        b.iter(|| {
+            for series in &universe {
+                let range = PreparedBatchRunner::<SMAConfig>::compute_into(
+                    black_box(&mut runner),
+                    black_box(series.as_slice()),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid Universe fixture");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_prepared_parameter_sweep(c: &mut Criterion) {
+    let input = series_fixture(REPEATED_SERIES_LEN, 0);
+    let configs = SWEEP_PERIODS
+        .iter()
+        .map(|&period| SMAConfig::new(period).expect("valid sweep period"))
+        .collect::<Vec<_>>();
+    let mut runners = configs
+        .iter()
+        .map(|config| {
+            IndicatorConfig::prepare_batch(config, REPEATED_SERIES_LEN)
+                .expect("valid prepared capacity")
+        })
+        .collect::<Vec<_>>();
+    let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+    let mut group = c.benchmark_group("indicator_execution/expanded/repeated");
+    group.throughput(Throughput::Elements(
+        (SWEEP_PERIODS.len() * REPEATED_SERIES_LEN) as u64,
+    ));
+
+    group.bench_function("parameter_sweep/SMA/prepared_runners", |b| {
+        b.iter(|| {
+            for runner in &mut runners {
+                let range = PreparedBatchRunner::<SMAConfig>::compute_into(
+                    black_box(runner),
+                    black_box(input.as_slice()),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid parameter-sweep fixture");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_prepared_per_worker(c: &mut Criterion) {
+    let config = SMAConfig::new(PERIOD).expect("valid period");
+    let mut runners = (0..WORKERS)
+        .map(|_| {
+            IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                .expect("valid prepared capacity")
+        })
+        .collect::<Vec<_>>();
+    let inputs = (0..WORKERS)
+        .map(|seed| series_fixture(REPEATED_SERIES_LEN, seed))
+        .collect::<Vec<_>>();
+    let mut outputs = (0..WORKERS)
+        .map(|_| vec![0.0 as Float; output_len(REPEATED_SERIES_LEN, PERIOD)])
+        .collect::<Vec<_>>();
+    let mut group = c.benchmark_group("indicator_execution/expanded/repeated");
+    group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+
+    group.bench_function("prepared_runner/per_worker", |b| {
+        b.iter(|| {
+            for ((runner, input), output) in runners
+                .iter_mut()
+                .zip(inputs.iter())
+                .zip(outputs.iter_mut())
+            {
+                let range = PreparedBatchRunner::<SMAConfig>::compute_into(
+                    black_box(runner),
+                    black_box(input.as_slice()),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid per-worker fixture");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+
+    group.finish();
+}
+
 fn bench_multi_instrument_streaming(c: &mut Criterion) {
     let instrument_inputs = (0..STREAM_INSTRUMENTS)
         .map(|seed| series_fixture(REPEATED_SERIES_LEN, seed))
@@ -379,6 +524,35 @@ fn bench_multi_instrument_streaming(c: &mut Criterion) {
     });
 
     group.finish();
+
+    let config = SMAConfig::new(PERIOD).expect("valid period");
+    let mut group = c.benchmark_group("indicator_execution/expanded/streaming");
+    group.throughput(Throughput::Elements(
+        (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+    ));
+    group.bench_function("SMA/independent_config_streams", |b| {
+        b.iter_batched_ref(
+            || {
+                (0..STREAM_INSTRUMENTS)
+                    .map(|_| IndicatorConfig::stream(&config).expect("valid period"))
+                    .collect::<Vec<_>>()
+            },
+            |streams| {
+                for tick in &inputs {
+                    for (stream, &input) in streams.iter_mut().zip(tick.iter()) {
+                        let output = StreamingComputation::<SMAConfig>::next(
+                            black_box(stream),
+                            black_box(input),
+                        )
+                        .expect("valid streaming fixture");
+                        black_box(output);
+                    }
+                }
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    group.finish();
 }
 
 criterion_group!(
@@ -390,6 +564,9 @@ criterion_group!(
     bench_universe,
     bench_parameter_sweep,
     bench_per_worker_predecessor,
+    bench_prepared_universe,
+    bench_prepared_parameter_sweep,
+    bench_prepared_per_worker,
     bench_multi_instrument_streaming,
 );
 criterion_main!(benches);

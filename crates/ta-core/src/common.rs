@@ -1,10 +1,10 @@
 //! Shared TA-Lib core helpers.
 //!
 //! This module contains small, allocation-aware primitives shared by indicator
-//! implementations: compact output ranges, padded-output conversion, and common
-//! validation routines. Batch indicator kernels write compact TA-Lib-style output
-//! buffers and return [`OutputRange`]; convenience wrappers use these helpers to
-//! create full-length padded vectors.
+//! implementations: compact outputs, output ranges, padded-output conversion,
+//! and common validation routines. Batch indicator kernels write compact values
+//! and return [`OutputRange`]; convenience wrappers use these helpers to create
+//! full-length padded vectors.
 
 use crate::{Float, Result, TalibError};
 
@@ -55,6 +55,85 @@ impl OutputRange {
     #[inline]
     pub const fn is_empty(&self) -> bool {
         self.nb_element == 0
+    }
+}
+
+/// Owned valid values together with their location in the source Observation Series.
+///
+/// The payload contains exactly [`OutputRange::nb_element`] values per output
+/// column. Construction is private to the crate so source bounds and payload
+/// lengths cannot be bypassed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompactOutput<O> {
+    source_len: usize,
+    range: OutputRange,
+    values: O,
+}
+
+pub(crate) trait CompactPayloadLen {
+    fn compact_payload_len(&self) -> Result<usize>;
+}
+
+impl<T> CompactPayloadLen for Vec<T> {
+    #[inline]
+    fn compact_payload_len(&self) -> Result<usize> {
+        Ok(self.len())
+    }
+}
+
+impl<O> CompactOutput<O> {
+    pub(crate) fn new(source_len: usize, range: OutputRange, values: O) -> Result<Self>
+    where
+        O: CompactPayloadLen,
+    {
+        let end = range
+            .beg_idx
+            .checked_add(range.nb_element)
+            .ok_or_else(|| TalibError::invalid_input("Compact Output range overflow"))?;
+        if end > source_len {
+            return Err(TalibError::invalid_input(format!(
+                "Compact Output range {}..{} exceeds source length {}",
+                range.beg_idx, end, source_len
+            )));
+        }
+
+        let payload_len = values.compact_payload_len()?;
+        if payload_len != range.nb_element {
+            return Err(TalibError::invalid_input(format!(
+                "Compact Output payload length mismatch: range has {}, payload has {}",
+                range.nb_element, payload_len
+            )));
+        }
+
+        Ok(Self {
+            source_len,
+            range,
+            values,
+        })
+    }
+
+    /// Returns the length of the source Observation Series.
+    #[inline]
+    pub const fn source_len(&self) -> usize {
+        self.source_len
+    }
+
+    /// Returns the source Output Range represented by the payload.
+    #[inline]
+    pub const fn range(&self) -> OutputRange {
+        self.range
+    }
+
+    /// Borrows the owned compact payload.
+    #[inline]
+    pub const fn values(&self) -> &O {
+        &self.values
+    }
+
+    /// Consumes the result and returns its owned compact payload.
+    #[inline]
+    pub fn into_values(self) -> O {
+        self.values
     }
 }
 
@@ -207,4 +286,72 @@ where
     let mut output = Vec::new();
     output.resize(input_len, T::pad_value());
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct NamedColumns {
+        left: Vec<Float>,
+        right: Vec<Float>,
+    }
+
+    impl CompactPayloadLen for NamedColumns {
+        fn compact_payload_len(&self) -> Result<usize> {
+            if self.left.len() != self.right.len() {
+                return Err(TalibError::invalid_input(
+                    "Compact Output columns must have equal lengths",
+                ));
+            }
+            Ok(self.left.len())
+        }
+    }
+
+    #[test]
+    fn compact_output_accepts_valid_source_range_and_payload() {
+        let output = CompactOutput::new(5, OutputRange::new(2, 3), vec![2_i32, 3, 4]).unwrap();
+
+        assert_eq!(output.source_len(), 5);
+        assert_eq!(output.range(), OutputRange::new(2, 3));
+        assert_eq!(output.values(), &vec![2, 3, 4]);
+    }
+
+    #[test]
+    fn compact_output_rejects_range_overflow() {
+        let error = CompactOutput::new(usize::MAX, OutputRange::new(usize::MAX, 1), vec![1_i32])
+            .unwrap_err();
+
+        assert!(matches!(error, TalibError::InvalidInput { .. }));
+    }
+
+    #[test]
+    fn compact_output_rejects_out_of_source_range() {
+        let error = CompactOutput::new(4, OutputRange::new(2, 3), vec![1_i32, 2, 3]).unwrap_err();
+
+        assert!(matches!(error, TalibError::InvalidInput { .. }));
+    }
+
+    #[test]
+    fn compact_output_rejects_payload_length_mismatch() {
+        let error = CompactOutput::new(5, OutputRange::new(2, 3), vec![1_i32, 2]).unwrap_err();
+
+        assert!(matches!(error, TalibError::InvalidInput { .. }));
+    }
+
+    #[test]
+    fn compact_output_payload_length_machinery_supports_named_columns() {
+        let error = CompactOutput::new(
+            3,
+            OutputRange::new(1, 2),
+            NamedColumns {
+                left: vec![1.0 as Float, 2.0],
+                right: vec![3.0 as Float],
+            },
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, TalibError::InvalidInput { .. }));
+    }
 }

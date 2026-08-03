@@ -33,6 +33,14 @@ pub enum TalibError {
         actual: usize,
     },
 
+    /// Input exceeds the capacity declared by a Prepared Batch Runner.
+    PreparedCapacityExceeded {
+        /// Maximum source length accepted by the runner.
+        max_input_len: usize,
+        /// Source length supplied to the rejected call.
+        actual_input_len: usize,
+    },
+
     /// Invalid parameter value
     InvalidParameter {
         /// Parameter name
@@ -115,6 +123,14 @@ impl TalibError {
         TalibError::InsufficientData { required, actual }
     }
 
+    /// Creates a PreparedCapacityExceeded error.
+    pub const fn prepared_capacity_exceeded(max_input_len: usize, actual_input_len: usize) -> Self {
+        TalibError::PreparedCapacityExceeded {
+            max_input_len,
+            actual_input_len,
+        }
+    }
+
     /// Creates an InvalidParameter error
     ///
     /// # Arguments
@@ -191,6 +207,16 @@ impl core::fmt::Display for TalibError {
                     f,
                     "Insufficient data: required {} data points, got {}",
                     required, actual
+                )
+            }
+            TalibError::PreparedCapacityExceeded {
+                max_input_len,
+                actual_input_len,
+            } => {
+                write!(
+                    f,
+                    "Prepared Batch Runner capacity exceeded: maximum input length {}, got {}",
+                    max_input_len, actual_input_len
                 )
             }
             TalibError::InvalidParameter {
@@ -296,6 +322,22 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "Insufficient data: required 20 data points, got 10"
+        );
+    }
+
+    #[test]
+    fn test_prepared_capacity_exceeded_creation() {
+        let err = TalibError::prepared_capacity_exceeded(4_096, 4_097);
+        assert_eq!(
+            err,
+            TalibError::PreparedCapacityExceeded {
+                max_input_len: 4_096,
+                actual_input_len: 4_097,
+            }
+        );
+        assert_eq!(
+            err.to_string(),
+            "Prepared Batch Runner capacity exceeded: maximum input length 4096, got 4097"
         );
     }
 

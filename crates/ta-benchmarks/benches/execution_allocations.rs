@@ -1,4 +1,4 @@
-//! Isolated allocation baselines for the current Indicator execution seam.
+//! Isolated allocation baselines for legacy and Rust-first Indicator execution.
 //!
 //! Run with `cargo bench -p ta-benchmarks --bench execution_allocations`.
 //! Output is TSV so it can be copied into `EXECUTION_BASELINES.md`. Peak bytes
@@ -19,9 +19,10 @@ use support::{
 };
 use ta_core::{
     math_operators::{MINMAXINDEXOutputMut, MINMAXOutputMut, MINMAX, MINMAXINDEX},
-    overlap::SMA,
+    overlap::{SMAConfig, SMA},
     price_transform::{AVGPRICEInput, AVGPRICE},
-    Float, Indicator, StreamingIndicator,
+    Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
+    StreamingIndicator,
 };
 
 const REPEATED_MINMAX_CALLS: usize = 8;
@@ -138,7 +139,7 @@ fn measure_allocations<T>(call: impl FnOnce() -> T) -> (T, AllocationProfile) {
     (value, profile)
 }
 
-fn print_profile<T>(scenario: &str, call: impl FnOnce() -> T) {
+fn print_profile<T>(scenario: &str, call: impl FnOnce() -> T) -> AllocationProfile {
     let (value, profile) = measure_allocations(call);
     black_box(&value);
     println!(
@@ -149,9 +150,38 @@ fn print_profile<T>(scenario: &str, call: impl FnOnce() -> T) {
         profile.retained_bytes
     );
     drop(value);
+    profile
+}
+
+fn assert_profile(
+    scenario: &str,
+    profile: AllocationProfile,
+    operations: usize,
+    gross_bytes: usize,
+    peak_bytes: usize,
+    retained_bytes: usize,
+) {
+    assert_eq!(profile.operations, operations, "{scenario}: operations");
+    assert_eq!(profile.gross_bytes, gross_bytes, "{scenario}: gross bytes");
+    assert_eq!(
+        profile.peak_incremental_bytes, peak_bytes,
+        "{scenario}: peak bytes"
+    );
+    assert_eq!(
+        profile.retained_bytes, retained_bytes,
+        "{scenario}: retained bytes"
+    );
+}
+
+fn assert_zero_allocations(scenario: &str, profile: AllocationProfile) {
+    assert_profile(scenario, profile, 0, 0, 0, 0);
 }
 
 fn profile_setup() {
+    let scenario = format!("setup/SMAConfig/period_{PERIOD}");
+    let profile = print_profile(&scenario, || SMAConfig::new(PERIOD).expect("valid period"));
+    assert_zero_allocations(&scenario, profile);
+
     print_profile(&format!("setup/SMA_instance/period_{PERIOD}"), || {
         SMA::new(PERIOD).expect("valid period")
     });
@@ -188,6 +218,29 @@ fn profile_setup() {
 fn profile_one_shot() {
     let input = series_fixture(PROFILE_SIZE, 0);
     let ohlc = ohlc_fixture(PROFILE_SIZE);
+
+    let sma_config = SMAConfig::new(PERIOD).expect("valid period");
+    let mut config_output = vec![0.0 as Float; output_len(PROFILE_SIZE, PERIOD)];
+    let scenario = format!("one_shot/SMAConfig/caller_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute_into(&sma_config, input.as_slice(), config_output.as_mut_slice())
+            .expect("valid SMA fixture")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let compact_bytes = output_len(PROFILE_SIZE, PERIOD) * core::mem::size_of::<Float>();
+    let scenario = format!("one_shot/SMAConfig/owned_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute(&sma_config, input.as_slice()).expect("valid SMA fixture")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        1,
+        compact_bytes,
+        compact_bytes,
+        compact_bytes,
+    );
 
     let sma = SMA::new(PERIOD).expect("valid period");
     let mut sma_output = vec![0.0 as Float; output_len(PROFILE_SIZE, PERIOD)];
@@ -272,7 +325,92 @@ fn profile_one_shot() {
     );
 }
 
+fn profile_small_owned_compact_counts() {
+    let config = SMAConfig::new(3).expect("valid period");
+    let count_0 = [];
+    let count_1 = [1.0 as Float, 2.0, 3.0];
+    let count_2 = [1.0 as Float, 2.0, 3.0, 4.0];
+    let count_3 = [1.0 as Float, 2.0, 3.0, 4.0, 5.0];
+    let inputs = [
+        (0, count_0.as_slice()),
+        (1, count_1.as_slice()),
+        (2, count_2.as_slice()),
+        (3, count_3.as_slice()),
+    ];
+
+    for (count, input) in inputs {
+        let scenario = format!("one_shot/SMAConfig/owned_compact/count_{count}");
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input).expect("valid small SMA fixture")
+        });
+        let payload_bytes = count * core::mem::size_of::<Float>();
+        if count == 0 {
+            assert_zero_allocations(&scenario, profile);
+        } else {
+            assert_profile(
+                &scenario,
+                profile,
+                1,
+                payload_bytes,
+                payload_bytes,
+                payload_bytes,
+            );
+        }
+    }
+}
+
 fn profile_repeated_workloads() {
+    let prepared_config = SMAConfig::new(PERIOD).expect("valid period");
+    let scenario = format!("setup/SMABatchRunner/capacity_{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::prepare_batch(&prepared_config, PROFILE_SIZE)
+            .expect("valid prepared capacity")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let mut prepared = IndicatorConfig::prepare_batch(&prepared_config, PROFILE_SIZE)
+        .expect("valid prepared capacity");
+    let prepared_input = series_fixture(PROFILE_SIZE, 0);
+    let mut prepared_output = vec![0.0 as Float; output_len(PROFILE_SIZE, PERIOD)];
+    let scenario = format!("repeated/prepared_SMA/first/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        PreparedBatchRunner::<SMAConfig>::compute_into(
+            &mut prepared,
+            prepared_input.as_slice(),
+            prepared_output.as_mut_slice(),
+        )
+        .expect("valid prepared fixture")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let scenario = format!("repeated/prepared_SMA/repeated/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        PreparedBatchRunner::<SMAConfig>::compute_into(
+            &mut prepared,
+            prepared_input.as_slice(),
+            prepared_output.as_mut_slice(),
+        )
+        .expect("valid prepared fixture")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let mut oversized_input = series_fixture(PROFILE_SIZE + 1, 0);
+    oversized_input[0] = Float::NAN;
+    let mut insufficient_output = [0.0 as Float; 1];
+    let scenario = format!(
+        "repeated/prepared_SMA/oversize_rejection/{}",
+        PROFILE_SIZE + 1
+    );
+    let profile = print_profile(&scenario, || {
+        PreparedBatchRunner::<SMAConfig>::compute_into(
+            &mut prepared,
+            oversized_input.as_slice(),
+            &mut insufficient_output,
+        )
+        .expect_err("oversized input must be rejected")
+    });
+    assert_zero_allocations(&scenario, profile);
+
     let universe = (0..UNIVERSE_INSTRUMENTS)
         .map(|seed| series_fixture(PROFILE_SIZE, seed))
         .collect::<Vec<_>>();
@@ -387,6 +525,24 @@ fn profile_repeated_workloads() {
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
+    let mut config_streams = (0..STREAM_INSTRUMENTS)
+        .map(|_| IndicatorConfig::stream(&prepared_config).expect("valid period"))
+        .collect::<Vec<_>>();
+    let scenario =
+        format!("streaming/SMAConfig/independent_streams/{STREAM_INSTRUMENTS}x{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        let mut last_output = None;
+        for tick in &stream_inputs {
+            for (stream, &input) in config_streams.iter_mut().zip(tick.iter()) {
+                last_output = StreamingComputation::<SMAConfig>::next(stream, input)
+                    .expect("valid streaming fixture");
+                black_box(last_output);
+            }
+        }
+        last_output
+    });
+    assert_zero_allocations(&scenario, profile);
+
     let mut streams = (0..STREAM_INSTRUMENTS)
         .map(|_| SMA::new(PERIOD).expect("valid period"))
         .collect::<Vec<_>>();
@@ -410,5 +566,6 @@ fn main() {
     println!("scenario\tallocation_operations\tgross_allocated_bytes\tpeak_incremental_bytes\tretained_bytes");
     profile_setup();
     profile_one_shot();
+    profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }

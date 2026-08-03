@@ -1,12 +1,13 @@
 ---
-date: 2026-08-02
+date: 2026-08-03
 repository: fast-ta
-branch: feat/2-execution-baselines
-base_commit: c3b28d3
-baseline: issue-2-current
-criterion_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- --save-baseline issue-2-current"
+branch: issue-3-rust-first-sma
+base_commit: 082fa18
+comparison_baseline: issue-2-final
+issue_2_criterion_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- --save-baseline issue-2-final"
+issue_3_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
-status: captured
+status: issue-3-final
 ---
 
 # Indicator Execution Baselines
@@ -37,7 +38,7 @@ Issue #2 therefore records predecessor behavior and workloads. It does not fabri
 - Profile: Cargo `bench` (optimized)
 - Criterion: 0.8.2, full default sampling
 
-Criterion results below are the middle estimates from the confidence intervals. Owned-result timing uses batched measurement so result destruction is outside the operation boundary. Streaming setup and teardown are also outside timing. `target/criterion/issue-2-current` is host-local and ignored by git; this document is the durable record.
+The issue #2 absolute results below are the middle estimates from the confidence intervals. Owned-result timing uses batched measurement so result destruction is outside the operation boundary. Streaming setup and teardown are also outside timing. The original `target/criterion/issue-2-current` capture is host-local and ignored by git; this document is the durable record.
 
 ## One-shot latency and throughput
 
@@ -68,7 +69,7 @@ Criterion results below are the middle estimates from the confidence intervals. 
 | MINMAXINDEX caller compact | 65,536 | 1.0529 ms | 62.241 Melem/s |
 | MINMAXINDEX owned legacy Aligned Output | 65,536 | 668.54 µs | 98.029 Melem/s |
 
-These representatives cover single-output, multi-input, multi-output, and index-output shapes through the public trait seam.
+These representatives cover single-output, multi-input, multi-output, and index-output shapes through the public trait seam. The mixed issue #3 suite additionally measures `SMAConfig::compute_into` as `caller_compact_config` at the same 64, 4,096, and 65,536 observation sizes, while retaining every historical ID.
 
 ## Repeated and streaming workloads
 
@@ -114,15 +115,83 @@ Fixtures, caller buffers, and reusable instances created before a workload are e
 
 The setup rows expose the current streaming-buffer allocation paid even by batch-only SMA instances. MINMAX and MINMAXINDEX demonstrate that caller-owned output does not imply allocation-free algorithm scratch. The eight-call MINMAX row shows scratch is allocated and released on every current call.
 
+## Issue #3 SMA expansion results
+
+Issue #3 was measured on 2026-08-03 in the same Apple M2 worktree environment. The allocation executable contains executable assertions for the new contracts and was run with:
+
+```text
+cargo bench -p ta-benchmarks --bench execution_allocations
+```
+
+| New SMA scenario | Operations | Gross bytes | Peak bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| Construct `SMAConfig(14)` | 0 | 0 | 0 | 0 |
+| `SMAConfig::compute_into`, 4,096 | 0 | 0 | 0 | 0 |
+| `SMAConfig::compute` owned Compact Output, 4,096 | 1 | 32,664 | 32,664 | 32,664 |
+| `SMAConfig::compute` owned Compact Output, count 0 | 0 | 0 | 0 | 0 |
+| `SMAConfig::compute` owned Compact Output, count 1 | 1 | 8 | 8 | 8 |
+| `SMAConfig::compute` owned Compact Output, count 2 | 1 | 16 | 16 | 16 |
+| `SMAConfig::compute` owned Compact Output, count 3 | 1 | 24 | 24 | 24 |
+| Prepare `SMABatchRunner(4,096)` | 0 | 0 | 0 | 0 |
+| First prepared call, 4,096 | 0 | 0 | 0 | 0 |
+| Repeated prepared call, 4,096 | 0 | 0 | 0 | 0 |
+| Oversize prepared rejection, 4,097 | 0 | 0 | 0 | 0 |
+| New independent stream ticks, 16 × 4,096 | 0 | 0 | 0 | 0 |
+
+The owned payload has 4,083 valid `f64` values, so 32,664 bytes is exactly one compact allocation. The isolated count 0/1/2/3 profiles assert the exact-allocation boundary at zero and at allocator-small payload sizes. Configuration and preparation retain no heap memory for SMA. Stream buffers are constructed outside the tick measurement. The issue #2 legacy rows remain present and asserted behavior remains unchanged: legacy `SMA(14)` construction allocates 112 bytes, caller Compact Output allocates zero, legacy owned Aligned Output allocates 32,768 bytes, and legacy stream ticks allocate zero.
+
+### Full Criterion acceptance evidence
+
+Two full Criterion runs were performed after the sealed-trait and legacy-adapter fixes for repeated and streaming workloads. After the exact-allocation fix and addition of the new caller-owned benchmark, two further full one-shot runs were performed. Every run used the default 100 samples per benchmark case. The tables report same-run median deltas; positive values mean the candidate was slower, and negative values mean it was faster.
+
+The new `caller_compact_config` cases use `IndicatorConfig::compute_into(&SMAConfig, ...)`, the same deterministic fixture and `black_box` boundaries as the legacy `caller_compact` predecessor, and a reusable output allocated outside the measured loop:
+
+| New caller-owned path | Same-run predecessor | Run A median delta | Run B median delta |
+|---|---|---:|---:|
+| `caller_compact_config`, 64 observations | `caller_compact`, 64 observations | -0.24% | -0.91% |
+| `caller_compact_config`, 4,096 observations | `caller_compact`, 4,096 observations | +0.45% | -0.64% |
+| `caller_compact_config`, 65,536 observations | `caller_compact`, 65,536 observations | -1.27% | +0.56% |
+
+All other new paths are likewise compared with their predecessors from the same run, avoiding cross-run host drift:
+
+| Candidate path | Same-run predecessor | Run A median delta | Run B median delta |
+|---|---|---:|---:|
+| Owned Compact Output, 64 observations | Legacy owned Aligned Output | +0.68% | +1.58% |
+| Owned Compact Output, 4,096 observations | Legacy owned Aligned Output | -0.31% | -1.42% |
+| Owned Compact Output, 65,536 observations | Legacy owned Aligned Output | -4.37% | -4.86% |
+| Prepared Batch Runner, Universe | Legacy caller-owned Universe | +0.48% | -0.43% |
+| Prepared Batch Runner, parameter sweep | Legacy caller-owned parameter sweep | +0.69% | +0.61% |
+| Prepared Batch Runner, per-worker | Independent legacy indicator instances | +0.08% | +0.13% |
+| Independent `SMAConfig` Streaming Computation | Independent legacy `SMA` Streaming Computation | -0.39% | -0.38% |
+
+Preserved-current IDs were compared separately with the freshly recaptured `issue-2-final` baseline. Their observed median-drift ranges across the two full runs were:
+
+| Preserved-current path | Observations / workload | Median drift range |
+|---|---|---:|
+| Caller-owned Compact Output | 64 | +4.29% to +4.68% |
+| Caller-owned Compact Output | 4,096 | +3.15% to +3.33% |
+| Caller-owned Compact Output | 65,536 | +2.33% to +4.83% |
+| Legacy owned Aligned Output | 64 | +2.76% to +3.47% |
+| Legacy owned Aligned Output | 4,096 | +2.62% to +4.51% |
+| Legacy owned Aligned Output | 65,536 | +2.96% to +3.03% |
+| Caller-owned Universe | 128 × 4,096 | -1.40% to -0.42% |
+| Caller-owned parameter sweep | 4 × 4,096 | +1.71% to +3.16% |
+| Per-worker legacy indicator instances | 4 × 4,096 | +1.24% to +3.46% |
+| Independent legacy Streaming Computation | 16 × 4,096 ticks | +0.13% to +2.31% |
+
+Gate conclusion: all new paths fall between -4.86% and +1.58% of same-run predecessors across both final runs. Every preserved-current path remains below +5% in both final runs. No path has a stable >~5% regression. These host-local comparisons establish acceptance against the regression gate; they do not establish portable speedups.
+
 ## Migration gate
 
 For issues #3 and later:
 
 1. Keep workload topology, fixture generation, sizes, periods, precision, toolchain, and host fixed.
-2. Run `cargo bench -p ta-benchmarks --bench execution_baselines -- --baseline issue-2-current`.
-3. Repeat on an otherwise idle host before treating a change as stable.
-4. A stable regression greater than approximately 5% requires an explicit accepted trade-off under ADR-0001.
-5. Run `execution_allocations` and compare operations, gross bytes, peak bytes, and retained bytes together with timing.
-6. Extend the current contract test file beside the legacy assertions; preserve current owned results as legacy Aligned Output rather than relabeling them as Compact Output.
+2. On pre-change `main`, capture the existing suite with `cargo bench -p ta-benchmarks --bench execution_baselines -- --save-baseline <name>`.
+3. After the change, run the new mixed suite twice at full sampling (100 samples per case) on an otherwise idle host. Do not apply `--baseline` to the whole mixed suite: Criterion 0.8 panics when the suite contains newly introduced benchmark IDs that are absent from the saved baseline.
+4. Compare every new path with its predecessor from the same run.
+5. For each preserved ID, compare it separately with `cargo bench -p ta-benchmarks --bench execution_baselines -- --exact --baseline <name> <full-existing-ID>`.
+6. Treat only a regression reproduced across the full runs as stable. A stable regression greater than approximately 5% requires an explicit accepted trade-off under ADR-0001.
+7. Run `cargo bench -p ta-benchmarks --bench execution_allocations` and evaluate operations, gross bytes, peak bytes, and retained bytes together with timing.
+8. Extend the current contract test file beside the legacy assertions; preserve current owned results as legacy Aligned Output rather than relabeling them as Compact Output.
 
 The rejected append and period-bounded ring scratch implementations from `prototype/output-interface-benchmark` are not included in production or in this baseline. Only their measurement lessons informed the benchmark design.

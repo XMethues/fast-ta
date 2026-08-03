@@ -12,7 +12,7 @@ mod wma;
 pub use dema::{DEMA_vec, DEMA};
 pub use ema::{EMA_vec, EMA};
 pub use ma::{MAType, MA_vec, MA};
-pub use sma::{SMA_vec, SMA};
+pub use sma::{SMABatchRunner, SMAConfig, SMAStream, SMA_vec, SMA};
 pub use t3::{
     T3_vec, T3_vec_with_default_vfactor, T3_with_default_vfactor, T3, T3_DEFAULT_VFACTOR,
 };

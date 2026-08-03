@@ -54,8 +54,11 @@ pub mod volume;
 pub use common::{
     compact_buffer, copy_compact_to_padded, output_count, padded_from_compact, period_lookback,
     validate_all_same_len, validate_finite_slice, validate_finite_slices, validate_input_len,
-    validate_output_len, validate_period, validate_same_len, OutputRange, PadValue,
+    validate_output_len, validate_period, validate_same_len, CompactOutput, OutputRange, PadValue,
 };
 pub use error::{Result, TalibError};
-pub use traits::{Indicator, Resettable, StreamingIndicator};
+pub use traits::{
+    Indicator, IndicatorConfig, PreparedBatchRunner, Resettable, StreamingComputation,
+    StreamingIndicator,
+};
 pub use types::Float;
