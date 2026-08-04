@@ -886,3 +886,59 @@ Universe rows report current / configuration / prepared. Per-worker rows report 
 ### Gate conclusion
 
 All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, per-worker, or streaming path regressed by approximately five percent against its reference. Every owned Compact Output path improved over the legacy Aligned Output path by 1.97%–49.86%. These are host-local default-`f64` qualification results, not portable speedup claims.
+
+## Issue #12 arithmetic qualification
+
+Issue #12 migrates the four paired arithmetic operators (`ADD`, `SUB`, `MULT`, and `DIV`) and rolling `SUM` through the Rust-first execution seam. The paired operators use one generated surface with typed borrowed batch inputs and typed ticks; `SUM` retains its Period configuration. Every configuration provides owned and caller-owned Compact Output, a reusable Prepared Batch Runner, and an independent Streaming Computation while the uppercase compatibility functions and structs retain their existing signatures and padded-owned behavior. Input Observation Series must be finite. Arithmetic results still follow the underlying IEEE-754 operations: finite operands may produce infinity on overflow or nonzero division by zero, and zero divided by zero produces `NaN`.
+
+The full benchmark command is `cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/arithmetic`. The one-shot matrix uses observations 64/4,096/65,536; `SUM` uses periods 14 and 512 where the observation count permits. Workloads also record Universe (128 × 4,096), parameter sweep (four `SUM` periods × 4,096), per-worker (4 × 4,096), and streaming (16 × 4,096) execution. Values below are Criterion mean point estimates from the 100-sample qualification runs.
+
+### Allocation evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports:
+
+| Indicators | Configuration | Caller-owned | Owned Compact Output | Prepared setup / first / repeated / oversize | Stream setup / ticks |
+|---|---:|---:|---:|---:|---:|
+| `ADD`, `SUB`, `MULT`, `DIV` | 0 / 0 B | 0 / 0 B | 1 / 32,768 B | 0 / 0 B in every phase | 0 / 0 B |
+| `SUM`, period 14 | 0 / 0 B | 0 / 0 B | 1 / 32,664 B | 0 / 0 B in every phase | 1 / 112 B; 0 / 0 B |
+
+Entries are allocation operations / gross allocated bytes for 4,096 observations. Owned byte counts are exactly `compact_count × size_of::<Float>()`; caller-owned computation, prepared construction, prepared reuse and rejection, and every streaming tick allocate nothing. The parameter-free paired-operator streams also require no setup allocation; `SUM` stream construction allocates its period-sized rolling buffer once.
+
+### One-shot timing evidence
+
+Caller-owned point estimates show current / configuration / prepared for 4,096 observations; the `SUM` row uses period 14. Delta ranges include every measured observation count and, for `SUM`, both measured periods. Owned point estimates show legacy Aligned Output / configuration Compact Output for 4,096 observations.
+
+| Indicator | 4,096 caller-owned point estimates | Config / current range | Prepared / current range | 4,096 owned point estimates | Compact / legacy range |
+|---|---:|---:|---:|---:|---:|
+| ADD | 3.828 µs / 3.855 µs / 3.792 µs | -1.09% to +0.78% | -1.84% to -0.94% | 5.615 µs / 4.167 µs | -36.28% to -25.79% |
+| SUB | 3.751 µs / 3.878 µs / 3.768 µs | -14.67% to +3.37% | -1.11% to +0.45% | 5.605 µs / 4.477 µs | -40.06% to -20.12% |
+| MULT | 3.778 µs / 3.892 µs / 3.781 µs | -14.09% to +3.03% | -1.18% to +0.08% | 5.599 µs / 4.485 µs | -39.35% to -19.89% |
+| DIV | 3.899 µs / 3.977 µs / 3.874 µs | -1.03% to +1.99% | -1.65% to -0.64% | 5.706 µs / 4.589 µs | -35.50% to -19.58% |
+| SUM | 5.251 µs / 5.240 µs / 5.257 µs | -0.22% to +0.82% | +0.01% to +0.39% | 7.052 µs / 5.725 µs | -31.24% to -18.55% |
+
+### Repeated and streaming evidence
+
+Universe and parameter-sweep rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured. Fixtures and caller-owned buffers are identical within each comparison; construction and reset remain outside measured operations.
+
+| Indicator / workload | Point estimates | Same-run deltas |
+|---|---:|---:|
+| ADD Universe, 128 × 4,096 | 519.920 µs / 516.163 µs / 501.863 µs | config/current -0.72%; prepared/current -3.47% |
+| ADD Per-worker, 4 × 4,096 | 15.668 µs / 15.777 µs | prepared/current +0.70% |
+| ADD Streaming, 16 × 4,096 | 60.539 µs / 62.797 µs | configured/legacy +3.73% |
+| SUB Universe, 128 × 4,096 | 518.964 µs / 516.716 µs / 501.977 µs | config/current -0.43%; prepared/current -3.27% |
+| SUB Per-worker, 4 × 4,096 | 15.663 µs / 15.800 µs | prepared/current +0.88% |
+| SUB Streaming, 16 × 4,096 | 59.715 µs / 59.618 µs | configured/legacy -0.16% |
+| MULT Universe, 128 × 4,096 | 519.620 µs / 516.687 µs / 497.509 µs | config/current -0.56%; prepared/current -4.26% |
+| MULT Per-worker, 4 × 4,096 | 15.622 µs / 15.737 µs | prepared/current +0.74% |
+| MULT Streaming, 16 × 4,096 | 62.435 µs / 64.073 µs | configured/legacy +2.62% |
+| DIV Universe, 128 × 4,096 | 536.870 µs / 536.452 µs / 520.556 µs | config/current -0.08%; prepared/current -3.04% |
+| DIV Per-worker, 4 × 4,096 | 16.060 µs / 16.260 µs | prepared/current +1.25% |
+| DIV Streaming, 16 × 4,096 | 149.213 µs / 155.569 µs | configured/legacy +4.26% |
+| SUM Universe, 128 × 4,096 | 674.523 µs / 674.142 µs / 683.747 µs | config/current -0.06%; prepared/current +1.37% |
+| SUM Sweep, 4 × 4,096 | 21.868 µs / 21.852 µs / 21.277 µs | config/current -0.08%; prepared/current -2.71% |
+| SUM Per-worker, 4 × 4,096 | 21.087 µs / 21.269 µs | prepared/current +0.86% |
+| SUM Streaming, 16 × 4,096 | 260.956 µs / 259.792 µs | configured/legacy -0.45% |
+
+### Gate conclusion
+
+All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path by 18.55%–40.06%. These are host-local default-`f64` qualification results, not portable speedup claims.

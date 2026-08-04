@@ -15,9 +15,10 @@ use support::{
 };
 use ta_core::{
     math_operators::{
-        MAXConfig, MAXINDEXConfig, MINConfig, MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig,
-        MINMAXINDEXOutputMut, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MAX,
-        MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
+        ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
+        MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXOutputMut,
+        MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MULTConfig, SUBConfig, SUMConfig,
+        ADD, DIV, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX, MULT, SUB, SUM,
     },
     math_transform::{
         ACOSConfig, ASINConfig, ATANConfig, CEILConfig, COSConfig, COSHConfig, EXPConfig,
@@ -1797,6 +1798,19 @@ define_single_output_workloads!(
     0.0 as Float
 );
 define_single_output_workloads!(
+    bench_sum_repeated_and_streaming,
+    "indicator_execution/expanded/arithmetic_workloads/SUM",
+    SUM,
+    SUMConfig,
+    SUM::new,
+    SUMConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
     bench_minindex_repeated_and_streaming,
     "indicator_execution/expanded/single_extrema_workloads/MININDEX",
     MININDEX,
@@ -2303,6 +2317,384 @@ fn bench_math_transform_execution(c: &mut Criterion) {
     bench_parameter_free_transform!(c, TAN, TANConfig, series_fixture);
     bench_parameter_free_transform!(c, TANH, TANHConfig, series_fixture);
 }
+
+fn binary_fixture(size: usize, seed: usize) -> (Vec<Float>, Vec<Float>) {
+    (series_fixture(size, seed), series_fixture(size, seed + 1))
+}
+
+fn binary_fixtures(series_count: usize) -> Vec<(Vec<Float>, Vec<Float>)> {
+    (0..series_count)
+        .map(|seed| binary_fixture(REPEATED_SERIES_LEN, seed * 2))
+        .collect()
+}
+
+fn binary_stream_inputs() -> Vec<Vec<BinaryTick>> {
+    let instrument_inputs = binary_fixtures(STREAM_INSTRUMENTS);
+    (0..REPEATED_SERIES_LEN)
+        .map(|tick_index| {
+            instrument_inputs
+                .iter()
+                .map(|(real0, real1)| BinaryTick {
+                    real0: real0[tick_index],
+                    real1: real1[tick_index],
+                })
+                .collect()
+        })
+        .collect()
+}
+
+macro_rules! bench_binary_operator {
+    ($criterion:expr, $indicator:ident, $config:ident) => {{
+        let mut group = $criterion.benchmark_group(concat!(
+            "indicator_execution/expanded/arithmetic/",
+            stringify!($indicator)
+        ));
+        for (case_index, &size) in SIZES.iter().enumerate() {
+            group.throughput(Throughput::Elements(size as u64));
+            for path in rotated_execution_paths(case_index) {
+                match path {
+                    ExecutionPath::Current => group.bench_with_input(
+                        BenchmarkId::new("current_caller_compact", size),
+                        &size,
+                        |b, &size| {
+                            let (real0, real1) = binary_fixture(size, 0);
+                            let indicator =
+                                $indicator::new().expect("valid parameter-free indicator");
+                            let mut output = vec![0.0 as Float; size];
+                            b.iter(|| {
+                                let range = Indicator::compute(
+                                    black_box(&indicator),
+                                    BinaryInput {
+                                        real0: black_box(real0.as_slice()),
+                                        real1: black_box(real1.as_slice()),
+                                    },
+                                    black_box(output.as_mut_slice()),
+                                )
+                                .expect(concat!(
+                                    "valid current ",
+                                    stringify!($indicator),
+                                    " fixture"
+                                ));
+                                black_box((range, output.as_slice()));
+                            });
+                        },
+                    ),
+                    ExecutionPath::Config => group.bench_with_input(
+                        BenchmarkId::new("config_caller_compact", size),
+                        &size,
+                        |b, &size| {
+                            let (real0, real1) = binary_fixture(size, 0);
+                            let config = $config::new();
+                            let mut output = vec![0.0 as Float; size];
+                            b.iter(|| {
+                                let range = IndicatorConfig::compute_into(
+                                    black_box(&config),
+                                    BinaryInput {
+                                        real0: black_box(real0.as_slice()),
+                                        real1: black_box(real1.as_slice()),
+                                    },
+                                    black_box(output.as_mut_slice()),
+                                )
+                                .expect(concat!(
+                                    "valid configured ",
+                                    stringify!($indicator),
+                                    " fixture"
+                                ));
+                                black_box((range, output.as_slice()));
+                            });
+                        },
+                    ),
+                    ExecutionPath::Prepared => group.bench_with_input(
+                        BenchmarkId::new("prepared_runner", size),
+                        &size,
+                        |b, &size| {
+                            let (real0, real1) = binary_fixture(size, 0);
+                            let config = $config::new();
+                            let mut runner = IndicatorConfig::prepare_batch(&config, size)
+                                .expect("valid prepared capacity");
+                            let mut output = vec![0.0 as Float; size];
+                            b.iter(|| {
+                                let range = PreparedBatchRunner::<$config>::compute_into(
+                                    black_box(&mut runner),
+                                    BinaryInput {
+                                        real0: black_box(real0.as_slice()),
+                                        real1: black_box(real1.as_slice()),
+                                    },
+                                    black_box(output.as_mut_slice()),
+                                )
+                                .expect(concat!(
+                                    "valid prepared ",
+                                    stringify!($indicator),
+                                    " fixture"
+                                ));
+                                black_box((range, output.as_slice()));
+                            });
+                        },
+                    ),
+                    ExecutionPath::LegacyOwned => group.bench_with_input(
+                        BenchmarkId::new("legacy_owned_aligned", size),
+                        &size,
+                        |b, &size| {
+                            let (real0, real1) = binary_fixture(size, 0);
+                            let indicator =
+                                $indicator::new().expect("valid parameter-free indicator");
+                            b.iter_batched(
+                                || (),
+                                |_| {
+                                    let output = Indicator::compute_to_vec(
+                                        black_box(&indicator),
+                                        BinaryInput {
+                                            real0: black_box(real0.as_slice()),
+                                            real1: black_box(real1.as_slice()),
+                                        },
+                                    )
+                                    .expect(concat!(
+                                        "valid legacy owned ",
+                                        stringify!($indicator),
+                                        " fixture"
+                                    ));
+                                    black_box(output)
+                                },
+                                BatchSize::LargeInput,
+                            );
+                        },
+                    ),
+                    ExecutionPath::ConfigOwned => group.bench_with_input(
+                        BenchmarkId::new("config_owned_compact", size),
+                        &size,
+                        |b, &size| {
+                            let (real0, real1) = binary_fixture(size, 0);
+                            let config = $config::new();
+                            b.iter_batched(
+                                || (),
+                                |_| {
+                                    let output = IndicatorConfig::compute(
+                                        black_box(&config),
+                                        BinaryInput {
+                                            real0: black_box(real0.as_slice()),
+                                            real1: black_box(real1.as_slice()),
+                                        },
+                                    )
+                                    .expect(concat!(
+                                        "valid configured owned ",
+                                        stringify!($indicator),
+                                        " fixture"
+                                    ));
+                                    black_box(output)
+                                },
+                                BatchSize::LargeInput,
+                            );
+                        },
+                    ),
+                };
+            }
+        }
+        group.finish();
+
+        let mut group = $criterion.benchmark_group(concat!(
+            "indicator_execution/expanded/arithmetic_workloads/",
+            stringify!($indicator)
+        ));
+        group.throughput(Throughput::Elements(
+            (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+        ));
+        group.bench_function("universe/current_caller_compact", |b| {
+            let universe = binary_fixtures(UNIVERSE_INSTRUMENTS);
+            let indicator = $indicator::new().expect("valid parameter-free indicator");
+            let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+            b.iter(|| {
+                for (real0, real1) in &universe {
+                    let range = Indicator::compute(
+                        black_box(&indicator),
+                        BinaryInput {
+                            real0: black_box(real0.as_slice()),
+                            real1: black_box(real1.as_slice()),
+                        },
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect(concat!(
+                        "valid current ",
+                        stringify!($indicator),
+                        " Universe"
+                    ));
+                    black_box((range, output.as_slice()));
+                }
+            });
+        });
+        group.bench_function("universe/config_caller_compact", |b| {
+            let universe = binary_fixtures(UNIVERSE_INSTRUMENTS);
+            let config = $config::new();
+            let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+            b.iter(|| {
+                for (real0, real1) in &universe {
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
+                        BinaryInput {
+                            real0: black_box(real0.as_slice()),
+                            real1: black_box(real1.as_slice()),
+                        },
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect(concat!(
+                        "valid configured ",
+                        stringify!($indicator),
+                        " Universe"
+                    ));
+                    black_box((range, output.as_slice()));
+                }
+            });
+        });
+        group.bench_function("universe/prepared_runner", |b| {
+            let universe = binary_fixtures(UNIVERSE_INSTRUMENTS);
+            let config = $config::new();
+            let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                .expect("valid prepared capacity");
+            let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+            b.iter(|| {
+                for (real0, real1) in &universe {
+                    let range = PreparedBatchRunner::<$config>::compute_into(
+                        black_box(&mut runner),
+                        BinaryInput {
+                            real0: black_box(real0.as_slice()),
+                            real1: black_box(real1.as_slice()),
+                        },
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect(concat!(
+                        "valid prepared ",
+                        stringify!($indicator),
+                        " Universe"
+                    ));
+                    black_box((range, output.as_slice()));
+                }
+            });
+        });
+
+        group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+        group.bench_function("per_worker/current_instances", |b| {
+            let indicators = (0..WORKERS)
+                .map(|_| $indicator::new().expect("valid parameter-free indicator"))
+                .collect::<Vec<_>>();
+            let inputs = binary_fixtures(WORKERS);
+            let mut outputs = (0..WORKERS)
+                .map(|_| vec![0.0 as Float; REPEATED_SERIES_LEN])
+                .collect::<Vec<_>>();
+            b.iter(|| {
+                for ((indicator, (real0, real1)), output) in
+                    indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
+                {
+                    let range = Indicator::compute(
+                        black_box(indicator),
+                        BinaryInput {
+                            real0: black_box(real0.as_slice()),
+                            real1: black_box(real1.as_slice()),
+                        },
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect(concat!(
+                        "valid current ",
+                        stringify!($indicator),
+                        " per worker"
+                    ));
+                    black_box((range, output.as_slice()));
+                }
+            });
+        });
+        group.bench_function("per_worker/prepared_runners", |b| {
+            let config = $config::new();
+            let mut runners = (0..WORKERS)
+                .map(|_| {
+                    IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                        .expect("valid prepared capacity")
+                })
+                .collect::<Vec<_>>();
+            let inputs = binary_fixtures(WORKERS);
+            let mut outputs = (0..WORKERS)
+                .map(|_| vec![0.0 as Float; REPEATED_SERIES_LEN])
+                .collect::<Vec<_>>();
+            b.iter(|| {
+                for ((runner, (real0, real1)), output) in runners
+                    .iter_mut()
+                    .zip(inputs.iter())
+                    .zip(outputs.iter_mut())
+                {
+                    let range = PreparedBatchRunner::<$config>::compute_into(
+                        black_box(runner),
+                        BinaryInput {
+                            real0: black_box(real0.as_slice()),
+                            real1: black_box(real1.as_slice()),
+                        },
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect(concat!(
+                        "valid prepared ",
+                        stringify!($indicator),
+                        " per worker"
+                    ));
+                    black_box((range, output.as_slice()));
+                }
+            });
+        });
+
+        let inputs = binary_stream_inputs();
+        group.throughput(Throughput::Elements(
+            (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+        ));
+        group.bench_function("streaming/legacy_instances", |b| {
+            b.iter_batched_ref(
+                || {
+                    (0..STREAM_INSTRUMENTS)
+                        .map(|_| $indicator::new().expect("valid parameter-free indicator"))
+                        .collect::<Vec<_>>()
+                },
+                |streams| {
+                    for_each_stream_sample!(streams, &inputs, |stream, input| {
+                        let output = StreamingIndicator::next(black_box(stream), black_box(input))
+                            .expect(concat!("valid legacy ", stringify!($indicator), " stream"));
+                        black_box(output);
+                    });
+                },
+                BatchSize::LargeInput,
+            );
+        });
+        let config = $config::new();
+        group.bench_function("streaming/config_streams", |b| {
+            b.iter_batched_ref(
+                || {
+                    (0..STREAM_INSTRUMENTS)
+                        .map(|_| {
+                            IndicatorConfig::stream(&config).expect("valid parameter-free stream")
+                        })
+                        .collect::<Vec<_>>()
+                },
+                |streams| {
+                    for_each_stream_sample!(streams, &inputs, |stream, input| {
+                        let output = StreamingComputation::<$config>::next(
+                            black_box(stream),
+                            black_box(input),
+                        )
+                        .expect(concat!(
+                            "valid configured ",
+                            stringify!($indicator),
+                            " stream"
+                        ));
+                        black_box(output);
+                    });
+                },
+                BatchSize::LargeInput,
+            );
+        });
+        group.finish();
+    }};
+}
+
+fn bench_binary_operator_execution(c: &mut Criterion) {
+    bench_binary_operator!(c, ADD, ADDConfig);
+    bench_binary_operator!(c, SUB, SUBConfig);
+    bench_binary_operator!(c, MULT, MULTConfig);
+    bench_binary_operator!(c, DIV, DIVConfig);
+}
+
 macro_rules! define_named_input_benchmarks {
     (
         $matrix_name:ident,
@@ -2642,6 +3034,19 @@ define_single_output_benchmark!(
     MAXConfig,
     MAX::new,
     MAXConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_sum_qualified_matrix,
+    "indicator_execution/expanded/arithmetic/SUM",
+    SUM,
+    SUMConfig,
+    SUM::new,
+    SUMConfig::new,
     1,
     Float,
     0.0 as Float,
@@ -3260,5 +3665,8 @@ criterion_group!(
     bench_atr_parameter_sweep,
     bench_natr_parameter_sweep,
     bench_math_transform_execution,
+    bench_binary_operator_execution,
+    bench_sum_qualified_matrix,
+    bench_sum_repeated_and_streaming,
 );
 criterion_main!(benches);

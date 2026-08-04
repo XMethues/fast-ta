@@ -19,9 +19,10 @@ use support::{
 };
 use ta_core::{
     math_operators::{
-        MAXConfig, MAXINDEXConfig, MINConfig, MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig,
-        MINMAXINDEXOutputMut, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MAX,
-        MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
+        ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
+        MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXOutputMut,
+        MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MULTConfig, SUBConfig, SUMConfig,
+        MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
     math_transform::{
         ACOSConfig, ASINConfig, ATANConfig, CEILConfig, COSConfig, COSHConfig, EXPConfig,
@@ -1057,6 +1058,13 @@ fn profile_single_output_execution() {
         1,
         STREAM_BYTES
     );
+    profile_single_output_indicator!(
+        "SUM",
+        SUMConfig,
+        SUMConfig::new(PERIOD).expect("valid period"),
+        1,
+        STREAM_BYTES
+    );
 }
 
 fn profile_math_transform_execution() {
@@ -1075,6 +1083,132 @@ fn profile_math_transform_execution() {
     profile_single_output_indicator!("SQRT", SQRTConfig, SQRTConfig::new(), 0, 0);
     profile_single_output_indicator!("TAN", TANConfig, TANConfig::new(), 0, 0);
     profile_single_output_indicator!("TANH", TANHConfig, TANHConfig::new(), 0, 0);
+}
+
+macro_rules! profile_binary_operator {
+    ($label:literal, $config:ty) => {{
+        let real0 = series_fixture(PROFILE_SIZE, 0);
+        let real1 = series_fixture(PROFILE_SIZE, 1);
+        let input = BinaryInput {
+            real0: real0.as_slice(),
+            real1: real1.as_slice(),
+        };
+
+        let scenario = format!("setup/{}Config/parameters", $label);
+        let profile = print_profile(&scenario, <$config>::new);
+        assert_zero_allocations(&scenario, profile);
+
+        let config = <$config>::new();
+        let mut output = vec![0.0 as Float; PROFILE_SIZE];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(&config, input, output.as_mut_slice())
+                .expect("valid binary caller-owned fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let output_bytes = PROFILE_SIZE * core::mem::size_of::<Float>();
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input).expect("valid binary owned fixture")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let empty = [];
+        let scenario = format!("one_shot/{}Config/owned_compact/count_0", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(
+                &config,
+                BinaryInput {
+                    real0: &empty,
+                    real1: &empty,
+                },
+            )
+            .expect("valid empty binary fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE)
+                .expect("valid binary prepared capacity")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, PROFILE_SIZE)
+            .expect("valid binary prepared capacity");
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $label);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input,
+                    output.as_mut_slice(),
+                )
+                .expect("valid prepared binary fixture")
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized_real0 = series_fixture(PROFILE_SIZE + 1, 2);
+        let oversized_real1 = series_fixture(PROFILE_SIZE + 1, 3);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $label,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                BinaryInput {
+                    real0: oversized_real0.as_slice(),
+                    real1: oversized_real1.as_slice(),
+                },
+                output.as_mut_slice(),
+            )
+            .expect_err("oversized binary input must be rejected")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}Config/stream", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::stream(&config).expect("valid binary stream")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut stream = IndicatorConfig::stream(&config).expect("valid binary stream");
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            let mut last = None;
+            for idx in 0..PROFILE_SIZE {
+                last = StreamingComputation::<$config>::next(
+                    &mut stream,
+                    BinaryTick {
+                        real0: real0[idx],
+                        real1: real1[idx],
+                    },
+                )
+                .expect("valid binary stream tick");
+                black_box(last);
+            }
+            last
+        });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
+fn profile_binary_operator_execution() {
+    profile_binary_operator!("ADD", ADDConfig);
+    profile_binary_operator!("SUB", SUBConfig);
+    profile_binary_operator!("MULT", MULTConfig);
+    profile_binary_operator!("DIV", DIVConfig);
 }
 
 macro_rules! profile_named_input_indicator {
@@ -1545,6 +1679,7 @@ fn main() {
     profile_single_extrema_execution();
     profile_single_output_execution();
     profile_math_transform_execution();
+    profile_binary_operator_execution();
     profile_named_input_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();

@@ -7,10 +7,11 @@
 
 use ta_core::{
     math_operators::{
-        MAXConfig, MAXINDEXConfig, MAXINDEXStream, MAXStream, MINConfig, MININDEXConfig,
-        MININDEXStream, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXOutputMut, MINMAXINDEXStream,
-        MINMAXINDEXStreamValue, MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXStream,
-        MINMAXValuesMut, MINStream, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
+        ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MAXINDEXStream,
+        MAXStream, MINConfig, MININDEXConfig, MININDEXStream, MINMAXConfig, MINMAXINDEXConfig,
+        MINMAXINDEXOutputMut, MINMAXINDEXStream, MINMAXINDEXStreamValue, MINMAXINDEXValuesMut,
+        MINMAXOutputMut, MINMAXStream, MINMAXValuesMut, MINStream, MULTConfig, SUBConfig,
+        SUMConfig, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
     },
     math_transform::{
         ACOSConfig, ACOSStream, ASINConfig, ASINStream, ATANConfig, ATANStream, CEILConfig,
@@ -4514,6 +4515,237 @@ fn math_transform_configs_preserve_ieee_domain_outputs_and_validation_order() {
 
     let mut stream = IndicatorConfig::stream(&SINConfig::new()).unwrap();
     assert!(StreamingComputation::<SINConfig>::next(&mut stream, Float::INFINITY).is_err());
+}
+
+macro_rules! assert_binary_operator_config {
+    ($config:ty, $operation:expr) => {{
+        let config = <$config>::new();
+        let left = [8.0 as Float, 6.0, 4.0];
+        let right = [2.0 as Float, 3.0, 4.0];
+        let input = BinaryInput {
+            real0: &left,
+            real1: &right,
+        };
+        let expected = [
+            $operation(left[0], right[0]),
+            $operation(left[1], right[1]),
+            $operation(left[2], right[2]),
+        ];
+
+        assert_eq!(IndicatorConfig::lookback(&config), 0);
+        let owned = IndicatorConfig::compute(&config, input).unwrap();
+        assert_eq!(owned.range(), OutputRange::new(0, 3));
+        assert_eq!(owned.values(), expected.as_slice());
+
+        let mut caller_output = [FLOAT_SENTINEL; 4];
+        let range = IndicatorConfig::compute_into(&config, input, &mut caller_output).unwrap();
+        assert_eq!(range, owned.range());
+        assert_eq!(&caller_output[..3], expected.as_slice());
+        assert_eq!(caller_output[3], FLOAT_SENTINEL);
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, 3).unwrap();
+        let mut prepared_output = [FLOAT_SENTINEL; 4];
+        let range =
+            PreparedBatchRunner::<$config>::compute_into(&mut runner, input, &mut prepared_output)
+                .unwrap();
+        assert_eq!(range, owned.range());
+        assert_eq!(&prepared_output[..3], expected.as_slice());
+        assert_eq!(prepared_output[3], FLOAT_SENTINEL);
+
+        let oversized_left = [1.0 as Float; 4];
+        let oversized_right = [2.0 as Float; 4];
+        let mut unchanged = [FLOAT_SENTINEL; 4];
+        assert_eq!(
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                BinaryInput {
+                    real0: &oversized_left,
+                    real1: &oversized_right,
+                },
+                &mut unchanged,
+            )
+            .unwrap_err(),
+            TalibError::PreparedCapacityExceeded {
+                max_input_len: 3,
+                actual_input_len: 4,
+            }
+        );
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 4]);
+
+        let mut stream = IndicatorConfig::stream(&config).unwrap();
+        assert_eq!(
+            StreamingComputation::<$config>::next(
+                &mut stream,
+                BinaryTick {
+                    real0: left[0],
+                    real1: right[0],
+                },
+            )
+            .unwrap(),
+            Some(expected[0])
+        );
+        StreamingComputation::<$config>::reset(&mut stream);
+        assert_eq!(
+            StreamingComputation::<$config>::next(
+                &mut stream,
+                BinaryTick {
+                    real0: left[1],
+                    real1: right[1],
+                },
+            )
+            .unwrap(),
+            Some(expected[1])
+        );
+
+        let mut unchanged = [FLOAT_SENTINEL; 3];
+        assert!(IndicatorConfig::compute_into(
+            &config,
+            BinaryInput {
+                real0: &left,
+                real1: &right[..2],
+            },
+            &mut unchanged,
+        )
+        .is_err());
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 3]);
+
+        let invalid = [2.0 as Float, Float::NAN, 4.0];
+        assert!(IndicatorConfig::compute_into(
+            &config,
+            BinaryInput {
+                real0: &left,
+                real1: &invalid,
+            },
+            &mut unchanged,
+        )
+        .is_err());
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 3]);
+    }};
+}
+
+#[test]
+fn binary_operator_configs_cover_all_execution_modes_and_validation() {
+    assert_binary_operator_config!(ADDConfig, |left, right| left + right);
+    assert_binary_operator_config!(SUBConfig, |left, right| left - right);
+    assert_binary_operator_config!(MULTConfig, |left, right| left * right);
+    assert_binary_operator_config!(DIVConfig, |left, right| left / right);
+}
+
+#[test]
+fn binary_operator_configs_preserve_operation_produced_non_finite_values() {
+    let config = DIVConfig::new();
+    let numerators = [1.0 as Float, 0.0, -1.0];
+    let zeroes = [0.0 as Float; 3];
+    let divided = IndicatorConfig::compute(
+        &config,
+        BinaryInput {
+            real0: &numerators,
+            real1: &zeroes,
+        },
+    )
+    .unwrap();
+    assert_eq!(divided.values()[0], Float::INFINITY);
+    assert!(divided.values()[1].is_nan());
+    assert_eq!(divided.values()[2], Float::NEG_INFINITY);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    assert_eq!(
+        StreamingComputation::<DIVConfig>::next(
+            &mut stream,
+            BinaryTick {
+                real0: 1.0,
+                real1: 0.0,
+            },
+        )
+        .unwrap(),
+        Some(Float::INFINITY)
+    );
+
+    let multiplied = IndicatorConfig::compute(
+        &MULTConfig::new(),
+        BinaryInput {
+            real0: &[Float::MAX],
+            real1: &[2.0 as Float],
+        },
+    )
+    .unwrap();
+    assert_eq!(multiplied.values(), &[Float::INFINITY]);
+}
+
+#[test]
+fn sum_config_covers_owned_caller_prepared_validation_and_independent_streams() {
+    let config = SUMConfig::new(3).unwrap();
+    let input = [1.0 as Float, 2.0, 3.0, 4.0, 5.0];
+    let owned = IndicatorConfig::compute(&config, &input).unwrap();
+    assert_eq!(IndicatorConfig::lookback(&config), 2);
+    assert_eq!(owned.range(), OutputRange::new(2, 3));
+    assert_eq!(owned.values(), &[6.0 as Float, 9.0, 12.0]);
+
+    let mut caller_output = [FLOAT_SENTINEL; 4];
+    assert_eq!(
+        IndicatorConfig::compute_into(&config, &input, &mut caller_output).unwrap(),
+        owned.range()
+    );
+    assert_eq!(&caller_output[..3], owned.values());
+    assert_eq!(caller_output[3], FLOAT_SENTINEL);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, input.len()).unwrap();
+    let mut prepared_output = [FLOAT_SENTINEL; 4];
+    assert_eq!(
+        PreparedBatchRunner::<SUMConfig>::compute_into(&mut runner, &input, &mut prepared_output,)
+            .unwrap(),
+        owned.range()
+    );
+    assert_eq!(&prepared_output[..3], owned.values());
+
+    let mut left = IndicatorConfig::stream(&config).unwrap();
+    let mut right = IndicatorConfig::stream(&config).unwrap();
+    for (idx, &value) in input.iter().enumerate() {
+        let expected = if idx < 2 {
+            None
+        } else {
+            Some(owned.values()[idx - 2])
+        };
+        assert_eq!(
+            StreamingComputation::<SUMConfig>::next(&mut left, value).unwrap(),
+            expected
+        );
+        assert_eq!(
+            StreamingComputation::<SUMConfig>::next(&mut right, value).unwrap(),
+            expected
+        );
+    }
+    StreamingComputation::<SUMConfig>::reset(&mut left);
+    assert_eq!(
+        StreamingComputation::<SUMConfig>::next(&mut left, input[0]).unwrap(),
+        None
+    );
+
+    let invalid = [1.0 as Float, Float::NAN, 3.0];
+    let mut unchanged = [FLOAT_SENTINEL; 2];
+    assert!(IndicatorConfig::compute_into(&config, &invalid, &mut unchanged).is_err());
+    assert_eq!(unchanged, [FLOAT_SENTINEL; 2]);
+    assert!(SUMConfig::new(0).is_err());
+}
+
+#[test]
+fn sum_config_stream_preserves_legacy_overflow_recovery() {
+    let config = SUMConfig::new(2).unwrap();
+    let input = [Float::MAX, Float::MAX, 0.0 as Float];
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    assert_eq!(
+        StreamingComputation::<SUMConfig>::next(&mut stream, input[0]).unwrap(),
+        None
+    );
+    assert_eq!(
+        StreamingComputation::<SUMConfig>::next(&mut stream, input[1]).unwrap(),
+        Some(Float::INFINITY)
+    );
+    assert_eq!(
+        StreamingComputation::<SUMConfig>::next(&mut stream, input[2]).unwrap(),
+        Some(Float::MAX)
+    );
 }
 
 #[test]

@@ -8,7 +8,9 @@ mod extrema;
 mod rolling;
 
 pub use arithmetic::{
-    ADD_vec, BinaryInput, BinaryTick, DIV_vec, MULT_vec, SUB_vec, ADD, DIV, MULT, SUB,
+    ADDBatchRunner, ADDConfig, ADDStream, ADD_vec, BinaryInput, BinaryTick, DIVBatchRunner,
+    DIVConfig, DIVStream, DIV_vec, MULTBatchRunner, MULTConfig, MULTStream, MULT_vec,
+    SUBBatchRunner, SUBConfig, SUBStream, SUB_vec, ADD, DIV, MULT, SUB,
 };
 pub use extrema::{
     MAXINDEXBatchRunner, MAXINDEXConfig, MAXINDEXStream, MAXINDEX_vec, MININDEXBatchRunner,
@@ -21,5 +23,5 @@ pub use extrema::{
 };
 pub use rolling::{
     MAXBatchRunner, MAXConfig, MAXStream, MAX_vec, MINBatchRunner, MINConfig, MINStream, MIN_vec,
-    SUM_vec, MAX, MIN, SUM,
+    SUMBatchRunner, SUMConfig, SUMStream, SUM_vec, MAX, MIN, SUM,
 };

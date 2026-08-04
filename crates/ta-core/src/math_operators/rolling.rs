@@ -1,5 +1,6 @@
 //! Rolling-window Math Operators.
 
+use crate::common::validate_finite_value;
 use crate::{
     compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
     validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
@@ -78,21 +79,7 @@ where
 #[allow(non_snake_case)]
 pub fn SUM(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
     let (lookback, count) = validate_rolling_window("SUM", real, timeperiod, out_real.len())?;
-    if count == 0 {
-        return Ok(OutputRange::empty());
-    }
-
-    let mut window_sum: Float = real[..timeperiod].iter().copied().sum();
-    out_real[0] = window_sum;
-
-    for output_idx in 1..count {
-        let new_idx = output_idx + timeperiod - 1;
-        let old_idx = output_idx - 1;
-        window_sum += real[new_idx] - real[old_idx];
-        out_real[output_idx] = window_sum;
-    }
-
-    Ok(OutputRange::new(lookback, count))
+    Ok(sum_kernel(real, timeperiod, lookback, count, out_real))
 }
 
 /// Computes rolling sum into a full-length vector.
@@ -105,6 +92,188 @@ pub fn SUM_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
         range,
         &compact[..range.nb_element],
     ))
+}
+
+#[inline(always)]
+fn sum_kernel(
+    real: &[Float],
+    period: usize,
+    lookback: usize,
+    count: usize,
+    output: &mut [Float],
+) -> OutputRange {
+    if count == 0 {
+        return OutputRange::empty();
+    }
+
+    let mut window_sum: Float = real[..period].iter().copied().sum();
+    output[0] = window_sum;
+    for output_idx in 1..count {
+        let new_idx = output_idx + period - 1;
+        let old_idx = output_idx - 1;
+        window_sum += real[new_idx] - real[old_idx];
+        output[output_idx] = window_sum;
+    }
+    OutputRange::new(lookback, count)
+}
+
+/// Immutable Rolling Sum Indicator Configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SUMConfig {
+    period: usize,
+}
+
+impl SUMConfig {
+    /// Creates a configuration for `timeperiod` observations.
+    pub fn new(timeperiod: usize) -> Result<Self> {
+        period_lookback("timeperiod", timeperiod)?;
+        Ok(Self { period: timeperiod })
+    }
+
+    /// Returns the configured Period.
+    #[inline]
+    pub const fn period(&self) -> usize {
+        self.period
+    }
+}
+
+impl crate::traits::sealed::Sealed for SUMConfig {}
+
+impl IndicatorConfig for SUMConfig {
+    type Input<'a> = &'a [Float];
+    type Output = Vec<Float>;
+    type OutputMut<'a> = &'a mut [Float];
+    type BatchRunner = SUMBatchRunner;
+    type Stream = SUMStream;
+
+    #[inline]
+    fn lookback(&self) -> usize {
+        self.period - 1
+    }
+
+    fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
+        let (lookback, count) = validate_rolling_input(input, self.period)?;
+        let mut values = Vec::with_capacity(count);
+        values.resize(count, 0.0 as Float);
+        let range = sum_kernel(input, self.period, lookback, count, &mut values);
+        CompactOutput::new(input.len(), range, values)
+    }
+
+    #[inline(always)]
+    fn compute_into<'a>(
+        &self,
+        input: Self::Input<'a>,
+        output: Self::OutputMut<'a>,
+    ) -> Result<OutputRange> {
+        SUM(input, self.period, output)
+    }
+
+    #[inline]
+    fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
+        Ok(SUMBatchRunner {
+            config: *self,
+            max_input_len,
+        })
+    }
+
+    #[inline]
+    fn stream(&self) -> Result<Self::Stream> {
+        SUMStream::new(self.period)
+    }
+}
+
+/// Prepared Batch Runner for Rolling Sum.
+#[derive(Debug, Clone)]
+pub struct SUMBatchRunner {
+    config: SUMConfig,
+    max_input_len: usize,
+}
+
+impl crate::traits::sealed::Sealed for SUMBatchRunner {}
+
+impl PreparedBatchRunner<SUMConfig> for SUMBatchRunner {
+    #[inline]
+    fn max_input_len(&self) -> usize {
+        self.max_input_len
+    }
+
+    #[inline(always)]
+    fn compute_into<'a>(
+        &mut self,
+        input: <SUMConfig as IndicatorConfig>::Input<'a>,
+        output: <SUMConfig as IndicatorConfig>::OutputMut<'a>,
+    ) -> Result<OutputRange>
+    where
+        SUMConfig: 'a,
+    {
+        if input.len() > self.max_input_len {
+            return Err(TalibError::prepared_capacity_exceeded(
+                self.max_input_len,
+                input.len(),
+            ));
+        }
+        IndicatorConfig::compute_into(&self.config, input, output)
+    }
+}
+
+/// Independent Streaming Computation state for Rolling Sum.
+#[derive(Debug, Clone)]
+pub struct SUMStream {
+    period: usize,
+    buffer: Vec<Float>,
+    index: usize,
+    count: usize,
+}
+
+impl SUMStream {
+    fn new(period: usize) -> Result<Self> {
+        period_lookback("timeperiod", period)?;
+        let mut buffer = Vec::new();
+        buffer.resize(period, 0.0 as Float);
+        Ok(Self {
+            period,
+            buffer,
+            index: 0,
+            count: 0,
+        })
+    }
+
+    #[inline]
+    const fn period(&self) -> usize {
+        self.period
+    }
+}
+
+impl crate::traits::sealed::Sealed for SUMStream {}
+
+impl StreamingComputation<SUMConfig> for SUMStream {
+    type Tick = Float;
+    type TickOutput = Float;
+
+    #[inline]
+    fn next(&mut self, input: Float) -> Result<Option<Float>> {
+        validate_finite_value("input", 0, input)?;
+
+        if self.count < self.period {
+            self.buffer[self.index] = input;
+            self.count += 1;
+            self.index = (self.index + 1) % self.period;
+            if self.count < self.period {
+                return Ok(None);
+            }
+        } else {
+            self.buffer[self.index] = input;
+            self.index = (self.index + 1) % self.period;
+        }
+
+        Ok(Some(self.buffer.iter().copied().sum()))
+    }
+
+    fn reset(&mut self) {
+        self.buffer.fill(0.0 as Float);
+        self.index = 0;
+        self.count = 0;
+    }
 }
 
 /// TA-Lib-style rolling minimum.
@@ -430,103 +599,7 @@ define_extreme_execution!(
     "rolling maximum"
 );
 
-macro_rules! define_rolling_struct {
-    ($name:ident, $vec_name:ident, $aggregate:expr) => {
-        #[doc = concat!(stringify!($name), " struct surface.")]
-        #[derive(Debug, Clone)]
-        pub struct $name {
-            period: usize,
-            buffer: Vec<Float>,
-            index: usize,
-            count: usize,
-        }
-
-        impl $name {
-            #[doc = concat!("Creates a ", stringify!($name), " calculator.")]
-            pub fn new(timeperiod: usize) -> Result<Self> {
-                period_lookback("timeperiod", timeperiod)?;
-                let mut buffer = Vec::new();
-                buffer.resize(timeperiod, 0.0 as Float);
-                Ok(Self {
-                    period: timeperiod,
-                    buffer,
-                    index: 0,
-                    count: 0,
-                })
-            }
-
-            /// Returns the configured period.
-            pub const fn period(&self) -> usize {
-                self.period
-            }
-
-            /// Computes compact outputs.
-            pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-                $name(real, self.period, out_real)
-            }
-
-            /// Computes full-length outputs.
-            pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-                $vec_name(real, self.period)
-            }
-        }
-
-        impl Indicator for $name {
-            type Input<'a> = &'a [Float];
-            type OutputMut<'a> = &'a mut [Float];
-            type OutputOwned = Vec<Float>;
-
-            fn lookback(&self) -> usize {
-                self.period - 1
-            }
-
-            fn compute<'a>(
-                &self,
-                inputs: Self::Input<'a>,
-                outputs: Self::OutputMut<'a>,
-            ) -> Result<OutputRange> {
-                $name(inputs, self.period, outputs)
-            }
-
-            fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-                $vec_name(inputs, self.period)
-            }
-        }
-
-        impl StreamingIndicator for $name {
-            type Tick = Float;
-            type TickOutput = Float;
-
-            fn next(&mut self, input: Float) -> Result<Option<Float>> {
-                validate_finite_slice("input", &[input])?;
-
-                self.buffer[self.index] = input;
-                if self.count < self.period {
-                    self.count += 1;
-                }
-                self.index = (self.index + 1) % self.period;
-
-                if self.count < self.period {
-                    return Ok(None);
-                }
-
-                Ok(Some($aggregate(&self.buffer)))
-            }
-        }
-
-        impl Resettable for $name {
-            fn reset(&mut self) {
-                for value in &mut self.buffer {
-                    *value = 0.0 as Float;
-                }
-                self.index = 0;
-                self.count = 0;
-            }
-        }
-    };
-}
-
-macro_rules! define_extreme_adapter {
+macro_rules! define_rolling_adapter {
     ($name:ident, $vec_name:ident, $config:ident, $stream:ident) => {
         #[doc = concat!("Legacy ", stringify!($name), " indicator.")]
         #[derive(Debug, Clone)]
@@ -605,9 +678,6 @@ macro_rules! define_extreme_adapter {
     };
 }
 
-define_rolling_struct!(SUM, SUM_vec, |window: &[Float]| window
-    .iter()
-    .copied()
-    .sum());
-define_extreme_adapter!(MIN, MIN_vec, MINConfig, MINStream);
-define_extreme_adapter!(MAX, MAX_vec, MAXConfig, MAXStream);
+define_rolling_adapter!(SUM, SUM_vec, SUMConfig, SUMStream);
+define_rolling_adapter!(MIN, MIN_vec, MINConfig, MINStream);
+define_rolling_adapter!(MAX, MAX_vec, MAXConfig, MAXStream);
