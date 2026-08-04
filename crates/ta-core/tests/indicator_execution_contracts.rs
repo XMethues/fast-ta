@@ -30,6 +30,7 @@ use ta_core::{
         MEDPRICEInput, MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig,
         WCLPRICEInput, WCLPRICETick, AVGDEV, AVGPRICE,
     },
+    statistic::{BETAConfig, CORRELConfig, PairInput, PairTick, STDDEVConfig, VARConfig},
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
         TRANGETick, ATR, NATR, TRANGE,
@@ -4746,6 +4747,200 @@ fn sum_config_stream_preserves_legacy_overflow_recovery() {
         StreamingComputation::<SUMConfig>::next(&mut stream, input[2]).unwrap(),
         Some(Float::MAX)
     );
+}
+
+macro_rules! assert_single_statistic_config {
+    ($config:expr, $config_type:ty) => {{
+        let config = $config;
+        let input = [1.0 as Float, 4.0, 2.0, 8.0, 3.0, 9.0, 5.0, 7.0];
+        let owned = IndicatorConfig::compute(&config, &input).unwrap();
+
+        let mut caller_output = [FLOAT_SENTINEL; 8];
+        let range = IndicatorConfig::compute_into(&config, &input, &mut caller_output).unwrap();
+        assert_eq!(range, owned.range());
+        for (&actual, &expected) in caller_output.iter().zip(owned.values()) {
+            assert_float_close(actual, expected);
+        }
+        assert!(caller_output[owned.values().len()..]
+            .iter()
+            .all(|&value| value == FLOAT_SENTINEL));
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, input.len()).unwrap();
+        let mut prepared_output = [FLOAT_SENTINEL; 8];
+        assert_eq!(
+            PreparedBatchRunner::<$config_type>::compute_into(
+                &mut runner,
+                &input,
+                &mut prepared_output,
+            )
+            .unwrap(),
+            owned.range()
+        );
+        for (&actual, &expected) in prepared_output.iter().zip(owned.values()) {
+            assert_float_close(actual, expected);
+        }
+
+        let replay = [7.0 as Float, 5.0, 9.0, 3.0, 8.0, 2.0, 4.0, 1.0];
+        let replay_owned = IndicatorConfig::compute(&config, &replay).unwrap();
+        PreparedBatchRunner::<$config_type>::compute_into(
+            &mut runner,
+            &replay,
+            &mut prepared_output,
+        )
+        .unwrap();
+        for (&actual, &expected) in prepared_output.iter().zip(replay_owned.values()) {
+            assert_float_close(actual, expected);
+        }
+
+        let oversized = [1.0 as Float; 9];
+        let mut unchanged = [FLOAT_SENTINEL; 9];
+        assert_eq!(
+            PreparedBatchRunner::<$config_type>::compute_into(
+                &mut runner,
+                &oversized,
+                &mut unchanged,
+            )
+            .unwrap_err(),
+            TalibError::PreparedCapacityExceeded {
+                max_input_len: input.len(),
+                actual_input_len: oversized.len(),
+            }
+        );
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 9]);
+
+        let mut stream = IndicatorConfig::stream(&config).unwrap();
+        for (idx, &tick) in input.iter().enumerate() {
+            let actual = StreamingComputation::<$config_type>::next(&mut stream, tick).unwrap();
+            if idx < owned.range().beg_idx {
+                assert_eq!(actual, None);
+            } else {
+                assert_float_close(actual.unwrap(), owned.values()[idx - owned.range().beg_idx]);
+            }
+        }
+        StreamingComputation::<$config_type>::reset(&mut stream);
+        assert_eq!(
+            StreamingComputation::<$config_type>::next(&mut stream, input[0]).unwrap(),
+            None
+        );
+
+        let invalid = [1.0 as Float, Float::NAN, 3.0];
+        let mut unchanged = [FLOAT_SENTINEL; 3];
+        assert!(IndicatorConfig::compute_into(&config, &invalid, &mut unchanged).is_err());
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 3]);
+    }};
+}
+
+#[test]
+fn variance_configs_cover_owned_caller_prepared_and_streaming_execution() {
+    assert_single_statistic_config!(VARConfig::new(3, 1.0).unwrap(), VARConfig);
+    assert_single_statistic_config!(STDDEVConfig::new(3, 2.0).unwrap(), STDDEVConfig);
+    assert!(VARConfig::new(0, 1.0).is_err());
+    assert!(STDDEVConfig::new(1, 1.0).is_err());
+    assert!(VARConfig::new(3, Float::NAN).is_err());
+}
+
+macro_rules! assert_paired_statistic_config {
+    ($config:expr, $config_type:ty) => {{
+        let config = $config;
+        let real0 = [10.0 as Float, 11.0, 13.0, 12.0, 15.0, 14.0, 18.0, 17.0];
+        let real1 = [20.0 as Float, 22.0, 23.0, 21.0, 26.0, 24.0, 29.0, 28.0];
+        let input = PairInput {
+            real0: &real0,
+            real1: &real1,
+        };
+        let owned = IndicatorConfig::compute(&config, input).unwrap();
+
+        let mut caller_output = [FLOAT_SENTINEL; 8];
+        let range = IndicatorConfig::compute_into(&config, input, &mut caller_output).unwrap();
+        assert_eq!(range, owned.range());
+        for (&actual, &expected) in caller_output.iter().zip(owned.values()) {
+            assert_float_close(actual, expected);
+        }
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, real0.len()).unwrap();
+        let mut prepared_output = [FLOAT_SENTINEL; 8];
+        assert_eq!(
+            PreparedBatchRunner::<$config_type>::compute_into(
+                &mut runner,
+                input,
+                &mut prepared_output,
+            )
+            .unwrap(),
+            owned.range()
+        );
+        for (&actual, &expected) in prepared_output.iter().zip(owned.values()) {
+            assert_float_close(actual, expected);
+        }
+
+        let oversized0 = [1.0 as Float; 9];
+        let oversized1 = [2.0 as Float; 9];
+        let mut unchanged = [FLOAT_SENTINEL; 9];
+        assert_eq!(
+            PreparedBatchRunner::<$config_type>::compute_into(
+                &mut runner,
+                PairInput {
+                    real0: &oversized0,
+                    real1: &oversized1,
+                },
+                &mut unchanged,
+            )
+            .unwrap_err(),
+            TalibError::PreparedCapacityExceeded {
+                max_input_len: real0.len(),
+                actual_input_len: oversized0.len(),
+            }
+        );
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 9]);
+
+        let mut stream = IndicatorConfig::stream(&config).unwrap();
+        for idx in 0..real0.len() {
+            let actual = StreamingComputation::<$config_type>::next(
+                &mut stream,
+                PairTick {
+                    real0: real0[idx],
+                    real1: real1[idx],
+                },
+            )
+            .unwrap();
+            if idx < owned.range().beg_idx {
+                assert_eq!(actual, None);
+            } else {
+                assert_float_close(actual.unwrap(), owned.values()[idx - owned.range().beg_idx]);
+            }
+        }
+        StreamingComputation::<$config_type>::reset(&mut stream);
+
+        let mut unchanged = [FLOAT_SENTINEL; 8];
+        assert!(IndicatorConfig::compute_into(
+            &config,
+            PairInput {
+                real0: &real0,
+                real1: &real1[..7],
+            },
+            &mut unchanged,
+        )
+        .is_err());
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 8]);
+        let invalid = [Float::NAN; 8];
+        assert!(IndicatorConfig::compute_into(
+            &config,
+            PairInput {
+                real0: &invalid,
+                real1: &real1,
+            },
+            &mut unchanged,
+        )
+        .is_err());
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 8]);
+    }};
+}
+
+#[test]
+fn paired_statistic_configs_cover_owned_caller_prepared_and_streaming_execution() {
+    assert_paired_statistic_config!(CORRELConfig::new(3).unwrap(), CORRELConfig);
+    assert_paired_statistic_config!(BETAConfig::new(3).unwrap(), BETAConfig);
+    assert!(CORRELConfig::new(0).is_err());
+    assert!(BETAConfig::new(0).is_err());
 }
 
 #[test]

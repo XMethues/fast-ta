@@ -12,14 +12,15 @@ mod variance;
 
 use crate::Float;
 
-pub use beta::{BETA_vec, BETA};
-pub use correl::{CORREL_vec, CORREL};
+pub use beta::{BETABatchRunner, BETAConfig, BETAStream, BETA_vec, BETA};
+pub use correl::{CORRELBatchRunner, CORRELConfig, CORRELStream, CORREL_vec, CORREL};
 pub use regression::{
     LINEARREG_ANGLE_vec, LINEARREG_INTERCEPT_vec, LINEARREG_SLOPE_vec, LINEARREG_vec, TSF_vec,
     LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT, LINEARREG_SLOPE, TSF,
 };
 pub use variance::{
-    STDDEV_vec, STDDEV_vec_with_default_nbdev, STDDEV_with_default_nbdev, VAR_vec,
+    STDDEVBatchRunner, STDDEVConfig, STDDEVStream, STDDEV_vec, STDDEV_vec_with_default_nbdev,
+    STDDEV_with_default_nbdev, VARBatchRunner, VARConfig, VARStream, VAR_vec,
     VAR_vec_with_default_nbdev, VAR_with_default_nbdev, STDDEV, VAR,
 };
 

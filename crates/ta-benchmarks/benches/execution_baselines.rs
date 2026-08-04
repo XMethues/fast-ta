@@ -35,6 +35,10 @@ use ta_core::{
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
         WCLPRICETick, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
     },
+    statistic::{
+        BETAConfig, CORRELConfig, PairInput, PairTick, STDDEVConfig, VARConfig, BETA, CORREL,
+        STDDEV, VAR,
+    },
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
         TRANGETick, ATR, NATR, TRANGE,
@@ -1811,6 +1815,32 @@ define_single_output_workloads!(
     0.0 as Float
 );
 define_single_output_workloads!(
+    bench_var_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics_workloads/VAR",
+    VAR,
+    VARConfig,
+    var_with_default_nbdev,
+    var_config_with_default_nbdev,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_stddev_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics_workloads/STDDEV",
+    STDDEV,
+    STDDEVConfig,
+    stddev_with_default_nbdev,
+    stddev_config_with_default_nbdev,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
     bench_minindex_repeated_and_streaming,
     "indicator_execution/expanded/single_extrema_workloads/MININDEX",
     MININDEX,
@@ -2318,6 +2348,32 @@ fn bench_math_transform_execution(c: &mut Criterion) {
     bench_parameter_free_transform!(c, TANH, TANHConfig, series_fixture);
 }
 
+fn var_with_default_nbdev(period: usize) -> ta_core::Result<VAR> {
+    VAR::with_default_nbdev(period)
+}
+
+fn var_config_with_default_nbdev(period: usize) -> ta_core::Result<VARConfig> {
+    VARConfig::with_default_nbdev(period)
+}
+
+fn stddev_with_default_nbdev(period: usize) -> ta_core::Result<STDDEV> {
+    STDDEV::with_default_nbdev(period)
+}
+
+fn stddev_config_with_default_nbdev(period: usize) -> ta_core::Result<STDDEVConfig> {
+    STDDEVConfig::with_default_nbdev(period)
+}
+
+struct PairFixture {
+    real0: Vec<Float>,
+    real1: Vec<Float>,
+}
+
+fn paired_fixture(size: usize) -> PairFixture {
+    let (real0, real1) = binary_fixture(size, 0);
+    PairFixture { real0, real1 }
+}
+
 fn binary_fixture(size: usize, seed: usize) -> (Vec<Float>, Vec<Float>) {
     (series_fixture(size, seed), series_fixture(size, seed + 1))
 }
@@ -2705,6 +2761,7 @@ macro_rules! define_named_input_benchmarks {
         $config:ident,
         $indicator_ctor:expr,
         $config_ctor:expr,
+        $fixture_ctor:path,
         $input:ident,
         $tick:ident,
         [$($field:ident),+ $(,)?]
@@ -2718,7 +2775,7 @@ macro_rules! define_named_input_benchmarks {
                     BenchmarkId::new("current_caller_compact", size),
                     &size,
                     |b, &size| {
-                        let ohlc = ohlc_fixture(size);
+                        let ohlc = ($fixture_ctor)(size);
                         let indicator =
                             ($indicator_ctor)().expect("valid multi-series configuration");
                         let mut output = vec![0.0 as Float; size];
@@ -2740,7 +2797,7 @@ macro_rules! define_named_input_benchmarks {
                     BenchmarkId::new("config_caller_compact", size),
                     &size,
                     |b, &size| {
-                        let ohlc = ohlc_fixture(size);
+                        let ohlc = ($fixture_ctor)(size);
                         let config = ($config_ctor)();
                         let mut output = vec![0.0 as Float; size];
                         b.iter(|| {
@@ -2761,7 +2818,7 @@ macro_rules! define_named_input_benchmarks {
                     BenchmarkId::new("prepared_runner", size),
                     &size,
                     |b, &size| {
-                        let ohlc = ohlc_fixture(size);
+                        let ohlc = ($fixture_ctor)(size);
                         let config = ($config_ctor)();
                         let mut runner = IndicatorConfig::prepare_batch(&config, size)
                             .expect("valid prepared multi-series capacity");
@@ -2784,7 +2841,7 @@ macro_rules! define_named_input_benchmarks {
                     BenchmarkId::new("legacy_owned_aligned", size),
                     &size,
                     |b, &size| {
-                        let ohlc = ohlc_fixture(size);
+                        let ohlc = ($fixture_ctor)(size);
                         let indicator =
                             ($indicator_ctor)().expect("valid multi-series configuration");
                         b.iter_batched(
@@ -2808,7 +2865,7 @@ macro_rules! define_named_input_benchmarks {
                     BenchmarkId::new("config_owned_compact", size),
                     &size,
                     |b, &size| {
-                        let ohlc = ohlc_fixture(size);
+                        let ohlc = ($fixture_ctor)(size);
                         let config = ($config_ctor)();
                         b.iter_batched(
                             || (),
@@ -2838,7 +2895,7 @@ macro_rules! define_named_input_benchmarks {
             ));
             group.bench_function("universe/current_caller_compact", |b| {
                 let universe = (0..UNIVERSE_INSTRUMENTS)
-                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .map(|_| ($fixture_ctor)(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
                 let indicator = ($indicator_ctor)().expect("valid multi-series configuration");
                 let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
@@ -2858,7 +2915,7 @@ macro_rules! define_named_input_benchmarks {
             });
             group.bench_function("universe/config_caller_compact", |b| {
                 let universe = (0..UNIVERSE_INSTRUMENTS)
-                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .map(|_| ($fixture_ctor)(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
                 let config = ($config_ctor)();
                 let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
@@ -2878,7 +2935,7 @@ macro_rules! define_named_input_benchmarks {
             });
             group.bench_function("universe/prepared_runner", |b| {
                 let universe = (0..UNIVERSE_INSTRUMENTS)
-                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .map(|_| ($fixture_ctor)(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
                 let config = ($config_ctor)();
                 let mut runner =
@@ -2903,7 +2960,7 @@ macro_rules! define_named_input_benchmarks {
                 (WORKERS * REPEATED_SERIES_LEN) as u64,
             ));
             group.bench_function("per_worker/current_instances", |b| {
-                let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+                let ohlc = ($fixture_ctor)(REPEATED_SERIES_LEN);
                 let indicators = (0..WORKERS)
                     .map(|_| {
                         ($indicator_ctor)().expect("valid multi-series configuration")
@@ -2926,7 +2983,7 @@ macro_rules! define_named_input_benchmarks {
                 });
             });
             group.bench_function("per_worker/prepared_runners", |b| {
-                let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+                let ohlc = ($fixture_ctor)(REPEATED_SERIES_LEN);
                 let config = ($config_ctor)();
                 let mut runners = (0..WORKERS)
                     .map(|_| IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN).unwrap())
@@ -2953,7 +3010,7 @@ macro_rules! define_named_input_benchmarks {
             ));
             group.bench_function("streaming/legacy_instances", |b| {
                 let inputs = (0..STREAM_INSTRUMENTS)
-                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .map(|_| ($fixture_ctor)(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
                 b.iter_batched_ref(
                     || {
@@ -2982,7 +3039,7 @@ macro_rules! define_named_input_benchmarks {
             });
             group.bench_function("streaming/config_streams", |b| {
                 let inputs = (0..STREAM_INSTRUMENTS)
-                    .map(|_| ohlc_fixture(REPEATED_SERIES_LEN))
+                    .map(|_| ($fixture_ctor)(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
                 let config = ($config_ctor)();
                 b.iter_batched_ref(
@@ -3047,6 +3104,32 @@ define_single_output_benchmark!(
     SUMConfig,
     SUM::new,
     SUMConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_var_qualified_matrix,
+    "indicator_execution/expanded/rolling_statistics/VAR",
+    VAR,
+    VARConfig,
+    var_with_default_nbdev,
+    var_config_with_default_nbdev,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_stddev_qualified_matrix,
+    "indicator_execution/expanded/rolling_statistics/STDDEV",
+    STDDEV,
+    STDDEVConfig,
+    stddev_with_default_nbdev,
+    stddev_config_with_default_nbdev,
     1,
     Float,
     0.0 as Float,
@@ -3388,6 +3471,99 @@ define_hlc_parameter_sweep!(
     NATRInput
 );
 
+macro_rules! define_paired_statistic_parameter_sweep {
+    ($name:ident, $group_name:literal, $indicator:ident, $config:ident) => {
+        fn $name(c: &mut Criterion) {
+            let mut group = c.benchmark_group($group_name);
+            let fixture = paired_fixture(REPEATED_SERIES_LEN);
+            let indicators = SWEEP_PERIODS
+                .iter()
+                .map(|&period| {
+                    $indicator::new(period).expect("valid paired-statistic sweep period")
+                })
+                .collect::<Vec<_>>();
+            let configs = SWEEP_PERIODS
+                .iter()
+                .map(|&period| $config::new(period).expect("valid paired-statistic sweep period"))
+                .collect::<Vec<_>>();
+            let mut runners = configs
+                .iter()
+                .map(|config| {
+                    IndicatorConfig::prepare_batch(config, REPEATED_SERIES_LEN)
+                        .expect("valid paired-statistic sweep capacity")
+                })
+                .collect::<Vec<_>>();
+            let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+            group.throughput(Throughput::Elements(
+                (SWEEP_PERIODS.len() * REPEATED_SERIES_LEN) as u64,
+            ));
+
+            group.bench_function("current_caller_compact", |b| {
+                b.iter(|| {
+                    for indicator in &indicators {
+                        let range = Indicator::compute(
+                            black_box(indicator),
+                            PairInput {
+                                real0: black_box(fixture.real0.as_slice()),
+                                real1: black_box(fixture.real1.as_slice()),
+                            },
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect("valid current paired-statistic sweep fixture");
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("config_caller_compact", |b| {
+                b.iter(|| {
+                    for config in &configs {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(config),
+                            PairInput {
+                                real0: black_box(fixture.real0.as_slice()),
+                                real1: black_box(fixture.real1.as_slice()),
+                            },
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect("valid configured paired-statistic sweep fixture");
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("prepared_runners", |b| {
+                b.iter(|| {
+                    for runner in &mut runners {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(runner),
+                            PairInput {
+                                real0: black_box(fixture.real0.as_slice()),
+                                real1: black_box(fixture.real1.as_slice()),
+                            },
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect("valid prepared paired-statistic sweep fixture");
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.finish();
+        }
+    };
+}
+
+define_paired_statistic_parameter_sweep!(
+    bench_correl_parameter_sweep,
+    "indicator_execution/expanded/rolling_statistics_workloads/CORREL/parameter_sweep",
+    CORREL,
+    CORRELConfig
+);
+define_paired_statistic_parameter_sweep!(
+    bench_beta_parameter_sweep,
+    "indicator_execution/expanded/rolling_statistics_workloads/BETA/parameter_sweep",
+    BETA,
+    BETAConfig
+);
+
 fn bench_adosc_parameter_sweep(c: &mut Criterion) {
     let mut group =
         c.benchmark_group("indicator_execution/expanded/volume_workloads/ADOSC/parameter_sweep");
@@ -3476,6 +3652,7 @@ define_named_input_benchmarks!(
     AVGPRICEConfig,
     AVGPRICE::new,
     AVGPRICEConfig::new,
+    ohlc_fixture,
     AVGPRICEInput,
     AVGPRICETick,
     [open, high, low, close]
@@ -3489,6 +3666,7 @@ define_named_input_benchmarks!(
     MEDPRICEConfig,
     MEDPRICE::new,
     MEDPRICEConfig::new,
+    ohlc_fixture,
     MEDPRICEInput,
     MEDPRICETick,
     [high, low]
@@ -3502,6 +3680,7 @@ define_named_input_benchmarks!(
     TYPPRICEConfig,
     TYPPRICE::new,
     TYPPRICEConfig::new,
+    ohlc_fixture,
     TYPPRICEInput,
     TYPPRICETick,
     [high, low, close]
@@ -3515,6 +3694,7 @@ define_named_input_benchmarks!(
     WCLPRICEConfig,
     WCLPRICE::new,
     WCLPRICEConfig::new,
+    ohlc_fixture,
     WCLPRICEInput,
     WCLPRICETick,
     [high, low, close]
@@ -3529,6 +3709,7 @@ define_named_input_benchmarks!(
     ADConfig,
     AD::new,
     ADConfig::new,
+    ohlc_fixture,
     ADInput,
     ADTick,
     [high, low, close, volume]
@@ -3542,6 +3723,7 @@ define_named_input_benchmarks!(
     ADOSCConfig,
     || ADOSC::new(PERIOD / 2, PERIOD),
     || ADOSCConfig::new(PERIOD / 2, PERIOD).expect("valid ADOSC parameters"),
+    ohlc_fixture,
     ADOSCInput,
     ADOSCTick,
     [high, low, close, volume]
@@ -3555,6 +3737,7 @@ define_named_input_benchmarks!(
     OBVConfig,
     OBV::new,
     OBVConfig::new,
+    ohlc_fixture,
     OBVInput,
     OBVTick,
     [close, volume]
@@ -3569,6 +3752,7 @@ define_named_input_benchmarks!(
     TRANGEConfig,
     TRANGE::new,
     TRANGEConfig::new,
+    ohlc_fixture,
     TRANGEInput,
     TRANGETick,
     [high, low, close]
@@ -3582,6 +3766,7 @@ define_named_input_benchmarks!(
     ATRConfig,
     || ATR::new(PERIOD),
     || ATRConfig::new(PERIOD).expect("valid ATR period"),
+    ohlc_fixture,
     ATRInput,
     ATRTick,
     [high, low, close]
@@ -3595,9 +3780,38 @@ define_named_input_benchmarks!(
     NATRConfig,
     || NATR::new(PERIOD),
     || NATRConfig::new(PERIOD).expect("valid NATR period"),
+    ohlc_fixture,
     NATRInput,
     NATRTick,
     [high, low, close]
+);
+define_named_input_benchmarks!(
+    bench_correl_qualified_matrix,
+    bench_correl_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics/CORREL",
+    "indicator_execution/expanded/rolling_statistics_workloads/CORREL",
+    CORREL,
+    CORRELConfig,
+    || CORREL::new(PERIOD),
+    || CORRELConfig::new(PERIOD).expect("valid CORREL period"),
+    paired_fixture,
+    PairInput,
+    PairTick,
+    [real0, real1]
+);
+define_named_input_benchmarks!(
+    bench_beta_qualified_matrix,
+    bench_beta_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics/BETA",
+    "indicator_execution/expanded/rolling_statistics_workloads/BETA",
+    BETA,
+    BETAConfig,
+    || BETA::new(PERIOD),
+    || BETAConfig::new(PERIOD).expect("valid BETA period"),
+    paired_fixture,
+    PairInput,
+    PairTick,
+    [real0, real1]
 );
 
 criterion_group!(
@@ -3668,5 +3882,15 @@ criterion_group!(
     bench_binary_operator_execution,
     bench_sum_qualified_matrix,
     bench_sum_repeated_and_streaming,
+    bench_var_qualified_matrix,
+    bench_stddev_qualified_matrix,
+    bench_var_repeated_and_streaming,
+    bench_stddev_repeated_and_streaming,
+    bench_correl_qualified_matrix,
+    bench_beta_qualified_matrix,
+    bench_correl_repeated_and_streaming,
+    bench_beta_repeated_and_streaming,
+    bench_correl_parameter_sweep,
+    bench_beta_parameter_sweep,
 );
 criterion_main!(benches);

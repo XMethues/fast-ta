@@ -62,6 +62,7 @@ impl RollingMoments {
         }
     }
 
+    #[inline]
     pub(super) fn push(&mut self, input: Float) -> Option<Float> {
         self.sum += input;
         self.sum_sq += input * input;
@@ -81,6 +82,7 @@ impl RollingMoments {
         Some(variance)
     }
 
+    #[inline]
     fn remove_trailing(&mut self, input: Float) {
         if self.trailing.is_empty() {
             self.sum -= input;
@@ -95,6 +97,7 @@ impl RollingMoments {
         self.index = (self.index + 1) % self.trailing.len();
     }
 
+    #[inline]
     pub(super) fn reset(&mut self) {
         self.trailing.fill(0.0 as Float);
         self.index = 0;
@@ -115,6 +118,23 @@ pub(super) struct PairedSnapshot {
 }
 
 impl PairedSnapshot {
+    pub(super) fn new(
+        n: usize,
+        sum_x: Float,
+        sum_y: Float,
+        sum_x_sq: Float,
+        sum_y_sq: Float,
+        sum_xy: Float,
+    ) -> Self {
+        Self {
+            n: n as Float,
+            sum_x,
+            sum_y,
+            sum_x_sq,
+            sum_y_sq,
+            sum_xy,
+        }
+    }
     pub(super) fn correlation(self) -> Float {
         let centered_x = self.sum_x_sq - self.sum_x * self.sum_x / self.n;
         let centered_y = self.sum_y_sq - self.sum_y * self.sum_y / self.n;

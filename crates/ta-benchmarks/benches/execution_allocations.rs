@@ -38,6 +38,7 @@ use ta_core::{
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
         WCLPRICETick, AVGPRICE,
     },
+    statistic::{BETAConfig, CORRELConfig, PairInput, PairTick, STDDEVConfig, VARConfig},
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
         TRANGETick,
@@ -1211,6 +1212,265 @@ fn profile_binary_operator_execution() {
     profile_binary_operator!("DIV", DIVConfig);
 }
 
+macro_rules! profile_single_statistic {
+    ($label:literal, $config:ty, $new_config:expr, $prepared_scratch:expr) => {{
+        let input = series_fixture(PROFILE_SIZE, 0);
+        let scratch_bytes = (PERIOD - 1) * core::mem::size_of::<Float>();
+        let scenario = format!("setup/{}Config/parameters", $label);
+        let profile = print_profile(&scenario, || $new_config);
+        assert_zero_allocations(&scenario, profile);
+
+        let config: $config = $new_config;
+        let count = PROFILE_SIZE - IndicatorConfig::lookback(&config);
+        let output_bytes = count * core::mem::size_of::<Float>();
+        let mut output = vec![0.0 as Float; count];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(&config, input.as_slice(), output.as_mut_slice())
+                .expect("valid statistic fixture")
+        });
+        assert_profile(&scenario, profile, 1, scratch_bytes, scratch_bytes, 0);
+
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input.as_slice()).expect("valid statistic fixture")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let scenario = format!("one_shot/{}Config/owned_compact/count_0", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, &[]).expect("valid empty statistic fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity")
+        });
+        if $prepared_scratch {
+            assert_profile(
+                &scenario,
+                profile,
+                1,
+                scratch_bytes,
+                scratch_bytes,
+                scratch_bytes,
+            );
+        } else {
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let mut runner =
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity");
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $label);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input.as_slice(),
+                    output.as_mut_slice(),
+                )
+                .expect("valid prepared statistic fixture")
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized = series_fixture(PROFILE_SIZE + 1, 1);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $label,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                oversized.as_slice(),
+                output.as_mut_slice(),
+            )
+            .expect_err("oversized statistic input must be rejected")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}Config/stream", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::stream(&config).expect("valid statistic stream")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            scratch_bytes,
+            scratch_bytes,
+            scratch_bytes,
+        );
+
+        let mut stream = IndicatorConfig::stream(&config).expect("valid statistic stream");
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            let mut last = None;
+            for &tick in &input {
+                last = StreamingComputation::<$config>::next(&mut stream, tick)
+                    .expect("valid statistic stream tick");
+                black_box(last);
+            }
+            last
+        });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
+macro_rules! profile_paired_statistic {
+    ($label:literal, $config:ty, $new_config:expr) => {{
+        let real0 = series_fixture(PROFILE_SIZE, 0);
+        let real1 = series_fixture(PROFILE_SIZE, 1);
+        let scratch_bytes = 2 * (PERIOD - 1) * core::mem::size_of::<Float>();
+        let scenario = format!("setup/{}Config/parameters", $label);
+        let profile = print_profile(&scenario, || $new_config);
+        assert_zero_allocations(&scenario, profile);
+
+        let config: $config = $new_config;
+        let count = PROFILE_SIZE - IndicatorConfig::lookback(&config);
+        let output_bytes = count * core::mem::size_of::<Float>();
+        let input = PairInput {
+            real0: real0.as_slice(),
+            real1: real1.as_slice(),
+        };
+        let mut output = vec![0.0 as Float; count];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(&config, input, output.as_mut_slice())
+                .expect("valid paired statistic fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input).expect("valid paired statistic fixture")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let scenario = format!("one_shot/{}Config/owned_compact/count_0", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(
+                &config,
+                PairInput {
+                    real0: &[],
+                    real1: &[],
+                },
+            )
+            .expect("valid empty paired statistic fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut runner =
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity");
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $label);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input,
+                    output.as_mut_slice(),
+                )
+                .expect("valid prepared paired statistic fixture")
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized0 = series_fixture(PROFILE_SIZE + 1, 2);
+        let oversized1 = series_fixture(PROFILE_SIZE + 1, 3);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $label,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                PairInput {
+                    real0: oversized0.as_slice(),
+                    real1: oversized1.as_slice(),
+                },
+                output.as_mut_slice(),
+            )
+            .expect_err("oversized paired statistic input must be rejected")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}Config/stream", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::stream(&config).expect("valid paired statistic stream")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            2,
+            scratch_bytes,
+            scratch_bytes,
+            scratch_bytes,
+        );
+
+        let mut stream = IndicatorConfig::stream(&config).expect("valid paired statistic stream");
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            let mut last = None;
+            for (&real0, &real1) in real0.iter().zip(&real1) {
+                last =
+                    StreamingComputation::<$config>::next(&mut stream, PairTick { real0, real1 })
+                        .expect("valid paired statistic stream tick");
+                black_box(last);
+            }
+            last
+        });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
+fn profile_statistic_execution() {
+    profile_single_statistic!(
+        "VAR",
+        VARConfig,
+        VARConfig::with_default_nbdev(PERIOD).expect("valid parameters"),
+        false
+    );
+    profile_single_statistic!(
+        "STDDEV",
+        STDDEVConfig,
+        STDDEVConfig::with_default_nbdev(PERIOD).expect("valid parameters"),
+        true
+    );
+    profile_paired_statistic!(
+        "CORREL",
+        CORRELConfig,
+        CORRELConfig::new(PERIOD).expect("valid period")
+    );
+    profile_paired_statistic!(
+        "BETA",
+        BETAConfig,
+        BETAConfig::new(PERIOD).expect("valid period")
+    );
+}
+
 macro_rules! profile_named_input_indicator {
     (
         $label:literal,
@@ -1681,6 +1941,7 @@ fn main() {
     profile_math_transform_execution();
     profile_binary_operator_execution();
     profile_named_input_execution();
+    profile_statistic_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }

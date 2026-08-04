@@ -11,12 +11,15 @@ use ta_core::math_transform::{
 use ta_core::overlap::{DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA};
 use ta_core::price_transform::{AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE};
 use ta_core::statistic::{
-    BETA, CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF,
-    VAR,
+    BETABatchRunner, BETAConfig, BETAStream, CORRELBatchRunner, CORRELConfig, CORRELStream,
+    STDDEVBatchRunner, STDDEVConfig, STDDEVStream, VARBatchRunner, VARConfig, VARStream, BETA,
+    CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF, VAR,
 };
 use ta_core::volatility::{ATR, NATR, TRANGE};
 use ta_core::volume::{AD, ADOSC, OBV};
-use ta_core::{Indicator, StreamingIndicator};
+use ta_core::{
+    Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation, StreamingIndicator,
+};
 
 #[test]
 fn inventory_contains_official_161_functions() {
@@ -265,6 +268,22 @@ fn first_tranche_structs_implement_batch_and_streaming_traits() {
     assert_streaming::<SUB>();
     assert_indicator::<SUM>();
     assert_streaming::<SUM>();
+}
+
+#[test]
+fn migrated_rolling_statistics_are_in_the_public_execution_catalogue() {
+    fn assert_execution_types<C, R, S>()
+    where
+        C: IndicatorConfig<BatchRunner = R, Stream = S>,
+        R: PreparedBatchRunner<C>,
+        S: StreamingComputation<C>,
+    {
+    }
+
+    assert_execution_types::<VARConfig, VARBatchRunner, VARStream>();
+    assert_execution_types::<STDDEVConfig, STDDEVBatchRunner, STDDEVStream>();
+    assert_execution_types::<CORRELConfig, CORRELBatchRunner, CORRELStream>();
+    assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
 }
 
 #[test]

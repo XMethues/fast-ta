@@ -942,3 +942,60 @@ Universe and parameter-sweep rows report current / configuration / prepared. Per
 ### Gate conclusion
 
 All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent against its same-run reference. Every owned Compact Output path improved over the legacy Aligned Output path by 18.55%–40.06%. These are host-local default-`f64` qualification results, not portable speedup claims.
+
+## Issue #13 rolling-statistics qualification
+
+Issue #13 migrates `VAR`, `STDDEV`, `CORREL`, and `BETA` through the Rust-first execution seam. Immutable configurations now provide owned and caller-owned Compact Output, capacity-checked Prepared Batch Runners, and independent Streaming Computations while the uppercase compatibility functions and structs retain their existing signatures and padded-owned behavior. `VAR` and `STDDEV` share validation, projection, and rolling-moment primitives; `CORREL` and `BETA` use typed paired batch inputs and ticks. `BETA` keeps its one-observation return lookback in addition to its configured Period.
+
+The full benchmark command is `cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/rolling_statistics`. The one-shot matrix uses observations 64/4,096/65,536; `VAR` and `STDDEV` also use periods 14 and 512 where the observation count permits. Workloads record Universe (128 × 4,096), parameter sweep (four periods × 4,096), per-worker (4 × 4,096), and streaming (16 × 4,096) execution. The `current` and `legacy` rows retain the pre-migration uppercase batch kernels and streaming structs from HEAD. Configuration caller-owned execution preserves that batch arithmetic, owned Compact Output uses the new input-indexed kernel, and prepared execution uses either the input-indexed kernel (`VAR`) or preallocated rolling state (`STDDEV`). Values below are Criterion mean point estimates.
+
+### Allocation evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports:
+
+| Indicators, period 14 | Configuration | Caller-owned | Owned Compact Output | Prepared setup / first / repeated / oversize | Stream setup / ticks |
+|---|---:|---:|---:|---:|---:|
+| `VAR` | 0 / 0 B | 1 / 104 B | 1 / 32,664 B | 0 / 0 B in every phase | 1 / 104 B; 0 / 0 B |
+| `STDDEV` | 0 / 0 B | 1 / 104 B | 1 / 32,664 B | 1 / 104 B setup; 0 / 0 B in every call phase | 1 / 104 B; 0 / 0 B |
+| `CORREL` | 0 / 0 B | 0 / 0 B | 1 / 32,664 B | 0 / 0 B in every phase | 2 / 208 B; 0 / 0 B |
+| `BETA` | 0 / 0 B | 0 / 0 B | 1 / 32,656 B | 0 / 0 B in every phase | 2 / 208 B; 0 / 0 B |
+
+Entries are allocation operations / gross allocated bytes for 4,096 observations. Owned byte counts are exactly `compact_count × size_of::<Float>()`. Configuration construction, prepared reuse and rejection, and streaming ticks allocate nothing. Single-series caller-owned execution allocates transient period-sized rolling state; the `STDDEV` Prepared Batch Runner retains that state once instead, while the direct `VAR` runner needs no scratch. Paired caller-owned and prepared execution index the borrowed Observation Series directly and allocate no scratch.
+
+### One-shot timing evidence
+
+Caller-owned point estimates show current / configuration / prepared for 4,096 observations and period 14. Delta ranges include every measured observation count and, for `VAR` and `STDDEV`, both measured periods. Owned point estimates show legacy Aligned Output / configuration Compact Output for 4,096 observations.
+
+| Indicator | 4,096 caller-owned point estimates | Config / current range | Prepared / current range | 4,096 owned point estimates | Compact / legacy range |
+|---|---:|---:|---:|---:|---:|
+| VAR | 12.473 µs / 12.714 µs / 9.703 µs | -0.27% to +1.94% | -27.55% to -21.20% | 13.121 µs / 9.575 µs | -41.56% to -26.92% |
+| STDDEV | 11.015 µs / 10.949 µs / 11.328 µs | -5.82% to +1.32% | -5.35% to +3.04% | 11.824 µs / 10.819 µs | -31.68% to -8.50% |
+| CORREL | 28.509 µs / 17.197 µs / 16.416 µs | -52.98% to -39.68% | -52.74% to -40.92% | 29.532 µs / 17.594 µs | -54.59% to -40.43% |
+| BETA | 28.193 µs / 19.923 µs / 20.159 µs | -38.53% to -24.92% | -43.70% to -28.50% | 30.401 µs / 19.761 µs | -44.72% to -33.50% |
+
+### Repeated and streaming evidence
+
+Universe, parameter-sweep, and per-worker fixtures keep configuration, construction, and caller-owned buffers outside measured operations. Universe and sweep rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured.
+
+| Indicator / workload | Point estimates | Same-run deltas |
+|---|---:|---:|
+| VAR Universe, 128 × 4,096 | 1.5130 ms / 1.5537 ms / 1.2303 ms | config/current +2.69%; prepared/current -18.68% |
+| VAR Sweep, 4 × 4,096 | 47.196 µs / 47.068 µs / 36.949 µs | config/current -0.27%; prepared/current -21.71% |
+| VAR Per-worker, 4 × 4,096 | 50.309 µs / 39.098 µs | prepared/current -22.28% |
+| VAR Streaming, 16 × 4,096 | 324.208 µs / 247.457 µs | configured/legacy -23.67% |
+| STDDEV Universe, 128 × 4,096 | 1.4647 ms / 1.3317 ms / 1.3284 ms | config/current -9.08%; prepared/current -9.30% |
+| STDDEV Sweep, 4 × 4,096 | 41.758 µs / 41.552 µs / 42.103 µs | config/current -0.49%; prepared/current +0.83% |
+| STDDEV Per-worker, 4 × 4,096 | 42.920 µs / 44.058 µs | prepared/current +2.65% |
+| STDDEV Streaming, 16 × 4,096 | 538.565 µs / 407.461 µs | configured/legacy -24.34% |
+| CORREL Universe, 128 × 4,096 | 3.4287 ms / 2.0290 ms / 2.0329 ms | config/current -40.82%; prepared/current -40.71% |
+| CORREL Sweep, 4 × 4,096 | 107.711 µs / 63.097 µs / 63.653 µs | config/current -41.42%; prepared/current -40.90% |
+| CORREL Per-worker, 4 × 4,096 | 111.518 µs / 63.683 µs | prepared/current -42.89% |
+| CORREL Streaming, 16 × 4,096 | 1.0608 ms / 1.0528 ms | configured/legacy -0.75% |
+| BETA Universe, 128 × 4,096 | 3.6283 ms / 2.6054 ms / 2.5265 ms | config/current -28.19%; prepared/current -30.37% |
+| BETA Sweep, 4 × 4,096 | 106.115 µs / 76.009 µs / 77.306 µs | config/current -28.37%; prepared/current -27.15% |
+| BETA Per-worker, 4 × 4,096 | 107.276 µs / 76.371 µs | prepared/current -28.81% |
+| BETA Streaming, 16 × 4,096 | 661.674 µs / 638.460 µs | configured/legacy -3.51% |
+
+### Gate conclusion
+
+All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent against its retained pre-migration reference. Every owned Compact Output path improved over the legacy Aligned Output path by 8.50%–54.59%. These are host-local default-`f64` qualification results, not portable speedup claims.
