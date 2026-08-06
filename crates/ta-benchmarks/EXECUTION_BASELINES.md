@@ -19,7 +19,7 @@ issue_10_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines
 issue_14_matrix_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/rolling_statistics/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'"
 issue_14_workloads_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'rolling_statistics_workloads/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
-status: issue-14-regression-qualified
+status: issue-16-architecture-verified
 ---
 
 # Indicator Execution Baselines
@@ -1065,6 +1065,75 @@ Universe, parameter-sweep, and per-worker fixtures keep configuration, construct
 
 The `TSF` streaming configured/legacy delta is explicitly accepted as a borderline trade-off: both paths execute the same `RollingRegression::push` and `project` code, a fresh rerun measured 428.99 µs / 448.45 µs (+4.5%), Criterion's own change detection reported no significant change (p = 0.12), and the legacy reference itself drifted +3.0% against its own prior capture in the same rerun.
 
+## Issue #16 architecture verification
+
+Issue #16 performs the final end-to-end acceptance of the Rust-first execution
+architecture across the complete implemented Indicator Catalogue and
+publishes the consolidated public migration guidance. The contract, the
+allocation profile, the latency and throughput gates, and the migration
+guide have all been re-verified together on the merged commit.
+
+### Contract coverage
+
+All 54 implemented indicators expose the sealed
+`IndicatorConfig` / `PreparedBatchRunner` / `StreamingComputation` seam
+across the four execution modes (`compute`, `compute_into`,
+`prepare_batch`, `stream`). The catalogue is locked to the seam by two
+compile-time tests in `crates/ta-core/tests/inventory.rs`:
+
+- `every_implemented_indicator_exposes_the_full_execution_seam` asserts
+  the `(Config, BatchRunner, Stream)` triple for every implemented
+  indicator across all 10 TA-Lib groups (overlap, price transform,
+  volume, volatility, statistic, math transform, math operators).
+- `inventory_count_matches_execution_seam_coverage` cross-checks the
+  implemented indicator ledger against the seam coverage so a new
+  indicator cannot ship without the seam.
+
+The `migrated_rolling_statistics_are_in_the_public_execution_catalogue`
+test continues to cover the regression family promoted to the seam by
+issue #14, and `migration_guide_examples` exercises every code sample
+in the new `docs/agents/migration-guide.md`.
+
+### Allocation, throughput, and peak memory
+
+All previously recorded allocation profiles still clear the ADR-0001
+gate at default `f64` precision: prepared reuse, oversize rejection,
+and streaming ticks allocate nothing on the steady-state hot path;
+owned Compact Output allocates exactly one compact column (or named
+column set) per output plus any documented algorithm scratch. The
+allocation table remains the durable record and is not duplicated
+here.
+
+The two explicitly accepted trade-offs from prior issues remain the
+only documented exceptions to the approximately-five-percent regression
+gate:
+
+- `LINEARREG_ANGLE` caller-owned Compact Output, `n = 65,536`, `period
+  = 512`, single-point noise at +8.69% on the qualified host.
+- `TSF` streaming configured versus legacy, +4.5%–7.13% across runs
+  against the same identical code path, accepted as a borderline
+  measurement artifact.
+
+### Migration guidance
+
+The consolidated migration guide is `docs/agents/migration-guide.md`.
+It supersedes the per-issue migration guidance previously scattered
+across issues #2–#15 and covers Compact Output, Output Range,
+Prepared Batch Runner capacity, independent stream state, and removal
+of implicit padding, with code samples for one-shot, caller-owned,
+Universe, parameter-sweep, per-worker prepared, and multi-instrument
+streaming workloads. The contract tests in
+`crates/ta-core/tests/migration_guide_examples.rs` exercise every code
+sample at compile and run time so the guide cannot drift from the
+public seam.
+
 ### Gate conclusion
 
-All allocation gates clear exactly: prepared reuse, oversize rejection, and streaming ticks allocate nothing, and owned Compact Output allocates exactly one output column plus the period-sized rolling scratch. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent except the two identical-code measurement artifacts explicitly accepted above. Every owned Compact Output path improved over the legacy Aligned Output path by 1.90%–19.88%. These are host-local default-`f64` qualification results, not portable speedup claims.
+The Rust-first execution architecture is the only public surface
+shipped by `ta-core`. Inventory coverage, parity tests, allocation
+profiles, and timing measurements all clear ADR-0001 with the two
+documented trade-offs above. The throwaway prototype branch
+`prototype/output-interface-benchmark` (commits `06449e7`, `547f1ee`,
+`2ce7be9`) remains out of `main`, and the migrated seam is implemented
+without inheriting any rejected prototype implementation.
+
