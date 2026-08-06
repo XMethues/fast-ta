@@ -38,7 +38,11 @@ use ta_core::{
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
         WCLPRICETick, AVGPRICE,
     },
-    statistic::{BETAConfig, CORRELConfig, PairInput, PairTick, STDDEVConfig, VARConfig},
+    statistic::{
+        BETAConfig, CORRELConfig, LINEARREGConfig, LINEARREG_ANGLEConfig,
+        LINEARREG_INTERCEPTConfig, LINEARREG_SLOPEConfig, PairInput, PairTick, STDDEVConfig,
+        TSFConfig, VARConfig,
+    },
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
         TRANGETick,
@@ -1446,6 +1450,116 @@ macro_rules! profile_paired_statistic {
     }};
 }
 
+macro_rules! profile_regression_statistic {
+    ($label:literal, $config:ty, $new_config:expr) => {{
+        let input = series_fixture(PROFILE_SIZE, 0);
+        let scratch_bytes = PERIOD * core::mem::size_of::<Float>();
+        let scenario = format!("setup/{}Config/parameters", $label);
+        let profile = print_profile(&scenario, || $new_config);
+        assert_zero_allocations(&scenario, profile);
+
+        let config: $config = $new_config;
+        let count = PROFILE_SIZE - IndicatorConfig::lookback(&config);
+        let output_bytes = count * core::mem::size_of::<Float>();
+        let mut output = vec![0.0 as Float; count];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(&config, input.as_slice(), output.as_mut_slice())
+                .expect("valid regression fixture")
+        });
+        assert_profile(&scenario, profile, 1, scratch_bytes, scratch_bytes, 0);
+
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input.as_slice()).expect("valid regression fixture")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            2,
+            scratch_bytes + output_bytes,
+            scratch_bytes + output_bytes,
+            output_bytes,
+        );
+
+        let scenario = format!("one_shot/{}Config/owned_compact/count_0", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, &[]).expect("valid empty regression fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            scratch_bytes,
+            scratch_bytes,
+            scratch_bytes,
+        );
+
+        let mut runner =
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid prepared capacity");
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $label);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input.as_slice(),
+                    output.as_mut_slice(),
+                )
+                .expect("valid prepared regression fixture")
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized = series_fixture(PROFILE_SIZE + 1, 1);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $label,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                oversized.as_slice(),
+                output.as_mut_slice(),
+            )
+            .expect_err("oversized regression input must be rejected")
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}Config/stream", $label);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::stream(&config).expect("valid regression stream")
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            scratch_bytes,
+            scratch_bytes,
+            scratch_bytes,
+        );
+
+        let mut stream = IndicatorConfig::stream(&config).expect("valid regression stream");
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $label);
+        let profile = print_profile(&scenario, || {
+            let mut last = None;
+            for &tick in &input {
+                last = StreamingComputation::<$config>::next(&mut stream, tick)
+                    .expect("valid regression stream tick");
+                black_box(last);
+            }
+            last
+        });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
 fn profile_statistic_execution() {
     profile_single_statistic!(
         "VAR",
@@ -1468,6 +1582,31 @@ fn profile_statistic_execution() {
         "BETA",
         BETAConfig,
         BETAConfig::new(PERIOD).expect("valid period")
+    );
+    profile_regression_statistic!(
+        "LINEARREG",
+        LINEARREGConfig,
+        LINEARREGConfig::new(PERIOD).expect("valid period")
+    );
+    profile_regression_statistic!(
+        "LINEARREG_SLOPE",
+        LINEARREG_SLOPEConfig,
+        LINEARREG_SLOPEConfig::new(PERIOD).expect("valid period")
+    );
+    profile_regression_statistic!(
+        "LINEARREG_INTERCEPT",
+        LINEARREG_INTERCEPTConfig,
+        LINEARREG_INTERCEPTConfig::new(PERIOD).expect("valid period")
+    );
+    profile_regression_statistic!(
+        "LINEARREG_ANGLE",
+        LINEARREG_ANGLEConfig,
+        LINEARREG_ANGLEConfig::new(PERIOD).expect("valid period")
+    );
+    profile_regression_statistic!(
+        "TSF",
+        TSFConfig,
+        TSFConfig::new(PERIOD).expect("valid period")
     );
 }
 

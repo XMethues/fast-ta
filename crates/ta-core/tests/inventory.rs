@@ -12,8 +12,12 @@ use ta_core::overlap::{DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA};
 use ta_core::price_transform::{AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE};
 use ta_core::statistic::{
     BETABatchRunner, BETAConfig, BETAStream, CORRELBatchRunner, CORRELConfig, CORRELStream,
-    STDDEVBatchRunner, STDDEVConfig, STDDEVStream, VARBatchRunner, VARConfig, VARStream, BETA,
-    CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF, VAR,
+    LINEARREGBatchRunner, LINEARREGConfig, LINEARREGStream, LINEARREG_ANGLEBatchRunner,
+    LINEARREG_ANGLEConfig, LINEARREG_ANGLEStream, LINEARREG_INTERCEPTBatchRunner,
+    LINEARREG_INTERCEPTConfig, LINEARREG_INTERCEPTStream, LINEARREG_SLOPEBatchRunner,
+    LINEARREG_SLOPEConfig, LINEARREG_SLOPEStream, STDDEVBatchRunner, STDDEVConfig, STDDEVStream,
+    TSFBatchRunner, TSFConfig, TSFStream, VARBatchRunner, VARConfig, VARStream, BETA, CORREL,
+    LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT, LINEARREG_SLOPE, STDDEV, TSF, VAR,
 };
 use ta_core::volatility::{ATR, NATR, TRANGE};
 use ta_core::volume::{AD, ADOSC, OBV};
@@ -284,6 +288,23 @@ fn migrated_rolling_statistics_are_in_the_public_execution_catalogue() {
     assert_execution_types::<STDDEVConfig, STDDEVBatchRunner, STDDEVStream>();
     assert_execution_types::<CORRELConfig, CORRELBatchRunner, CORRELStream>();
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
+    assert_execution_types::<LINEARREGConfig, LINEARREGBatchRunner, LINEARREGStream>();
+    assert_execution_types::<
+        LINEARREG_SLOPEConfig,
+        LINEARREG_SLOPEBatchRunner,
+        LINEARREG_SLOPEStream,
+    >();
+    assert_execution_types::<
+        LINEARREG_INTERCEPTConfig,
+        LINEARREG_INTERCEPTBatchRunner,
+        LINEARREG_INTERCEPTStream,
+    >();
+    assert_execution_types::<
+        LINEARREG_ANGLEConfig,
+        LINEARREG_ANGLEBatchRunner,
+        LINEARREG_ANGLEStream,
+    >();
+    assert_execution_types::<TSFConfig, TSFBatchRunner, TSFStream>();
 }
 
 #[test]

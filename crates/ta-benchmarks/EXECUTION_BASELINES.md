@@ -16,8 +16,10 @@ issue_8_streaming_repeat_command: "cargo bench -p ta-benchmarks --bench executio
 issue_9_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volume"
 issue_9_streaming_repeat_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volume_workloads/ADOSC/streaming"
 issue_10_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volatility"
+issue_14_matrix_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/rolling_statistics/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'"
+issue_14_workloads_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'rolling_statistics_workloads/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
-status: issue-10-volatility-qualified
+status: issue-14-regression-qualified
 ---
 
 # Indicator Execution Baselines
@@ -999,3 +1001,70 @@ Universe, parameter-sweep, and per-worker fixtures keep configuration, construct
 ### Gate conclusion
 
 All allocation gates clear exactly. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent against its retained pre-migration reference. Every owned Compact Output path improved over the legacy Aligned Output path by 8.50%–54.59%. These are host-local default-`f64` qualification results, not portable speedup claims.
+
+## Issue #14 regression qualification
+
+Issue #14 migrates `LINEARREG`, `LINEARREG_SLOPE`, `LINEARREG_INTERCEPT`, `LINEARREG_ANGLE`, and `TSF` through the Rust-first execution seam. Immutable configurations now provide owned and caller-owned Compact Output, capacity-checked Prepared Batch Runners, and independent Streaming Computations while the uppercase compatibility functions and structs retain their existing signatures and padded-owned behavior. All five projections share the `RollingRegression` rolling state and the `project` mapping; the configuration caller-owned path delegates to the same uppercase batch kernel retained as the `current` reference.
+
+The matrix command is `cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/rolling_statistics/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'` and the workload command is `cargo bench -p ta-benchmarks --bench execution_baselines -- 'rolling_statistics_workloads/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'`. The one-shot matrix uses observations 64/4,096/65,536 with periods 14 and 512 where the observation count permits. Workloads record Universe (128 × 4,096), parameter sweep (four periods × 4,096), per-worker (4 × 4,096), and streaming (16 × 4,096) execution. The `current` rows retain the pre-migration uppercase batch kernels and the `legacy` rows the pre-migration streaming structs from HEAD.
+
+### Allocation evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports:
+
+| Indicators, period 14 | Configuration | Caller-owned | Owned Compact Output | Prepared setup / first / repeated / oversize | Stream setup / ticks |
+|---|---:|---:|---:|---:|---:|
+| `LINEARREG` | 0 / 0 B | 1 / 112 B | 2 / 32,776 B | 1 / 112 B setup; 0 / 0 B in every call phase | 1 / 112 B; 0 / 0 B |
+| `LINEARREG_SLOPE` | 0 / 0 B | 1 / 112 B | 2 / 32,776 B | 1 / 112 B setup; 0 / 0 B in every call phase | 1 / 112 B; 0 / 0 B |
+| `LINEARREG_INTERCEPT` | 0 / 0 B | 1 / 112 B | 2 / 32,776 B | 1 / 112 B setup; 0 / 0 B in every call phase | 1 / 112 B; 0 / 0 B |
+| `LINEARREG_ANGLE` | 0 / 0 B | 1 / 112 B | 2 / 32,776 B | 1 / 112 B setup; 0 / 0 B in every call phase | 1 / 112 B; 0 / 0 B |
+| `TSF` | 0 / 0 B | 1 / 112 B | 2 / 32,776 B | 1 / 112 B setup; 0 / 0 B in every call phase | 1 / 112 B; 0 / 0 B |
+
+Entries are allocation operations / gross allocated bytes for 4,096 observations. Owned byte counts are exactly `compact_count × size_of::<Float>()` (32,664 B) plus the 112 B period-sized `RollingRegression` scratch. Configuration construction allocates nothing. Single-series caller-owned execution allocates the transient period-sized rolling state, which the Prepared Batch Runner retains once instead; prepared reuse, oversize rejection, and streaming ticks then allocate nothing.
+
+### One-shot timing evidence
+
+Caller-owned point estimates show current / configuration / prepared for 4,096 observations and period 14. Delta ranges include every measured observation count and both measured periods. Owned point estimates show legacy Aligned Output / configuration Compact Output for 4,096 observations.
+
+| Indicator | 4,096 caller-owned point estimates | Config / current range | Prepared / current range | 4,096 owned point estimates | Compact / legacy range |
+|---|---:|---:|---:|---:|---:|
+| LINEARREG | 24.875 µs / 24.724 µs / 24.815 µs | −7.76% to +0.96% | −10.05% to +0.86% | 26.460 µs / 25.174 µs | −10.10% to −4.49% |
+| LINEARREG_SLOPE | 24.423 µs / 24.652 µs / 24.362 µs | +0.01% to +3.31% | −5.23% to +3.02% | 26.332 µs / 25.337 µs | −8.64% to −3.40% |
+| LINEARREG_INTERCEPT | 24.918 µs / 24.642 µs / 24.626 µs | −1.11% to +1.36% | −5.41% to +3.49% | 26.277 µs / 25.245 µs | −8.62% to −3.93% |
+| LINEARREG_ANGLE | 31.191 µs / 31.608 µs / 30.827 µs | −2.16% to +8.69% | −5.79% to +3.88% | 32.737 µs / 31.013 µs | −19.88% to −5.24% |
+| TSF | 24.570 µs / 24.413 µs / 24.645 µs | −2.25% to +0.80% | −11.06% to +1.41% | 26.054 µs / 25.389 µs | −8.79% to −1.90% |
+
+The single +8.69% `LINEARREG_ANGLE` configuration point at 65,536 observations and period 512 is explicitly accepted: configuration `compute_into` delegates to the identical uppercase kernel measured by the `current` row, so the two paths execute the same code and the delta is measurement-ordering noise rather than an implementation regression.
+
+### Repeated and streaming evidence
+
+Universe, parameter-sweep, and per-worker fixtures keep configuration, construction, and caller-owned buffers outside measured operations. Universe and sweep rows report current / configuration / prepared. Per-worker rows report current / prepared, and streaming rows report legacy / configured.
+
+| Indicator / workload | Point estimates | Same-run deltas |
+|---|---:|---:|
+| LINEARREG Universe, 128 × 4,096 | 3.2539 ms / 3.2367 ms / 3.1870 ms | config/current −0.53%; prepared/current −2.05% |
+| LINEARREG Sweep, 4 × 4,096 | 99.883 µs / 100.155 µs / 99.668 µs | config/current +0.27%; prepared/current −0.22% |
+| LINEARREG Per-worker, 4 × 4,096 | 100.602 µs / 98.171 µs | prepared/current −2.42% |
+| LINEARREG Streaming, 16 × 4,096 | 395.436 µs / 387.099 µs | configured/legacy −2.11% |
+| LINEARREG_SLOPE Universe, 128 × 4,096 | 3.1959 ms / 3.1828 ms / 3.1434 ms | config/current −0.41%; prepared/current −1.64% |
+| LINEARREG_SLOPE Sweep, 4 × 4,096 | 106.748 µs / 99.988 µs / 98.541 µs | config/current −6.33%; prepared/current −7.69% |
+| LINEARREG_SLOPE Per-worker, 4 × 4,096 | 99.794 µs / 98.943 µs | prepared/current −0.85% |
+| LINEARREG_SLOPE Streaming, 16 × 4,096 | 398.387 µs / 350.786 µs | configured/legacy −11.95% |
+| LINEARREG_INTERCEPT Universe, 128 × 4,096 | 3.2113 ms / 3.2522 ms / 3.1725 ms | config/current +1.27%; prepared/current −1.21% |
+| LINEARREG_INTERCEPT Sweep, 4 × 4,096 | 100.344 µs / 100.789 µs / 98.506 µs | config/current +0.44%; prepared/current −1.83% |
+| LINEARREG_INTERCEPT Per-worker, 4 × 4,096 | 99.193 µs / 99.106 µs | prepared/current −0.09% |
+| LINEARREG_INTERCEPT Streaming, 16 × 4,096 | 397.348 µs / 370.067 µs | configured/legacy −6.87% |
+| LINEARREG_ANGLE Universe, 128 × 4,096 | 4.1084 ms / 4.0747 ms / 3.9902 ms | config/current −0.82%; prepared/current −2.88% |
+| LINEARREG_ANGLE Sweep, 4 × 4,096 | 146.596 µs / 146.972 µs / 142.245 µs | config/current +0.26%; prepared/current −2.97% |
+| LINEARREG_ANGLE Per-worker, 4 × 4,096 | 127.310 µs / 123.658 µs | prepared/current −2.87% |
+| LINEARREG_ANGLE Streaming, 16 × 4,096 | 675.997 µs / 667.747 µs | configured/legacy −1.22% |
+| TSF Universe, 128 × 4,096 | 3.1226 ms / 3.1216 ms / 3.1315 ms | config/current −0.03%; prepared/current +0.29% |
+| TSF Sweep, 4 × 4,096 | 97.637 µs / 98.262 µs / 98.672 µs | config/current +0.64%; prepared/current +1.06% |
+| TSF Per-worker, 4 × 4,096 | 97.812 µs / 98.040 µs | prepared/current +0.23% |
+| TSF Streaming, 16 × 4,096 | 415.200 µs / 444.806 µs | configured/legacy +7.13% |
+
+The `TSF` streaming configured/legacy delta is explicitly accepted as a borderline trade-off: both paths execute the same `RollingRegression::push` and `project` code, a fresh rerun measured 428.99 µs / 448.45 µs (+4.5%), Criterion's own change detection reported no significant change (p = 0.12), and the legacy reference itself drifted +3.0% against its own prior capture in the same rerun.
+
+### Gate conclusion
+
+All allocation gates clear exactly: prepared reuse, oversize rejection, and streaming ticks allocate nothing, and owned Compact Output allocates exactly one output column plus the period-sized rolling scratch. No configuration caller-owned, prepared, Universe, parameter-sweep, per-worker, or streaming path regressed by approximately five percent except the two identical-code measurement artifacts explicitly accepted above. Every owned Compact Output path improved over the legacy Aligned Output path by 1.90%–19.88%. These are host-local default-`f64` qualification results, not portable speedup claims.

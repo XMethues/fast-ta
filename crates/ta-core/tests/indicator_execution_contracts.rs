@@ -30,7 +30,11 @@ use ta_core::{
         MEDPRICEInput, MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig,
         WCLPRICEInput, WCLPRICETick, AVGDEV, AVGPRICE,
     },
-    statistic::{BETAConfig, CORRELConfig, PairInput, PairTick, STDDEVConfig, VARConfig},
+    statistic::{
+        BETAConfig, CORRELConfig, LINEARREGConfig, LINEARREG_ANGLEConfig,
+        LINEARREG_INTERCEPTConfig, LINEARREG_SLOPEConfig, PairInput, PairTick, STDDEVConfig,
+        TSFConfig, VARConfig,
+    },
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
         TRANGETick, ATR, NATR, TRANGE,
@@ -4941,6 +4945,209 @@ fn paired_statistic_configs_cover_owned_caller_prepared_and_streaming_execution(
     assert_paired_statistic_config!(BETAConfig::new(3).unwrap(), BETAConfig);
     assert!(CORRELConfig::new(0).is_err());
     assert!(BETAConfig::new(0).is_err());
+}
+
+macro_rules! assert_regression_config {
+    ($config:expr, $config_type:ty) => {{
+        let config = $config;
+        assert_eq!(IndicatorConfig::lookback(&config), config.period() - 1);
+        let input = [1.0 as Float, 4.0, 2.0, 8.0, 3.0, 9.0, 5.0, 7.0];
+        let owned = IndicatorConfig::compute(&config, &input).unwrap();
+        assert_eq!(owned.source_len(), input.len());
+        assert_eq!(
+            owned.range(),
+            OutputRange::new(config.period() - 1, input.len() - (config.period() - 1))
+        );
+        assert_eq!(owned.values().len(), owned.range().nb_element);
+
+        let mut caller_output = [FLOAT_SENTINEL; 8];
+        let range = IndicatorConfig::compute_into(&config, &input, &mut caller_output).unwrap();
+        assert_eq!(range, owned.range());
+        assert_float_slice_close(&caller_output[..owned.values().len()], owned.values());
+        assert!(caller_output[owned.values().len()..]
+            .iter()
+            .all(|&value| value == FLOAT_SENTINEL));
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, input.len()).unwrap();
+        assert_eq!(
+            PreparedBatchRunner::<$config_type>::max_input_len(&runner),
+            input.len()
+        );
+        let mut prepared_output = [FLOAT_SENTINEL; 8];
+        assert_eq!(
+            PreparedBatchRunner::<$config_type>::compute_into(
+                &mut runner,
+                &input,
+                &mut prepared_output,
+            )
+            .unwrap(),
+            owned.range()
+        );
+        assert_float_slice_close(&prepared_output[..owned.values().len()], owned.values());
+
+        let replay = [7.0 as Float, 5.0, 9.0, 3.0, 8.0, 2.0, 4.0, 1.0];
+        let replay_owned = IndicatorConfig::compute(&config, &replay).unwrap();
+        PreparedBatchRunner::<$config_type>::compute_into(
+            &mut runner,
+            &replay,
+            &mut prepared_output,
+        )
+        .unwrap();
+        assert_float_slice_close(
+            &prepared_output[..replay_owned.values().len()],
+            replay_owned.values(),
+        );
+
+        let shorter = [2.0 as Float, 6.0, 4.0, 5.0];
+        let shorter_owned = IndicatorConfig::compute(&config, &shorter).unwrap();
+        let mut shorter_output = [FLOAT_SENTINEL; 4];
+        assert_eq!(
+            PreparedBatchRunner::<$config_type>::compute_into(
+                &mut runner,
+                &shorter,
+                &mut shorter_output,
+            )
+            .unwrap(),
+            shorter_owned.range()
+        );
+        assert_float_slice_close(
+            &shorter_output[..shorter_owned.values().len()],
+            shorter_owned.values(),
+        );
+
+        let oversized = [1.0 as Float; 9];
+        let mut unchanged = [FLOAT_SENTINEL; 9];
+        assert_eq!(
+            PreparedBatchRunner::<$config_type>::compute_into(
+                &mut runner,
+                &oversized,
+                &mut unchanged,
+            )
+            .unwrap_err(),
+            TalibError::PreparedCapacityExceeded {
+                max_input_len: input.len(),
+                actual_input_len: oversized.len(),
+            }
+        );
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 9]);
+
+        let mut stream = IndicatorConfig::stream(&config).unwrap();
+        for (idx, &tick) in input.iter().enumerate() {
+            let actual = StreamingComputation::<$config_type>::next(&mut stream, tick).unwrap();
+            if idx < owned.range().beg_idx {
+                assert_eq!(actual, None);
+            } else {
+                assert_float_close(actual.unwrap(), owned.values()[idx - owned.range().beg_idx]);
+            }
+        }
+        StreamingComputation::<$config_type>::reset(&mut stream);
+        assert_eq!(
+            StreamingComputation::<$config_type>::next(&mut stream, input[0]).unwrap(),
+            None
+        );
+
+        let mut rejected_tick_stream = IndicatorConfig::stream(&config).unwrap();
+        StreamingComputation::<$config_type>::next(&mut rejected_tick_stream, input[0]).unwrap();
+        assert!(
+            StreamingComputation::<$config_type>::next(&mut rejected_tick_stream, Float::NAN)
+                .is_err()
+        );
+        for (offset, &tick) in input[1..].iter().enumerate() {
+            let idx = offset + 1;
+            let actual =
+                StreamingComputation::<$config_type>::next(&mut rejected_tick_stream, tick)
+                    .unwrap();
+            if idx < owned.range().beg_idx {
+                assert_eq!(actual, None);
+            } else {
+                assert_float_close(actual.unwrap(), owned.values()[idx - owned.range().beg_idx]);
+            }
+        }
+
+        let invalid = [1.0 as Float, Float::NAN, 3.0];
+        let mut unchanged = [FLOAT_SENTINEL; 3];
+        assert!(IndicatorConfig::compute_into(&config, &invalid, &mut unchanged).is_err());
+        assert_eq!(unchanged, [FLOAT_SENTINEL; 3]);
+    }};
+}
+
+#[test]
+fn regression_configs_cover_owned_caller_prepared_and_streaming_execution() {
+    assert_regression_config!(LINEARREGConfig::new(3).unwrap(), LINEARREGConfig);
+    assert_regression_config!(
+        LINEARREG_SLOPEConfig::new(3).unwrap(),
+        LINEARREG_SLOPEConfig
+    );
+    assert_regression_config!(
+        LINEARREG_INTERCEPTConfig::new(3).unwrap(),
+        LINEARREG_INTERCEPTConfig
+    );
+    assert_regression_config!(
+        LINEARREG_ANGLEConfig::new(3).unwrap(),
+        LINEARREG_ANGLEConfig
+    );
+    assert_regression_config!(TSFConfig::new(3).unwrap(), TSFConfig);
+}
+
+#[test]
+fn regression_configs_preserve_short_input_and_parameter_validation() {
+    for period in [0usize, 1] {
+        assert!(LINEARREGConfig::new(period).is_err());
+        assert!(LINEARREG_SLOPEConfig::new(period).is_err());
+        assert!(LINEARREG_INTERCEPTConfig::new(period).is_err());
+        assert!(LINEARREG_ANGLEConfig::new(period).is_err());
+        assert!(TSFConfig::new(period).is_err());
+    }
+    assert!(LINEARREGConfig::new(100_001).is_err());
+
+    let config = LINEARREGConfig::new(4).unwrap();
+    let empty = IndicatorConfig::compute(&config, &[]).unwrap();
+    assert_eq!(empty.source_len(), 0);
+    assert_eq!(empty.range(), OutputRange::empty());
+    assert!(empty.values().is_empty());
+
+    let too_small_output = [1.0 as Float, 2.0, 3.0];
+    assert!(matches!(
+        IndicatorConfig::compute_into(&config, &too_small_output, &mut [0.0; 0]),
+        Err(TalibError::InsufficientData {
+            required: 4,
+            actual: 3
+        })
+    ));
+}
+
+#[test]
+fn regression_config_matches_legacy_projection_semantics() {
+    let input = [10.0 as Float, 12.0, 11.0, 15.0, 14.0, 18.0, 17.0, 20.0];
+    let period = 4usize;
+
+    let linearreg_owned =
+        IndicatorConfig::compute(&LINEARREGConfig::new(period).unwrap(), &input).unwrap();
+    let slope_owned =
+        IndicatorConfig::compute(&LINEARREG_SLOPEConfig::new(period).unwrap(), &input).unwrap();
+    let intercept_owned =
+        IndicatorConfig::compute(&LINEARREG_INTERCEPTConfig::new(period).unwrap(), &input).unwrap();
+    let angle_owned =
+        IndicatorConfig::compute(&LINEARREG_ANGLEConfig::new(period).unwrap(), &input).unwrap();
+    let tsf_owned = IndicatorConfig::compute(&TSFConfig::new(period).unwrap(), &input).unwrap();
+
+    assert_eq!(linearreg_owned.range(), OutputRange::new(3, 5));
+    assert_float_slice_close(
+        linearreg_owned.values(),
+        &[14.1 as Float, 14.5, 17.5, 17.5, 19.8],
+    );
+    assert_float_slice_close(slope_owned.values(), &[1.4 as Float, 1.0, 2.0, 1.0, 1.7]);
+    assert_float_slice_close(
+        intercept_owned.values(),
+        &[9.9 as Float, 11.5, 11.5, 14.5, 14.7],
+    );
+    for (&angle, &slope) in angle_owned.values().iter().zip(slope_owned.values()) {
+        assert_float_close(
+            angle,
+            slope.atan() * (180.0 as Float / core::f64::consts::PI as Float),
+        );
+    }
+    assert_float_slice_close(tsf_owned.values(), &[15.5 as Float, 15.5, 19.5, 18.5, 21.5]);
 }
 
 #[test]

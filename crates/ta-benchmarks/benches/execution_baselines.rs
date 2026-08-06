@@ -36,8 +36,10 @@ use ta_core::{
         WCLPRICETick, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
     },
     statistic::{
-        BETAConfig, CORRELConfig, PairInput, PairTick, STDDEVConfig, VARConfig, BETA, CORREL,
-        STDDEV, VAR,
+        BETAConfig, CORRELConfig, LINEARREGConfig, LINEARREG_ANGLEConfig,
+        LINEARREG_INTERCEPTConfig, LINEARREG_SLOPEConfig, PairInput, PairTick, STDDEVConfig,
+        TSFConfig, VARConfig, BETA, CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT,
+        LINEARREG_SLOPE, STDDEV, TSF, VAR,
     },
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
@@ -1841,6 +1843,71 @@ define_single_output_workloads!(
     0.0 as Float
 );
 define_single_output_workloads!(
+    bench_linearreg_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics_workloads/LINEARREG",
+    LINEARREG,
+    LINEARREGConfig,
+    LINEARREG::new,
+    LINEARREGConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_linearreg_slope_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics_workloads/LINEARREG_SLOPE",
+    LINEARREG_SLOPE,
+    LINEARREG_SLOPEConfig,
+    LINEARREG_SLOPE::new,
+    LINEARREG_SLOPEConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_linearreg_intercept_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics_workloads/LINEARREG_INTERCEPT",
+    LINEARREG_INTERCEPT,
+    LINEARREG_INTERCEPTConfig,
+    LINEARREG_INTERCEPT::new,
+    LINEARREG_INTERCEPTConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_linearreg_angle_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics_workloads/LINEARREG_ANGLE",
+    LINEARREG_ANGLE,
+    LINEARREG_ANGLEConfig,
+    LINEARREG_ANGLE::new,
+    LINEARREG_ANGLEConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_tsf_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_statistics_workloads/TSF",
+    TSF,
+    TSFConfig,
+    TSF::new,
+    TSFConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
     bench_minindex_repeated_and_streaming,
     "indicator_execution/expanded/single_extrema_workloads/MININDEX",
     MININDEX,
@@ -3137,6 +3204,71 @@ define_single_output_benchmark!(
     0.0 as Float
 );
 define_single_output_benchmark!(
+    bench_linearreg_qualified_matrix,
+    "indicator_execution/expanded/rolling_statistics/LINEARREG",
+    LINEARREG,
+    LINEARREGConfig,
+    LINEARREG::new,
+    LINEARREGConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_linearreg_slope_qualified_matrix,
+    "indicator_execution/expanded/rolling_statistics/LINEARREG_SLOPE",
+    LINEARREG_SLOPE,
+    LINEARREG_SLOPEConfig,
+    LINEARREG_SLOPE::new,
+    LINEARREG_SLOPEConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_linearreg_intercept_qualified_matrix,
+    "indicator_execution/expanded/rolling_statistics/LINEARREG_INTERCEPT",
+    LINEARREG_INTERCEPT,
+    LINEARREG_INTERCEPTConfig,
+    LINEARREG_INTERCEPT::new,
+    LINEARREG_INTERCEPTConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_linearreg_angle_qualified_matrix,
+    "indicator_execution/expanded/rolling_statistics/LINEARREG_ANGLE",
+    LINEARREG_ANGLE,
+    LINEARREG_ANGLEConfig,
+    LINEARREG_ANGLE::new,
+    LINEARREG_ANGLEConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_tsf_qualified_matrix,
+    "indicator_execution/expanded/rolling_statistics/TSF",
+    TSF,
+    TSFConfig,
+    TSF::new,
+    TSFConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
     bench_minindex_qualified_scratch_matrix,
     "indicator_execution/expanded/single_extrema/MININDEX",
     MININDEX,
@@ -3892,5 +4024,15 @@ criterion_group!(
     bench_beta_repeated_and_streaming,
     bench_correl_parameter_sweep,
     bench_beta_parameter_sweep,
+    bench_linearreg_qualified_matrix,
+    bench_linearreg_slope_qualified_matrix,
+    bench_linearreg_intercept_qualified_matrix,
+    bench_linearreg_angle_qualified_matrix,
+    bench_tsf_qualified_matrix,
+    bench_linearreg_repeated_and_streaming,
+    bench_linearreg_slope_repeated_and_streaming,
+    bench_linearreg_intercept_repeated_and_streaming,
+    bench_linearreg_angle_repeated_and_streaming,
+    bench_tsf_repeated_and_streaming,
 );
 criterion_main!(benches);
