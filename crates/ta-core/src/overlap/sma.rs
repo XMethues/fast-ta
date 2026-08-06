@@ -3,12 +3,12 @@
 //! [`SMAConfig`] is the Rust-first immutable Indicator Configuration. It can
 //! produce owned Compact Output, write caller-owned output, create a reusable
 //! [`SMABatchRunner`], or create an independent [`SMAStream`]. The uppercase
-//! [`SMA`] type and functions remain as compatibility interfaces.
+//! [`SMA`] function is the compact batch kernel behind `compute_into`.
 
 use crate::{
     period_lookback, validate_finite_slice, validate_input_len, validate_output_len, CompactOutput,
-    Float, Indicator, IndicatorConfig, OutputRange, PreparedBatchRunner, Resettable, Result,
-    StreamingComputation, StreamingIndicator, TalibError,
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation,
+    TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -71,35 +71,6 @@ pub fn SMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<
     } else {
         Ok(OutputRange::new(lookback, count))
     }
-}
-
-/// Computes SMA into a full-length vector padded with `Float::NAN` before the lookback.
-#[allow(non_snake_case)]
-pub fn SMA_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    let lookback = period_lookback("timeperiod", timeperiod)?;
-    validate_finite_slice("real", real)?;
-    let count = validate_input_len(real.len(), lookback)?;
-
-    // Retain this direct legacy loop (and temporary arithmetic duplication) for the
-    // ADR-0001 performance gate until issue #15 removes the legacy path.
-    let mut output = Vec::new();
-    output.resize(real.len(), Float::NAN);
-    if count == 0 {
-        return Ok(output);
-    }
-
-    let inv_period = 1.0 as Float / timeperiod as Float;
-    let mut window_sum: Float = real[..timeperiod].iter().copied().sum();
-    output[lookback] = window_sum * inv_period;
-
-    for output_idx in 1..count {
-        let new_idx = output_idx + timeperiod - 1;
-        let old_idx = output_idx - 1;
-        window_sum += real[new_idx] - real[old_idx];
-        output[lookback + output_idx] = window_sum * inv_period;
-    }
-
-    Ok(output)
 }
 
 /// Immutable Simple Moving Average Indicator Configuration.
@@ -245,11 +216,6 @@ impl SMAStream {
             sum: 0.0 as Float,
         })
     }
-
-    #[inline]
-    const fn period(&self) -> usize {
-        self.period
-    }
 }
 
 impl crate::traits::sealed::Sealed for SMAStream {}
@@ -287,99 +253,5 @@ impl StreamingComputation<SMAConfig> for SMAStream {
         self.index = 0;
         self.count = 0;
         self.sum = 0.0 as Float;
-    }
-}
-
-/// Legacy Simple Moving Average indicator.
-///
-/// This compatibility adapter keeps the historical combined batch/streaming
-/// signatures while storing only its [`SMAStream`] execution state.
-#[derive(Debug, Clone)]
-pub struct SMA {
-    stream: SMAStream,
-}
-
-impl SMA {
-    /// Creates a new legacy SMA indicator.
-    pub fn new(timeperiod: usize) -> Result<Self> {
-        let config = SMAConfig::new(timeperiod)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { stream })
-    }
-
-    /// Creates a legacy SMA indicator seeded from the most recent `timeperiod` values.
-    pub fn from_data(timeperiod: usize, real: &[Float]) -> Result<Self> {
-        validate_finite_slice("real", real)?;
-        let mut sma = Self::new(timeperiod)?;
-        let start = real.len().saturating_sub(timeperiod);
-        for &value in &real[start..] {
-            let _ = StreamingIndicator::next(&mut sma, value)?;
-        }
-        Ok(sma)
-    }
-
-    /// Returns the configured period.
-    #[inline]
-    pub const fn period(&self) -> usize {
-        self.stream.period()
-    }
-
-    /// Computes compact SMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        SMA(real, self.period(), out_real)
-    }
-
-    /// Computes full-length padded SMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        SMA_vec(real, self.period())
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        Ok(StreamingIndicator::next(self, input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for SMA {
-    type Input<'a> = &'a [Float];
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    #[inline]
-    fn lookback(&self) -> usize {
-        self.period() - 1
-    }
-
-    #[inline]
-    fn compute<'a>(
-        &self,
-        inputs: Self::Input<'a>,
-        outputs: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        SMA(inputs, self.period(), outputs)
-    }
-
-    #[inline]
-    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        SMA_vec(inputs, self.period())
-    }
-}
-
-impl StreamingIndicator for SMA {
-    type Tick = Float;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Float) -> Result<Option<Float>> {
-        StreamingComputation::<SMAConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for SMA {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<SMAConfig>::reset(&mut self.stream);
     }
 }

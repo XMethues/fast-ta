@@ -2,9 +2,8 @@
 
 use crate::common::validate_finite_value;
 use crate::{
-    compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    period_lookback, validate_finite_slice, validate_input_len, validate_output_len, CompactOutput,
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation,
     TalibError,
 };
 
@@ -80,18 +79,6 @@ where
 pub fn SUM(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
     let (lookback, count) = validate_rolling_window("SUM", real, timeperiod, out_real.len())?;
     Ok(sum_kernel(real, timeperiod, lookback, count, out_real))
-}
-
-/// Computes rolling sum into a full-length vector.
-#[allow(non_snake_case)]
-pub fn SUM_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = SUM(real, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
 }
 
 #[inline(always)]
@@ -237,11 +224,6 @@ impl SUMStream {
             count: 0,
         })
     }
-
-    #[inline]
-    const fn period(&self) -> usize {
-        self.period
-    }
 }
 
 impl crate::traits::sealed::Sealed for SUMStream {}
@@ -284,36 +266,12 @@ pub fn MIN(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<
     })
 }
 
-/// Computes rolling minimum into a full-length vector.
-#[allow(non_snake_case)]
-pub fn MIN_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = MIN(real, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
-}
-
 /// TA-Lib-style rolling maximum.
 #[allow(non_snake_case)]
 pub fn MAX(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<OutputRange> {
     rolling_extreme("MAX", real, timeperiod, out_real, |candidate, current| {
         candidate > current
     })
-}
-
-/// Computes rolling maximum into a full-length vector.
-#[allow(non_snake_case)]
-pub fn MAX_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = MAX(real, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
 }
 
 #[inline(always)]
@@ -536,11 +494,6 @@ macro_rules! define_extreme_execution {
                     count: 0,
                 })
             }
-
-            #[inline]
-            const fn period(&self) -> usize {
-                self.period
-            }
         }
 
         impl crate::traits::sealed::Sealed for $stream {}
@@ -598,86 +551,3 @@ define_extreme_execution!(
     "MAX",
     "rolling maximum"
 );
-
-macro_rules! define_rolling_adapter {
-    ($name:ident, $vec_name:ident, $config:ident, $stream:ident) => {
-        #[doc = concat!("Legacy ", stringify!($name), " indicator.")]
-        #[derive(Debug, Clone)]
-        pub struct $name {
-            stream: $stream,
-        }
-
-        impl $name {
-            #[doc = concat!("Creates a ", stringify!($name), " calculator.")]
-            pub fn new(timeperiod: usize) -> Result<Self> {
-                let config = $config::new(timeperiod)?;
-                let stream = IndicatorConfig::stream(&config)?;
-                Ok(Self { stream })
-            }
-
-            /// Returns the configured Period.
-            #[inline]
-            pub const fn period(&self) -> usize {
-                self.stream.period()
-            }
-
-            /// Computes compact outputs.
-            #[inline]
-            pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-                $name(real, self.period(), out_real)
-            }
-
-            /// Computes full-length outputs.
-            #[inline]
-            pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-                $vec_name(real, self.period())
-            }
-        }
-
-        impl Indicator for $name {
-            type Input<'a> = &'a [Float];
-            type OutputMut<'a> = &'a mut [Float];
-            type OutputOwned = Vec<Float>;
-
-            #[inline]
-            fn lookback(&self) -> usize {
-                self.period() - 1
-            }
-
-            #[inline]
-            fn compute<'a>(
-                &self,
-                inputs: Self::Input<'a>,
-                outputs: Self::OutputMut<'a>,
-            ) -> Result<OutputRange> {
-                $name(inputs, self.period(), outputs)
-            }
-
-            #[inline]
-            fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-                $vec_name(inputs, self.period())
-            }
-        }
-
-        impl StreamingIndicator for $name {
-            type Tick = Float;
-            type TickOutput = Float;
-
-            #[inline]
-            fn next(&mut self, input: Float) -> Result<Option<Float>> {
-                StreamingComputation::<$config>::next(&mut self.stream, input)
-            }
-        }
-
-        impl Resettable for $name {
-            #[inline]
-            fn reset(&mut self) {
-                StreamingComputation::<$config>::reset(&mut self.stream);
-            }
-        }
-    };
-}
-
-define_rolling_adapter!(SUM, SUM_vec, SUMConfig, SUMStream);
-define_rolling_adapter!(MIN, MIN_vec, MINConfig, MINStream);
-define_rolling_adapter!(MAX, MAX_vec, MAXConfig, MAXStream);

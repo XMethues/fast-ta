@@ -5,9 +5,8 @@ use super::moments::{
 };
 use crate::common::validate_finite_value;
 use crate::{
-    compact_buffer, padded_from_compact, validate_finite_slice, validate_input_len,
-    validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig, OutputRange,
-    PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator, TalibError,
+    validate_finite_slice, validate_input_len, validate_output_len, CompactOutput, Float,
+    IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -131,9 +130,7 @@ fn variance_batch(
 macro_rules! define_variance_indicator {
     (
         $name:ident,
-        $vec_name:ident,
         $default_name:ident,
-        $default_vec_name:ident,
         $config:ident,
         $runner:ident,
         $stream:ident,
@@ -168,24 +165,6 @@ macro_rules! define_variance_indicator {
             out_real: &mut [Float],
         ) -> Result<OutputRange> {
             $name(real, timeperiod, DEFAULT_NBDEV, out_real)
-        }
-
-        #[doc = concat!("Computes ", $description, " into a full-length padded vector.")]
-        #[allow(non_snake_case)]
-        pub fn $vec_name(real: &[Float], timeperiod: usize, nbdev: Float) -> Result<Vec<Float>> {
-            let mut compact = compact_buffer::<Float>(real.len());
-            let range = $name(real, timeperiod, nbdev, &mut compact)?;
-            Ok(padded_from_compact(
-                real.len(),
-                range,
-                &compact[..range.nb_element],
-            ))
-        }
-
-        #[doc = concat!("Computes ", $description, " with default nbdev 1.0 into a full-length padded vector.")]
-        #[allow(non_snake_case)]
-        pub fn $default_vec_name(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-            $vec_name(real, timeperiod, DEFAULT_NBDEV)
         }
 
         #[doc = concat!("Immutable ", $description, " Indicator Configuration.")]
@@ -265,9 +244,7 @@ macro_rules! define_variance_indicator {
             fn prepare_batch(&self, max_input_len: usize) -> Result<Self::BatchRunner> {
                 let moments = match $projection {
                     VarianceProjection::Variance => None,
-                    VarianceProjection::StandardDeviation => {
-                        Some(RollingMoments::new(self.period))
-                    }
+                    VarianceProjection::StandardDeviation => Some(RollingMoments::new(self.period)),
                 };
                 Ok($runner {
                     config: *self,
@@ -375,106 +352,12 @@ macro_rules! define_variance_indicator {
                 self.moments.reset();
             }
         }
-
-        #[doc = concat!($description, " indicator.")]
-        #[derive(Debug, Clone)]
-        pub struct $name {
-            period: usize,
-            nbdev: Float,
-            moments: RollingMoments,
-        }
-
-        impl $name {
-            #[doc = concat!("Creates a new ", $description, " indicator.")]
-            pub fn new(timeperiod: usize, nbdev: Float) -> Result<Self> {
-                statistic_lookback(timeperiod, $minimum_period, 0)?;
-                validate_nbdev(nbdev)?;
-                Ok(Self {
-                    period: timeperiod,
-                    nbdev,
-                    moments: RollingMoments::new(timeperiod),
-                })
-            }
-
-            #[doc = concat!("Creates a new ", $description, " indicator with nbdev 1.0.")]
-            pub fn with_default_nbdev(timeperiod: usize) -> Result<Self> {
-                Self::new(timeperiod, DEFAULT_NBDEV)
-            }
-
-            /// Returns the configured Period.
-            pub const fn period(&self) -> usize {
-                self.period
-            }
-
-            /// Returns the configured deviation multiplier.
-            pub const fn nbdev(&self) -> Float {
-                self.nbdev
-            }
-
-            /// Computes compact outputs using this indicator's configuration.
-            pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-                $name(real, self.period, self.nbdev, out_real)
-            }
-
-            /// Computes full-length padded outputs using this indicator's configuration.
-            pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-                $vec_name(real, self.period, self.nbdev)
-            }
-
-            /// Checked streaming update that returns `Float::NAN` during warm-up.
-            pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-                Ok(self.next(input)?.unwrap_or(Float::NAN))
-            }
-        }
-
-        impl Indicator for $name {
-            type Input<'a> = &'a [Float];
-            type OutputMut<'a> = &'a mut [Float];
-            type OutputOwned = Vec<Float>;
-
-            fn lookback(&self) -> usize {
-                self.period - 1
-            }
-
-            fn compute<'a>(
-                &self,
-                input: Self::Input<'a>,
-                output: Self::OutputMut<'a>,
-            ) -> Result<OutputRange> {
-                $name(input, self.period, self.nbdev, output)
-            }
-
-            fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-                $vec_name(input, self.period, self.nbdev)
-            }
-        }
-
-        impl StreamingIndicator for $name {
-            type Tick = Float;
-            type TickOutput = Float;
-
-            fn next(&mut self, input: Float) -> Result<Option<Float>> {
-                validate_finite_slice("input", &[input])?;
-                Ok(self
-                    .moments
-                    .push(input)
-                    .map(|variance| project(variance, self.nbdev, $projection)))
-            }
-        }
-
-        impl Resettable for $name {
-            fn reset(&mut self) {
-                self.moments.reset();
-            }
-        }
     };
 }
 
 define_variance_indicator!(
     VAR,
-    VAR_vec,
     VAR_with_default_nbdev,
-    VAR_vec_with_default_nbdev,
     VARConfig,
     VARBatchRunner,
     VARStream,
@@ -484,9 +367,7 @@ define_variance_indicator!(
 );
 define_variance_indicator!(
     STDDEV,
-    STDDEV_vec,
     STDDEV_with_default_nbdev,
-    STDDEV_vec_with_default_nbdev,
     STDDEVConfig,
     STDDEVBatchRunner,
     STDDEVStream,

@@ -1,9 +1,8 @@
 //! Generic Moving Average (MA) dispatcher.
 
 use crate::{
-    compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, CompactOutput, Float, Indicator, IndicatorConfig, OutputRange,
-    PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator, TalibError,
+    period_lookback, validate_finite_slice, validate_input_len, CompactOutput, Float,
+    IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -152,18 +151,6 @@ fn ma_kernel(
         ),
         MAType::KAMA | MAType::MAMA => Err(unsupported_ma_type(matype)),
     }
-}
-
-/// Computes the selected moving average into a full-length padded vector.
-#[allow(non_snake_case)]
-pub fn MA_vec(real: &[Float], timeperiod: usize, matype: MAType) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = MA(real, timeperiod, matype, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
 }
 
 /// Immutable generic Moving Average Indicator Configuration.
@@ -365,24 +352,13 @@ impl MAStreamInner {
 /// Independent Streaming Computation state for the generic Moving Average dispatcher.
 #[derive(Debug, Clone)]
 pub struct MAStream {
-    config: MAConfig,
     inner: MAStreamInner,
 }
 
 impl MAStream {
     fn new(config: MAConfig) -> Result<Self> {
         let inner = MAStreamInner::new(config)?;
-        Ok(Self { config, inner })
-    }
-
-    #[inline]
-    const fn period(&self) -> usize {
-        self.config.period
-    }
-
-    #[inline]
-    const fn ma_type(&self) -> MAType {
-        self.config.matype
+        Ok(Self { inner })
     }
 }
 
@@ -400,92 +376,5 @@ impl StreamingComputation<MAConfig> for MAStream {
     #[inline]
     fn reset(&mut self) {
         self.inner.reset();
-    }
-}
-
-/// Legacy generic Moving Average indicator dispatcher.
-#[derive(Debug, Clone)]
-pub struct MA {
-    stream: MAStream,
-}
-
-impl MA {
-    /// Creates a new legacy MA dispatcher for the selected moving-average type.
-    pub fn new(timeperiod: usize, matype: MAType) -> Result<Self> {
-        let config = MAConfig::new(timeperiod, matype)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { stream })
-    }
-
-    /// Returns the configured period.
-    #[inline]
-    pub const fn period(&self) -> usize {
-        self.stream.period()
-    }
-
-    /// Returns the configured moving-average type.
-    #[inline]
-    pub const fn ma_type(&self) -> MAType {
-        self.stream.ma_type()
-    }
-
-    /// Computes compact MA outputs using this dispatcher's period and type.
-    #[inline]
-    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        MA(real, self.period(), self.ma_type(), out_real)
-    }
-
-    /// Computes full-length padded MA outputs using this dispatcher's period and type.
-    #[inline]
-    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        MA_vec(real, self.period(), self.ma_type())
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        Ok(StreamingIndicator::next(self, input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for MA {
-    type Input<'a> = &'a [Float];
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    #[inline]
-    fn lookback(&self) -> usize {
-        ma_lookback(self.period(), self.ma_type())
-            .expect("validated MA indicator must retain a valid lookback")
-    }
-
-    #[inline]
-    fn compute<'a>(
-        &self,
-        inputs: Self::Input<'a>,
-        outputs: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        MA(inputs, self.period(), self.ma_type(), outputs)
-    }
-
-    #[inline]
-    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        MA_vec(inputs, self.period(), self.ma_type())
-    }
-}
-
-impl StreamingIndicator for MA {
-    type Tick = Float;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Float) -> Result<Option<Float>> {
-        StreamingComputation::<MAConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for MA {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<MAConfig>::reset(&mut self.stream);
     }
 }

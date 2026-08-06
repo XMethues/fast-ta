@@ -7,9 +7,8 @@
 
 use crate::common::validate_finite_value;
 use crate::{
-    compact_buffer, padded_from_compact, validate_all_same_len, validate_finite_slices,
-    validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig, OutputRange,
-    PreparedBatchRunner, Result, StreamingComputation, StreamingIndicator, TalibError,
+    validate_all_same_len, validate_finite_slices, validate_output_len, CompactOutput, Float,
+    IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -38,7 +37,6 @@ pub struct BinaryTick {
 macro_rules! define_binary_operator {
     (
         $name:ident,
-        $vec_name:ident,
         $config:ident,
         $runner:ident,
         $stream:ident,
@@ -94,18 +92,6 @@ macro_rules! define_binary_operator {
             let len = $config::validate_input(input)?;
             validate_output_len(stringify!($name), out_real.len(), len)?;
             Ok($config::compute_validated(input, out_real))
-        }
-
-        #[doc = concat!("Computes ", stringify!($name), " into a full-length vector.")]
-        #[allow(non_snake_case)]
-        pub fn $vec_name(real0: &[Float], real1: &[Float]) -> Result<Vec<Float>> {
-            let mut compact = compact_buffer::<Float>(real0.len());
-            let range = $name(real0, real1, &mut compact)?;
-            Ok(padded_from_compact(
-                real0.len(),
-                range,
-                &compact[..range.nb_element],
-            ))
         }
 
         impl crate::traits::sealed::Sealed for $config {}
@@ -204,74 +190,11 @@ macro_rules! define_binary_operator {
             #[inline]
             fn reset(&mut self) {}
         }
-
-        #[doc = concat!(stringify!($name), " struct surface.")]
-        #[derive(Debug, Clone, Copy)]
-        pub struct $name {
-            stream: $stream,
-        }
-
-        impl $name {
-            #[doc = concat!("Creates a ", stringify!($name), " calculator.")]
-            pub fn new() -> Result<Self> {
-                Ok(Self {
-                    stream: IndicatorConfig::stream(&$config::new())?,
-                })
-            }
-
-            /// Computes compact outputs.
-            pub fn compute(
-                &self,
-                real0: &[Float],
-                real1: &[Float],
-                out_real: &mut [Float],
-            ) -> Result<OutputRange> {
-                $name(real0, real1, out_real)
-            }
-
-            /// Computes full-length outputs.
-            pub fn compute_to_vec(&self, real0: &[Float], real1: &[Float]) -> Result<Vec<Float>> {
-                $vec_name(real0, real1)
-            }
-        }
-
-        impl Indicator for $name {
-            type Input<'a> = BinaryInput<'a>;
-            type OutputMut<'a> = &'a mut [Float];
-            type OutputOwned = Vec<Float>;
-
-            fn lookback(&self) -> usize {
-                0
-            }
-
-            fn compute<'a>(
-                &self,
-                input: Self::Input<'a>,
-                output: Self::OutputMut<'a>,
-            ) -> Result<OutputRange> {
-                $name(input.real0, input.real1, output)
-            }
-
-            fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-                $vec_name(input.real0, input.real1)
-            }
-        }
-
-        impl StreamingIndicator for $name {
-            type Tick = BinaryTick;
-            type TickOutput = Float;
-
-            #[inline(always)]
-            fn next(&mut self, input: BinaryTick) -> Result<Option<Float>> {
-                StreamingComputation::<$config>::next(&mut self.stream, input)
-            }
-        }
     };
 }
 
 define_binary_operator!(
     ADD,
-    ADD_vec,
     ADDConfig,
     ADDBatchRunner,
     ADDStream,
@@ -279,7 +202,6 @@ define_binary_operator!(
 );
 define_binary_operator!(
     SUB,
-    SUB_vec,
     SUBConfig,
     SUBBatchRunner,
     SUBStream,
@@ -287,7 +209,6 @@ define_binary_operator!(
 );
 define_binary_operator!(
     MULT,
-    MULT_vec,
     MULTConfig,
     MULTBatchRunner,
     MULTStream,
@@ -295,7 +216,6 @@ define_binary_operator!(
 );
 define_binary_operator!(
     DIV,
-    DIV_vec,
     DIVConfig,
     DIVBatchRunner,
     DIVStream,

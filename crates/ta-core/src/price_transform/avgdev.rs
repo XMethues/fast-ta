@@ -1,9 +1,8 @@
 //! Average Deviation (AVGDEV).
 
 use crate::{
-    compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    period_lookback, validate_finite_slice, validate_input_len, validate_output_len, CompactOutput,
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation,
     TalibError,
 };
 
@@ -50,18 +49,6 @@ pub fn AVGDEV(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Resu
     let (lookback, count) = validate_avgdev_input(real, timeperiod)?;
     validate_output_len("AVGDEV", out_real.len(), count)?;
     Ok(avgdev_kernel(real, timeperiod, lookback, count, out_real))
-}
-
-/// Computes Average Deviation into a full-length vector.
-#[allow(non_snake_case)]
-pub fn AVGDEV_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = AVGDEV(real, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
 }
 
 /// Immutable Average Deviation Indicator Configuration.
@@ -184,11 +171,6 @@ impl AVGDEVStream {
             count: 0,
         })
     }
-
-    #[inline]
-    const fn period(&self) -> usize {
-        self.period
-    }
 }
 
 impl crate::traits::sealed::Sealed for AVGDEVStream {}
@@ -224,77 +206,5 @@ impl StreamingComputation<AVGDEVConfig> for AVGDEVStream {
         self.buffer.fill(0.0 as Float);
         self.index = 0;
         self.count = 0;
-    }
-}
-
-/// Legacy Average Deviation indicator.
-#[derive(Debug, Clone)]
-pub struct AVGDEV {
-    stream: AVGDEVStream,
-}
-
-impl AVGDEV {
-    /// Creates a new legacy Average Deviation indicator.
-    pub fn new(timeperiod: usize) -> Result<Self> {
-        let config = AVGDEVConfig::new(timeperiod)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { stream })
-    }
-
-    /// Returns the configured period.
-    #[inline]
-    pub const fn period(&self) -> usize {
-        self.stream.period()
-    }
-
-    /// Computes compact outputs.
-    #[inline]
-    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        AVGDEV(real, self.period(), out_real)
-    }
-
-    /// Computes full-length outputs.
-    #[inline]
-    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        AVGDEV_vec(real, self.period())
-    }
-}
-
-impl Indicator for AVGDEV {
-    type Input<'a> = &'a [Float];
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    fn lookback(&self) -> usize {
-        self.period() - 1
-    }
-
-    fn compute<'a>(
-        &self,
-        inputs: Self::Input<'a>,
-        outputs: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        AVGDEV(inputs, self.period(), outputs)
-    }
-
-    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        AVGDEV_vec(inputs, self.period())
-    }
-}
-
-impl StreamingIndicator for AVGDEV {
-    type Tick = Float;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Float) -> Result<Option<Float>> {
-        StreamingComputation::<AVGDEVConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for AVGDEV {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<AVGDEVConfig>::reset(&mut self.stream);
     }
 }

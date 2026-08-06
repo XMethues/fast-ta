@@ -2,9 +2,8 @@
 
 use crate::common::validate_finite_value;
 use crate::{
-    compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    period_lookback, validate_finite_slice, validate_input_len, validate_output_len, CompactOutput,
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation,
     TalibError,
 };
 
@@ -58,18 +57,6 @@ pub fn TEMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result
     let (lookback, count) = validate_tema_input(real, timeperiod)?;
     validate_output_len("TEMA", out_real.len(), count)?;
     tema_kernel(real, timeperiod, lookback, count, out_real)
-}
-
-/// Computes TEMA into a full-length vector padded with `Float::NAN` before the lookback.
-#[allow(non_snake_case)]
-pub fn TEMA_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = TEMA(real, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
 }
 
 /// Immutable Triple Exponential Moving Average Indicator Configuration.
@@ -174,7 +161,6 @@ impl PreparedBatchRunner<TEMAConfig> for TEMABatchRunner {
 /// Independent Streaming Computation state for Triple Exponential Moving Average.
 #[derive(Debug, Clone)]
 pub struct TEMAStream {
-    period: usize,
     ema1: super::ema::EMAStream,
     ema2: super::ema::EMAStream,
     ema3: super::ema::EMAStream,
@@ -184,16 +170,10 @@ impl TEMAStream {
     fn new(period: usize) -> Result<Self> {
         tema_lookback(period)?;
         Ok(Self {
-            period,
             ema1: super::ema::EMAStream::new(period)?,
             ema2: super::ema::EMAStream::new(period)?,
             ema3: super::ema::EMAStream::new(period)?,
         })
-    }
-
-    #[inline]
-    const fn period(&self) -> usize {
-        self.period
     }
 
     fn next_validated(&mut self, input: Float) -> Result<Option<Float>> {
@@ -233,85 +213,5 @@ impl StreamingComputation<TEMAConfig> for TEMAStream {
     #[inline]
     fn reset(&mut self) {
         self.reset_state();
-    }
-}
-
-/// Legacy Triple Exponential Moving Average indicator.
-#[derive(Debug, Clone)]
-pub struct TEMA {
-    stream: TEMAStream,
-}
-
-impl TEMA {
-    /// Creates a new legacy TEMA indicator.
-    pub fn new(timeperiod: usize) -> Result<Self> {
-        let config = TEMAConfig::new(timeperiod)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { stream })
-    }
-
-    /// Returns the configured period.
-    #[inline]
-    pub const fn period(&self) -> usize {
-        self.stream.period()
-    }
-
-    /// Computes compact TEMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        TEMA(real, self.period(), out_real)
-    }
-
-    /// Computes full-length padded TEMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        TEMA_vec(real, self.period())
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        Ok(StreamingIndicator::next(self, input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for TEMA {
-    type Input<'a> = &'a [Float];
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    #[inline]
-    fn lookback(&self) -> usize {
-        (self.period() - 1) * 3
-    }
-
-    #[inline]
-    fn compute<'a>(
-        &self,
-        inputs: Self::Input<'a>,
-        outputs: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        TEMA(inputs, self.period(), outputs)
-    }
-
-    #[inline]
-    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        TEMA_vec(inputs, self.period())
-    }
-}
-
-impl StreamingIndicator for TEMA {
-    type Tick = Float;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Float) -> Result<Option<Float>> {
-        StreamingComputation::<TEMAConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for TEMA {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<TEMAConfig>::reset(&mut self.stream);
     }
 }

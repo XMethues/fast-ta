@@ -1,10 +1,9 @@
 //! On-Balance Volume (OBV).
 
 use crate::{
-    compact_buffer, padded_from_compact, validate_all_same_len, validate_finite_slices,
-    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
-    TalibError,
+    validate_all_same_len, validate_finite_slices, validate_input_len, validate_output_len,
+    CompactOutput, Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result,
+    StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -76,17 +75,6 @@ pub fn OBV(close: &[Float], volume: &[Float], out_real: &mut [Float]) -> Result<
     Ok(obv_kernel(input, len, count, out_real))
 }
 
-/// Computes OBV into a full-length vector padded at the warm-up index.
-#[allow(non_snake_case)]
-pub fn OBV_vec(close: &[Float], volume: &[Float]) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(close.len());
-    let range = OBV(close, volume, &mut compact)?;
-    Ok(padded_from_compact(
-        close.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
-}
 /// Immutable On-Balance Volume Indicator Configuration.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct OBVConfig;
@@ -139,7 +127,10 @@ impl IndicatorConfig for OBVConfig {
 
     #[inline]
     fn stream(&self) -> Result<Self::Stream> {
-        Ok(OBVStream { inner: OBV::new()? })
+        Ok(OBVStream {
+            previous_close: None,
+            value: 0.0 as Float,
+        })
     }
 }
 
@@ -180,86 +171,13 @@ impl PreparedBatchRunner<OBVConfig> for OBVBatchRunner {
 /// Independent Streaming Computation state for OBV.
 #[derive(Debug, Clone)]
 pub struct OBVStream {
-    inner: OBV,
+    previous_close: Option<Float>,
+    value: Float,
 }
 
 impl crate::traits::sealed::Sealed for OBVStream {}
 
 impl StreamingComputation<OBVConfig> for OBVStream {
-    type Tick = OBVTick;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
-        StreamingIndicator::next(&mut self.inner, input)
-    }
-
-    #[inline]
-    fn reset(&mut self) {
-        Resettable::reset(&mut self.inner);
-    }
-}
-
-/// On-Balance Volume indicator using first-observation warm-up.
-#[derive(Debug, Clone, Default)]
-pub struct OBV {
-    previous_close: Option<Float>,
-    value: Float,
-}
-
-impl OBV {
-    /// Creates a new OBV indicator.
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            previous_close: None,
-            value: 0.0 as Float,
-        })
-    }
-
-    /// Computes compact OBV outputs.
-    pub fn compute(
-        &self,
-        close: &[Float],
-        volume: &[Float],
-        out_real: &mut [Float],
-    ) -> Result<OutputRange> {
-        OBV(close, volume, out_real)
-    }
-
-    /// Computes full-length padded OBV outputs.
-    pub fn compute_to_vec(&self, close: &[Float], volume: &[Float]) -> Result<Vec<Float>> {
-        OBV_vec(close, volume)
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: OBVTick) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for OBV {
-    type Input<'a> = OBVInput<'a>;
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    fn lookback(&self) -> usize {
-        1
-    }
-
-    fn compute<'a>(
-        &self,
-        input: Self::Input<'a>,
-        output: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        OBV(input.close, input.volume, output)
-    }
-
-    fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        OBV_vec(input.close, input.volume)
-    }
-}
-
-impl StreamingIndicator for OBV {
     type Tick = OBVTick;
     type TickOutput = Float;
 
@@ -275,9 +193,8 @@ impl StreamingIndicator for OBV {
         self.previous_close = Some(input.close);
         Ok(Some(self.value))
     }
-}
 
-impl Resettable for OBV {
+    #[inline]
     fn reset(&mut self) {
         self.previous_close = None;
         self.value = 0.0 as Float;

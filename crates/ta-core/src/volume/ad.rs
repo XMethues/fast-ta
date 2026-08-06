@@ -1,9 +1,8 @@
 //! Chaikin Accumulation/Distribution Line (AD).
 
 use crate::{
-    compact_buffer, padded_from_compact, validate_all_same_len, validate_finite_slices,
-    validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig, OutputRange,
-    PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator, TalibError,
+    validate_all_same_len, validate_finite_slices, validate_output_len, CompactOutput, Float,
+    IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -103,22 +102,6 @@ pub fn AD(
     Ok(ad_kernel(input, len, out_real))
 }
 
-/// Computes AD into a full-length vector.
-#[allow(non_snake_case)]
-pub fn AD_vec(
-    high: &[Float],
-    low: &[Float],
-    close: &[Float],
-    volume: &[Float],
-) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(high.len());
-    let range = AD(high, low, close, volume, &mut compact)?;
-    Ok(padded_from_compact(
-        high.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
-}
 /// Immutable Chaikin Accumulation/Distribution Line Indicator Configuration.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct ADConfig;
@@ -171,7 +154,9 @@ impl IndicatorConfig for ADConfig {
 
     #[inline]
     fn stream(&self) -> Result<Self::Stream> {
-        Ok(ADStream { inner: AD::new()? })
+        Ok(ADStream {
+            cumulative: 0.0 as Float,
+        })
     }
 }
 
@@ -212,92 +197,12 @@ impl PreparedBatchRunner<ADConfig> for ADBatchRunner {
 /// Independent Streaming Computation state for AD.
 #[derive(Debug, Clone)]
 pub struct ADStream {
-    inner: AD,
+    cumulative: Float,
 }
 
 impl crate::traits::sealed::Sealed for ADStream {}
 
 impl StreamingComputation<ADConfig> for ADStream {
-    type Tick = ADTick;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
-        StreamingIndicator::next(&mut self.inner, input)
-    }
-
-    #[inline]
-    fn reset(&mut self) {
-        Resettable::reset(&mut self.inner);
-    }
-}
-
-/// Chaikin Accumulation/Distribution Line indicator.
-#[derive(Debug, Clone, Default)]
-pub struct AD {
-    cumulative: Float,
-}
-
-impl AD {
-    /// Creates a new AD indicator.
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            cumulative: 0.0 as Float,
-        })
-    }
-
-    /// Computes compact AD outputs.
-    pub fn compute(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-        volume: &[Float],
-        out_real: &mut [Float],
-    ) -> Result<OutputRange> {
-        AD(high, low, close, volume, out_real)
-    }
-
-    /// Computes full-length AD outputs.
-    pub fn compute_to_vec(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-        volume: &[Float],
-    ) -> Result<Vec<Float>> {
-        AD_vec(high, low, close, volume)
-    }
-
-    /// Checked streaming update.
-    pub fn next_checked(&mut self, input: ADTick) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for AD {
-    type Input<'a> = ADInput<'a>;
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    fn lookback(&self) -> usize {
-        0
-    }
-
-    fn compute<'a>(
-        &self,
-        input: Self::Input<'a>,
-        output: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        AD(input.high, input.low, input.close, input.volume, output)
-    }
-
-    fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        AD_vec(input.high, input.low, input.close, input.volume)
-    }
-}
-
-impl StreamingIndicator for AD {
     type Tick = ADTick;
     type TickOutput = Float;
 
@@ -311,9 +216,8 @@ impl StreamingIndicator for AD {
         self.cumulative += money_flow_volume(input.high, input.low, input.close, input.volume);
         Ok(Some(self.cumulative))
     }
-}
 
-impl Resettable for AD {
+    #[inline]
     fn reset(&mut self) {
         self.cumulative = 0.0 as Float;
     }

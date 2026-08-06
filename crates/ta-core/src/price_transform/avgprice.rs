@@ -2,9 +2,8 @@
 
 use crate::common::validate_finite_value;
 use crate::{
-    compact_buffer, padded_from_compact, validate_all_same_len, validate_finite_slices,
-    validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig, OutputRange,
-    PreparedBatchRunner, Result, StreamingComputation, StreamingIndicator, TalibError,
+    validate_all_same_len, validate_finite_slices, validate_output_len, CompactOutput, Float,
+    IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -87,23 +86,6 @@ pub fn AVGPRICE(
     let len = validate_avgprice_input(input)?;
     validate_output_len("AVGPRICE", out_real.len(), len)?;
     Ok(avgprice_kernel(input, len, out_real))
-}
-
-/// Computes Average Price into a full-length vector.
-#[allow(non_snake_case)]
-pub fn AVGPRICE_vec(
-    open: &[Float],
-    high: &[Float],
-    low: &[Float],
-    close: &[Float],
-) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(open.len());
-    let range = AVGPRICE(open, high, low, close, &mut compact)?;
-    Ok(padded_from_compact(
-        open.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
 }
 
 /// Immutable Average Price Indicator Configuration.
@@ -216,72 +198,4 @@ impl StreamingComputation<AVGPRICEConfig> for AVGPRICEStream {
 
     #[inline]
     fn reset(&mut self) {}
-}
-
-/// Average Price struct surface.
-#[derive(Debug, Clone, Copy)]
-pub struct AVGPRICE {
-    _private: (),
-}
-
-impl AVGPRICE {
-    /// Creates an Average Price calculator.
-    pub fn new() -> Result<Self> {
-        Ok(Self { _private: () })
-    }
-
-    /// Computes compact outputs.
-    pub fn compute(
-        &self,
-        open: &[Float],
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-        out_real: &mut [Float],
-    ) -> Result<OutputRange> {
-        AVGPRICE(open, high, low, close, out_real)
-    }
-
-    /// Computes full-length outputs.
-    pub fn compute_to_vec(
-        &self,
-        open: &[Float],
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-    ) -> Result<Vec<Float>> {
-        AVGPRICE_vec(open, high, low, close)
-    }
-}
-
-impl Indicator for AVGPRICE {
-    type Input<'a> = AVGPRICEInput<'a>;
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    fn lookback(&self) -> usize {
-        0
-    }
-
-    fn compute<'a>(
-        &self,
-        input: Self::Input<'a>,
-        output: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        AVGPRICE(input.open, input.high, input.low, input.close, output)
-    }
-
-    fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        AVGPRICE_vec(input.open, input.high, input.low, input.close)
-    }
-}
-
-impl StreamingIndicator for AVGPRICE {
-    type Tick = AVGPRICETick;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
-        avgprice_tick(input).map(Some)
-    }
 }

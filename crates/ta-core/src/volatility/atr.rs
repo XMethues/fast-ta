@@ -1,10 +1,9 @@
 //! Average True Range (ATR).
 
 use crate::{
-    compact_buffer, padded_from_compact, validate_finite_slices, validate_input_len,
-    validate_output_len, validate_period, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
-    TalibError,
+    validate_finite_slices, validate_input_len, validate_output_len, validate_period,
+    CompactOutput, Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result,
+    StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -110,22 +109,6 @@ pub fn ATR(
     Ok(atr_kernel(input, timeperiod, lookback, count, out_real))
 }
 
-/// Computes Average True Range into a full-length vector.
-#[allow(non_snake_case)]
-pub fn ATR_vec(
-    high: &[Float],
-    low: &[Float],
-    close: &[Float],
-    timeperiod: usize,
-) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(high.len());
-    let range = ATR(high, low, close, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        high.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
-}
 /// Immutable Average True Range Indicator Configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ATRConfig {
@@ -288,103 +271,5 @@ impl StreamingComputation<ATRConfig> for ATRStream {
         self.count = 0;
         self.true_range_sum = 0.0 as Float;
         self.value = 0.0 as Float;
-    }
-}
-
-/// Average True Range compatibility adapter.
-#[derive(Debug, Clone)]
-pub struct ATR {
-    config: ATRConfig,
-    stream: ATRStream,
-}
-
-impl ATR {
-    /// Creates a new Average True Range indicator.
-    pub fn new(timeperiod: usize) -> Result<Self> {
-        let config = ATRConfig::new(timeperiod)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { config, stream })
-    }
-
-    /// Returns the configured period.
-    #[inline]
-    pub const fn period(&self) -> usize {
-        self.config.period()
-    }
-
-    /// Computes compact ATR outputs using this indicator's period.
-    #[inline]
-    pub fn compute(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-        out_real: &mut [Float],
-    ) -> Result<OutputRange> {
-        ATR(high, low, close, self.config.period, out_real)
-    }
-
-    /// Computes full-length padded ATR outputs using this indicator's period.
-    #[inline]
-    pub fn compute_to_vec(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-    ) -> Result<Vec<Float>> {
-        ATR_vec(high, low, close, self.config.period)
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: ATRTick) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for ATR {
-    type Input<'a> = ATRInput<'a>;
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    #[inline]
-    fn lookback(&self) -> usize {
-        self.config.period
-    }
-
-    #[inline]
-    fn compute<'a>(
-        &self,
-        input: Self::Input<'a>,
-        output: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        ATR(
-            input.high,
-            input.low,
-            input.close,
-            self.config.period,
-            output,
-        )
-    }
-
-    #[inline]
-    fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        ATR_vec(input.high, input.low, input.close, self.config.period)
-    }
-}
-
-impl StreamingIndicator for ATR {
-    type Tick = ATRTick;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
-        StreamingComputation::<ATRConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for ATR {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<ATRConfig>::reset(&mut self.stream);
     }
 }

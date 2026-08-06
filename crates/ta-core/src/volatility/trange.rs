@@ -1,10 +1,9 @@
 //! True Range (TRANGE).
 
 use crate::{
-    compact_buffer, padded_from_compact, validate_all_same_len, validate_finite_slices,
-    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
-    TalibError,
+    validate_all_same_len, validate_finite_slices, validate_input_len, validate_output_len,
+    CompactOutput, Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result,
+    StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -89,17 +88,6 @@ pub fn TRANGE(
     Ok(trange_kernel(input, count, out_real))
 }
 
-/// Computes True Range into a full-length vector.
-#[allow(non_snake_case)]
-pub fn TRANGE_vec(high: &[Float], low: &[Float], close: &[Float]) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(high.len());
-    let range = TRANGE(high, low, close, &mut compact)?;
-    Ok(padded_from_compact(
-        high.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
-}
 /// Immutable True Range Indicator Configuration.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct TRANGEConfig;
@@ -222,83 +210,5 @@ impl StreamingComputation<TRANGEConfig> for TRANGEStream {
     #[inline]
     fn reset(&mut self) {
         self.previous_close = None;
-    }
-}
-
-/// True Range compatibility adapter.
-#[derive(Debug, Clone, Default)]
-pub struct TRANGE {
-    stream: TRANGEStream,
-}
-
-impl TRANGE {
-    /// Creates a True Range calculator.
-    pub fn new() -> Result<Self> {
-        Ok(Self::default())
-    }
-
-    /// Computes compact outputs.
-    pub fn compute(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-        out_real: &mut [Float],
-    ) -> Result<OutputRange> {
-        TRANGE(high, low, close, out_real)
-    }
-
-    /// Computes full-length outputs.
-    pub fn compute_to_vec(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-    ) -> Result<Vec<Float>> {
-        TRANGE_vec(high, low, close)
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: TRANGETick) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for TRANGE {
-    type Input<'a> = TRANGEInput<'a>;
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    fn lookback(&self) -> usize {
-        1
-    }
-
-    fn compute<'a>(
-        &self,
-        input: Self::Input<'a>,
-        output: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        TRANGE(input.high, input.low, input.close, output)
-    }
-
-    fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        TRANGE_vec(input.high, input.low, input.close)
-    }
-}
-
-impl StreamingIndicator for TRANGE {
-    type Tick = TRANGETick;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
-        StreamingComputation::<TRANGEConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for TRANGE {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<TRANGEConfig>::reset(&mut self.stream);
     }
 }

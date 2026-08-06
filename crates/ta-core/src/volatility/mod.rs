@@ -7,8 +7,6 @@ mod atr;
 mod natr;
 mod trange;
 
-pub use atr::{ATRBatchRunner, ATRConfig, ATRInput, ATRStream, ATRTick, ATR_vec, ATR};
-pub use natr::{NATRBatchRunner, NATRConfig, NATRInput, NATRStream, NATRTick, NATR_vec, NATR};
-pub use trange::{
-    TRANGEBatchRunner, TRANGEConfig, TRANGEInput, TRANGEStream, TRANGETick, TRANGE_vec, TRANGE,
-};
+pub use atr::{ATRBatchRunner, ATRConfig, ATRInput, ATRStream, ATRTick, ATR};
+pub use natr::{NATRBatchRunner, NATRConfig, NATRInput, NATRStream, NATRTick, NATR};
+pub use trange::{TRANGEBatchRunner, TRANGEConfig, TRANGEInput, TRANGEStream, TRANGETick, TRANGE};

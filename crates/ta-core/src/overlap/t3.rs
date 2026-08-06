@@ -2,9 +2,8 @@
 
 use crate::common::validate_finite_value;
 use crate::{
-    compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    period_lookback, validate_finite_slice, validate_input_len, validate_output_len, CompactOutput,
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation,
     TalibError,
 };
 
@@ -110,24 +109,6 @@ pub fn T3_with_default_vfactor(
     out_real: &mut [Float],
 ) -> Result<OutputRange> {
     T3(real, timeperiod, T3_DEFAULT_VFACTOR, out_real)
-}
-
-/// Computes T3 into a full-length vector padded with `Float::NAN` before the lookback.
-#[allow(non_snake_case)]
-pub fn T3_vec(real: &[Float], timeperiod: usize, vfactor: Float) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = T3(real, timeperiod, vfactor, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
-}
-
-/// Computes T3 with the default vfactor into a full-length vector.
-#[allow(non_snake_case)]
-pub fn T3_vec_with_default_vfactor(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    T3_vec(real, timeperiod, T3_DEFAULT_VFACTOR)
 }
 
 /// Immutable T3 Moving Average Indicator Configuration.
@@ -255,8 +236,6 @@ impl PreparedBatchRunner<T3Config> for T3BatchRunner {
 /// Independent Streaming Computation state for T3 Moving Average.
 #[derive(Debug, Clone)]
 pub struct T3Stream {
-    period: usize,
-    vfactor: Float,
     coefficients: (Float, Float, Float, Float),
     ema1: super::ema::EMAStream,
     ema2: super::ema::EMAStream,
@@ -271,8 +250,6 @@ impl T3Stream {
         t3_lookback(period)?;
         validate_vfactor(vfactor)?;
         Ok(Self {
-            period,
-            vfactor,
             coefficients: t3_coefficients(vfactor),
             ema1: super::ema::EMAStream::new(period)?,
             ema2: super::ema::EMAStream::new(period)?,
@@ -281,16 +258,6 @@ impl T3Stream {
             ema5: super::ema::EMAStream::new(period)?,
             ema6: super::ema::EMAStream::new(period)?,
         })
-    }
-
-    #[inline]
-    const fn period(&self) -> usize {
-        self.period
-    }
-
-    #[inline]
-    const fn vfactor(&self) -> Float {
-        self.vfactor
     }
 
     fn next_validated(&mut self, input: Float) -> Result<Option<Float>> {
@@ -345,96 +312,5 @@ impl StreamingComputation<T3Config> for T3Stream {
     #[inline]
     fn reset(&mut self) {
         self.reset_state();
-    }
-}
-
-/// Legacy T3 Moving Average indicator.
-#[derive(Debug, Clone)]
-pub struct T3 {
-    stream: T3Stream,
-}
-
-impl T3 {
-    /// Creates a new legacy T3 indicator with an explicit vfactor.
-    pub fn new(timeperiod: usize, vfactor: Float) -> Result<Self> {
-        let config = T3Config::new(timeperiod, vfactor)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { stream })
-    }
-
-    /// Creates a new legacy T3 indicator with TA-Lib's default vfactor.
-    pub fn with_default_vfactor(timeperiod: usize) -> Result<Self> {
-        Self::new(timeperiod, T3_DEFAULT_VFACTOR)
-    }
-
-    /// Returns the configured period.
-    #[inline]
-    pub const fn period(&self) -> usize {
-        self.stream.period()
-    }
-
-    /// Returns the configured vfactor.
-    #[inline]
-    pub const fn vfactor(&self) -> Float {
-        self.stream.vfactor()
-    }
-
-    /// Computes compact T3 outputs using this indicator's period and vfactor.
-    #[inline]
-    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        T3(real, self.period(), self.vfactor(), out_real)
-    }
-
-    /// Computes full-length padded T3 outputs using this indicator's period and vfactor.
-    #[inline]
-    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        T3_vec(real, self.period(), self.vfactor())
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        Ok(StreamingIndicator::next(self, input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for T3 {
-    type Input<'a> = &'a [Float];
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    #[inline]
-    fn lookback(&self) -> usize {
-        (self.period() - 1) * 6
-    }
-
-    #[inline]
-    fn compute<'a>(
-        &self,
-        inputs: Self::Input<'a>,
-        outputs: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        T3(inputs, self.period(), self.vfactor(), outputs)
-    }
-
-    #[inline]
-    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        T3_vec(inputs, self.period(), self.vfactor())
-    }
-}
-
-impl StreamingIndicator for T3 {
-    type Tick = Float;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Float) -> Result<Option<Float>> {
-        StreamingComputation::<T3Config>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for T3 {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<T3Config>::reset(&mut self.stream);
     }
 }

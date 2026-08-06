@@ -8,20 +8,18 @@ mod extrema;
 mod rolling;
 
 pub use arithmetic::{
-    ADDBatchRunner, ADDConfig, ADDStream, ADD_vec, BinaryInput, BinaryTick, DIVBatchRunner,
-    DIVConfig, DIVStream, DIV_vec, MULTBatchRunner, MULTConfig, MULTStream, MULT_vec,
-    SUBBatchRunner, SUBConfig, SUBStream, SUB_vec, ADD, DIV, MULT, SUB,
+    ADDBatchRunner, ADDConfig, ADDStream, BinaryInput, BinaryTick, DIVBatchRunner, DIVConfig,
+    DIVStream, MULTBatchRunner, MULTConfig, MULTStream, SUBBatchRunner, SUBConfig, SUBStream, ADD,
+    DIV, MULT, SUB,
 };
 pub use extrema::{
-    MAXINDEXBatchRunner, MAXINDEXConfig, MAXINDEXStream, MAXINDEX_vec, MININDEXBatchRunner,
-    MININDEXConfig, MININDEXStream, MININDEX_vec, MINMAXBatchRunner, MINMAXConfig,
-    MINMAXINDEXBatchRunner, MINMAXINDEXConfig, MINMAXINDEXOutput, MINMAXINDEXOutputMut,
-    MINMAXINDEXStream, MINMAXINDEXStreamValue, MINMAXINDEXValue, MINMAXINDEXValues,
-    MINMAXINDEXValuesMut, MINMAXINDEX_vec, MINMAXOutput, MINMAXOutputMut, MINMAXStream,
-    MINMAXValue, MINMAXValues, MINMAXValuesMut, MINMAX_vec, MAXINDEX, MININDEX, MINMAX,
+    MAXINDEXBatchRunner, MAXINDEXConfig, MAXINDEXStream, MININDEXBatchRunner, MININDEXConfig,
+    MININDEXStream, MINMAXBatchRunner, MINMAXConfig, MINMAXINDEXBatchRunner, MINMAXINDEXConfig,
+    MINMAXINDEXStream, MINMAXINDEXStreamValue, MINMAXINDEXValues, MINMAXINDEXValuesMut,
+    MINMAXStream, MINMAXValue, MINMAXValues, MINMAXValuesMut, MAXINDEX, MININDEX, MINMAX,
     MINMAXINDEX,
 };
 pub use rolling::{
-    MAXBatchRunner, MAXConfig, MAXStream, MAX_vec, MINBatchRunner, MINConfig, MINStream, MIN_vec,
-    SUMBatchRunner, SUMConfig, SUMStream, SUM_vec, MAX, MIN, SUM,
+    MAXBatchRunner, MAXConfig, MAXStream, MINBatchRunner, MINConfig, MINStream, SUMBatchRunner,
+    SUMConfig, SUMStream, MAX, MIN, SUM,
 };

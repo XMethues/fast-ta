@@ -1,10 +1,9 @@
 //! Chaikin Accumulation/Distribution Oscillator (ADOSC).
 
 use crate::{
-    compact_buffer, padded_from_compact, validate_finite_slices, validate_input_len,
-    validate_output_len, validate_period, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
-    TalibError,
+    validate_finite_slices, validate_input_len, validate_output_len, validate_period,
+    CompactOutput, Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result,
+    StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -168,32 +167,6 @@ pub fn ADOSC(
     ))
 }
 
-/// Computes ADOSC into a full-length padded vector.
-#[allow(non_snake_case)]
-pub fn ADOSC_vec(
-    high: &[Float],
-    low: &[Float],
-    close: &[Float],
-    volume: &[Float],
-    fastperiod: usize,
-    slowperiod: usize,
-) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(high.len());
-    let range = ADOSC(
-        high,
-        low,
-        close,
-        volume,
-        fastperiod,
-        slowperiod,
-        &mut compact,
-    )?;
-    Ok(padded_from_compact(
-        high.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
-}
 /// Immutable Chaikin Accumulation/Distribution Oscillator Indicator Configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ADOSCConfig {
@@ -357,128 +330,5 @@ impl StreamingComputation<ADOSCConfig> for ADOSCStream {
         self.cumulative = 0.0 as Float;
         self.fast.reset();
         self.slow.reset();
-    }
-}
-
-/// Chaikin Accumulation/Distribution Oscillator compatibility adapter.
-#[derive(Debug, Clone)]
-pub struct ADOSC {
-    config: ADOSCConfig,
-    stream: ADOSCStream,
-}
-
-impl ADOSC {
-    /// Creates a new ADOSC indicator.
-    pub fn new(fastperiod: usize, slowperiod: usize) -> Result<Self> {
-        let config = ADOSCConfig::new(fastperiod, slowperiod)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { config, stream })
-    }
-
-    /// Returns the fast period.
-    pub const fn fastperiod(&self) -> usize {
-        self.config.fastperiod()
-    }
-
-    /// Returns the slow period.
-    pub const fn slowperiod(&self) -> usize {
-        self.config.slowperiod()
-    }
-
-    /// Computes compact ADOSC outputs.
-    pub fn compute(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-        volume: &[Float],
-        out_real: &mut [Float],
-    ) -> Result<OutputRange> {
-        ADOSC(
-            high,
-            low,
-            close,
-            volume,
-            self.config.fastperiod,
-            self.config.slowperiod,
-            out_real,
-        )
-    }
-
-    /// Computes full-length padded ADOSC outputs.
-    pub fn compute_to_vec(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-        volume: &[Float],
-    ) -> Result<Vec<Float>> {
-        ADOSC_vec(
-            high,
-            low,
-            close,
-            volume,
-            self.config.fastperiod,
-            self.config.slowperiod,
-        )
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: ADOSCTick) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for ADOSC {
-    type Input<'a> = ADOSCInput<'a>;
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    fn lookback(&self) -> usize {
-        IndicatorConfig::lookback(&self.config)
-    }
-
-    fn compute<'a>(
-        &self,
-        input: Self::Input<'a>,
-        output: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        ADOSC(
-            input.high,
-            input.low,
-            input.close,
-            input.volume,
-            self.config.fastperiod,
-            self.config.slowperiod,
-            output,
-        )
-    }
-
-    fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        ADOSC_vec(
-            input.high,
-            input.low,
-            input.close,
-            input.volume,
-            self.config.fastperiod,
-            self.config.slowperiod,
-        )
-    }
-}
-
-impl StreamingIndicator for ADOSC {
-    type Tick = ADOSCTick;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
-        StreamingComputation::<ADOSCConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for ADOSC {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<ADOSCConfig>::reset(&mut self.stream);
     }
 }

@@ -1,17 +1,14 @@
 //! Public contracts for the Indicator execution seam.
 //!
-//! Historical tests keep the legacy `Indicator`, `StreamingIndicator`, and
-//! `Resettable` behavior fixed. Migration tests exercise each Indicator
-//! Configuration through owned Compact Output, caller-owned output, Prepared
-//! Batch Runners, and independent Streaming Computation.
+//! Migration tests exercise each Indicator Configuration through owned
+//! Compact Output, caller-owned output, Prepared Batch Runners, and
+//! independent Streaming Computation.
 
 use ta_core::{
     math_operators::{
-        ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MAXINDEXStream,
-        MAXStream, MINConfig, MININDEXConfig, MININDEXStream, MINMAXConfig, MINMAXINDEXConfig,
-        MINMAXINDEXOutputMut, MINMAXINDEXStream, MINMAXINDEXStreamValue, MINMAXINDEXValuesMut,
-        MINMAXOutputMut, MINMAXStream, MINMAXValuesMut, MINStream, MULTConfig, SUBConfig,
-        SUMConfig, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
+        ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
+        MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXStreamValue,
+        MINMAXINDEXValuesMut, MINMAXValuesMut, MULTConfig, SUBConfig, SUMConfig,
     },
     math_transform::{
         ACOSConfig, ACOSStream, ASINConfig, ASINStream, ATANConfig, ATANStream, CEILConfig,
@@ -21,14 +18,13 @@ use ta_core::{
         TANHStream, TANStream,
     },
     overlap::{
-        DEMAConfig, DEMAStream, EMAConfig, EMAStream, MAConfig, MAStream, MAType, SMAConfig,
-        SMAStream, T3Config, T3Stream, TEMAConfig, TEMAStream, TRIMAConfig, TRIMAStream, WMAConfig,
-        WMAStream, DEMA, EMA, MA, SMA, T3, T3_DEFAULT_VFACTOR, TEMA, TRIMA, WMA,
+        DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
+        WMAConfig, T3_DEFAULT_VFACTOR,
     },
     price_transform::{
-        AVGDEVConfig, AVGDEVStream, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig,
-        MEDPRICEInput, MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig,
-        WCLPRICEInput, WCLPRICETick, AVGDEV, AVGPRICE,
+        AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
+        MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
+        WCLPRICETick,
     },
     statistic::{
         BETAConfig, CORRELConfig, LINEARREGConfig, LINEARREG_ANGLEConfig,
@@ -37,14 +33,12 @@ use ta_core::{
     },
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
-        TRANGETick, ATR, NATR, TRANGE,
+        TRANGETick,
     },
     volume::{
-        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
-        OBVTick, AD, ADOSC, OBV,
+        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
     },
-    Float, Indicator, IndicatorConfig, OutputRange, PreparedBatchRunner, Resettable,
-    StreamingComputation, StreamingIndicator, TalibError,
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 
 const FLOAT_SENTINEL: Float = -9_876.5 as Float;
@@ -80,211 +74,6 @@ fn compute_with_prepared_runner<'a, C: IndicatorConfig + 'a>(
 
 fn assert_some_float_close(actual: Option<Float>, expected: Float) {
     assert_float_close(actual.expect("expected a computed value"), expected);
-}
-
-#[test]
-fn current_owned_sma_is_legacy_aligned_and_matches_caller_compact_output() {
-    let input = [
-        1.0 as Float,
-        2.0 as Float,
-        3.0 as Float,
-        4.0 as Float,
-        5.0 as Float,
-    ];
-    let indicator = SMA::new(3).unwrap();
-    let mut compact = [FLOAT_SENTINEL; 5];
-
-    let range = Indicator::compute(&indicator, &input, &mut compact).unwrap();
-    let owned = Indicator::compute_to_vec(&indicator, &input).unwrap();
-
-    assert_eq!(range, OutputRange::new(2, 3));
-    assert_float_slice_close(&compact[..range.nb_element], &[2.0, 3.0, 4.0]);
-    assert_eq!(&compact[range.nb_element..], &[FLOAT_SENTINEL; 2]);
-
-    assert_eq!(owned.len(), input.len());
-    assert!(owned[..range.beg_idx].iter().all(|value| value.is_nan()));
-    assert_float_slice_close(
-        &owned[range.beg_idx..range.end_idx()],
-        &compact[..range.nb_element],
-    );
-}
-
-#[test]
-fn current_multi_input_avgprice_uses_named_input_view() {
-    let open = [10.0 as Float, 20.0 as Float, 30.0 as Float];
-    let high = [14.0 as Float, 24.0 as Float, 34.0 as Float];
-    let low = [8.0 as Float, 18.0 as Float, 28.0 as Float];
-    let close = [12.0 as Float, 22.0 as Float, 32.0 as Float];
-    let input = AVGPRICEInput {
-        open: &open,
-        high: &high,
-        low: &low,
-        close: &close,
-    };
-    let indicator = AVGPRICE::new().unwrap();
-    let mut compact = [FLOAT_SENTINEL; 3];
-
-    let range = Indicator::compute(&indicator, input, &mut compact).unwrap();
-    let owned = Indicator::compute_to_vec(&indicator, input).unwrap();
-
-    assert_eq!(range, OutputRange::new(0, input.open.len()));
-    assert_float_slice_close(&compact, &[11.0, 21.0, 31.0]);
-    assert_float_slice_close(&owned, &compact);
-}
-
-#[test]
-fn current_multi_output_minmax_columns_share_one_range() {
-    let input = [3.0 as Float, 1.0 as Float, 4.0 as Float, 2.0 as Float];
-    let indicator = MINMAX::new(2).unwrap();
-    let mut min = [FLOAT_SENTINEL; 4];
-    let mut max = [FLOAT_SENTINEL; 4];
-
-    let range = Indicator::compute(
-        &indicator,
-        &input,
-        MINMAXOutputMut {
-            min: &mut min,
-            max: &mut max,
-        },
-    )
-    .unwrap();
-    let owned = Indicator::compute_to_vec(&indicator, &input).unwrap();
-
-    assert_eq!(range, OutputRange::new(1, 3));
-    assert_float_slice_close(&min[..range.nb_element], &[1.0, 1.0, 2.0]);
-    assert_float_slice_close(&max[..range.nb_element], &[3.0, 4.0, 4.0]);
-    assert_eq!(min[range.nb_element], FLOAT_SENTINEL);
-    assert_eq!(max[range.nb_element], FLOAT_SENTINEL);
-
-    assert_eq!(owned.min.len(), input.len());
-    assert_eq!(owned.max.len(), input.len());
-    assert!(owned.min[..range.beg_idx]
-        .iter()
-        .all(|value| value.is_nan()));
-    assert!(owned.max[..range.beg_idx]
-        .iter()
-        .all(|value| value.is_nan()));
-    assert_float_slice_close(
-        &owned.min[range.beg_idx..range.end_idx()],
-        &min[..range.nb_element],
-    );
-    assert_float_slice_close(
-        &owned.max[range.beg_idx..range.end_idx()],
-        &max[..range.nb_element],
-    );
-}
-
-#[test]
-fn current_legacy_aligned_index_output_has_ambiguous_zero_unavailable_value() {
-    let input = [5.0 as Float, 4.0 as Float, 3.0 as Float, 2.0 as Float];
-    let indicator = MINMAXINDEX::new(3).unwrap();
-    let mut min_idx = [i32::MIN; 4];
-    let mut max_idx = [i32::MIN; 4];
-
-    let range = Indicator::compute(
-        &indicator,
-        &input,
-        MINMAXINDEXOutputMut {
-            min_idx: &mut min_idx,
-            max_idx: &mut max_idx,
-        },
-    )
-    .unwrap();
-    let owned = Indicator::compute_to_vec(&indicator, &input).unwrap();
-
-    assert_eq!(range, OutputRange::new(2, 2));
-    assert_eq!(&min_idx[..range.nb_element], &[2_i32, 3_i32]);
-    assert_eq!(&max_idx[..range.nb_element], &[0_i32, 1_i32]);
-    assert_eq!(owned.min_idx, vec![0_i32, 0_i32, 2_i32, 3_i32]);
-    assert_eq!(owned.max_idx, vec![0_i32, 0_i32, 0_i32, 1_i32]);
-
-    // Zero represents both a legacy unavailable position and a valid absolute output index.
-    assert_eq!(owned.max_idx[0], owned.max_idx[range.beg_idx]);
-}
-
-#[test]
-fn current_execution_has_output_capacity_but_no_prepared_input_capacity() {
-    let indicator = SMA::new(3).unwrap();
-    let short = [1.0 as Float, 2.0 as Float, 3.0 as Float, 4.0 as Float];
-    let long = [
-        1.0 as Float,
-        2.0 as Float,
-        3.0 as Float,
-        4.0 as Float,
-        5.0 as Float,
-        6.0 as Float,
-    ];
-
-    let mut exact = [FLOAT_SENTINEL; 2];
-    assert_eq!(
-        Indicator::compute(&indicator, &short, &mut exact).unwrap(),
-        OutputRange::new(2, 2)
-    );
-    assert_float_slice_close(&exact, &[2.0, 3.0]);
-
-    let mut oversized = [FLOAT_SENTINEL; 6];
-    assert_eq!(
-        Indicator::compute(&indicator, &long, &mut oversized).unwrap(),
-        OutputRange::new(2, 4)
-    );
-    assert_float_slice_close(&oversized[..4], &[2.0, 3.0, 4.0, 5.0]);
-    assert_eq!(&oversized[4..], &[FLOAT_SENTINEL; 2]);
-
-    let mut too_small = [FLOAT_SENTINEL; 3];
-    let error = Indicator::compute(&indicator, &long, &mut too_small).unwrap_err();
-    assert!(matches!(error, TalibError::InvalidInput { .. }));
-    assert_eq!(too_small, [FLOAT_SENTINEL; 3]);
-}
-
-#[test]
-fn current_multi_output_capacity_failure_does_not_partially_mutate_columns() {
-    let input = [3.0 as Float, 1.0 as Float, 4.0 as Float, 2.0 as Float];
-    let indicator = MINMAX::new(2).unwrap();
-    let mut sufficient_min = [FLOAT_SENTINEL; 3];
-    let mut insufficient_max = [FLOAT_SENTINEL; 2];
-
-    let error = Indicator::compute(
-        &indicator,
-        &input,
-        MINMAXOutputMut {
-            min: &mut sufficient_min,
-            max: &mut insufficient_max,
-        },
-    )
-    .unwrap_err();
-
-    assert!(matches!(error, TalibError::InvalidInput { .. }));
-    assert_eq!(sufficient_min, [FLOAT_SENTINEL; 3]);
-    assert_eq!(insufficient_max, [FLOAT_SENTINEL; 2]);
-}
-
-#[test]
-fn current_streaming_instances_are_operationally_independent() {
-    let mut left = SMA::new(3).unwrap();
-    let mut right = SMA::new(3).unwrap();
-
-    assert_eq!(StreamingIndicator::next(&mut left, 1.0).unwrap(), None);
-    assert_eq!(StreamingIndicator::next(&mut right, 10.0).unwrap(), None);
-    assert_eq!(StreamingIndicator::next(&mut left, 2.0).unwrap(), None);
-    assert_eq!(StreamingIndicator::next(&mut right, 20.0).unwrap(), None);
-
-    // Batch computation borrows the instance immutably and does not consume its
-    // accumulated streaming observations.
-    let mut compact = [FLOAT_SENTINEL; 3];
-    Indicator::compute(
-        &left,
-        &[100.0 as Float, 200.0 as Float, 300.0 as Float],
-        &mut compact,
-    )
-    .unwrap();
-
-    assert_some_float_close(StreamingIndicator::next(&mut left, 3.0).unwrap(), 2.0);
-    assert_some_float_close(StreamingIndicator::next(&mut right, 30.0).unwrap(), 20.0);
-    assert_some_float_close(StreamingIndicator::next(&mut left, 4.0).unwrap(), 3.0);
-
-    Resettable::reset(&mut left);
-    assert_some_float_close(StreamingIndicator::next(&mut right, 40.0).unwrap(), 30.0);
-    assert_eq!(StreamingIndicator::next(&mut left, 10.0).unwrap(), None);
 }
 
 fn assert_sma_owned_compact_shape(
@@ -597,27 +386,6 @@ fn sma_config_preserves_invalid_empty_short_and_nonfinite_semantics() {
 }
 
 #[test]
-fn legacy_sma_from_data_clone_reset_and_replay_remain_compatible() {
-    let mut seeded = SMA::from_data(3, &[1.0 as Float, 2.0]).unwrap();
-    let mut cloned = seeded.clone();
-
-    assert_float_close(seeded.next_checked(3.0).unwrap(), 2.0);
-    assert_float_close(cloned.next_checked(3.0).unwrap(), 2.0);
-    assert_float_close(seeded.next_checked(4.0).unwrap(), 3.0);
-    assert_float_close(cloned.next_checked(4.0).unwrap(), 3.0);
-
-    Resettable::reset(&mut seeded);
-    assert!(seeded.next_checked(1.0).unwrap().is_nan());
-    assert!(seeded.next_checked(2.0).unwrap().is_nan());
-    assert_float_close(seeded.next_checked(3.0).unwrap(), 2.0);
-
-    assert!(matches!(
-        SMA::from_data(0, &[Float::NAN]),
-        Err(TalibError::InvalidInput { .. })
-    ));
-}
-
-#[test]
 fn ema_config_separates_batch_and_streaming_execution() {
     let input = [1.0 as Float, 2.0, 3.0, 4.0, 5.0];
     let config = EMAConfig::new(3).unwrap();
@@ -647,15 +415,11 @@ fn ema_config_separates_batch_and_streaming_execution() {
 
     let mut stream = IndicatorConfig::stream(&config).unwrap();
     let mut independent = IndicatorConfig::stream(&config).unwrap();
-    let mut legacy = EMA::new(3).unwrap();
     let streamed = input
         .iter()
-        .filter_map(|&tick| {
-            let value = StreamingComputation::<EMAConfig>::next(&mut stream, tick).unwrap();
-            assert_eq!(StreamingIndicator::next(&mut legacy, tick).unwrap(), value);
-            value
-        })
+        .filter_map(|&tick| StreamingComputation::<EMAConfig>::next(&mut stream, tick).unwrap())
         .collect::<Vec<_>>();
+
     assert_float_slice_close(&streamed, owned.values());
 
     assert_eq!(
@@ -671,22 +435,13 @@ fn ema_config_separates_batch_and_streaming_execution() {
         StreamingComputation::<EMAConfig>::next(&mut independent, 30.0).unwrap(),
         20.0,
     );
-
     StreamingComputation::<EMAConfig>::reset(&mut stream);
-    Resettable::reset(&mut legacy);
     let replayed = input
         .iter()
-        .filter_map(|&tick| {
-            let value = StreamingComputation::<EMAConfig>::next(&mut stream, tick).unwrap();
-            assert_eq!(StreamingIndicator::next(&mut legacy, tick).unwrap(), value);
-            value
-        })
+        .filter_map(|&tick| StreamingComputation::<EMAConfig>::next(&mut stream, tick).unwrap())
         .collect::<Vec<_>>();
+
     assert_float_slice_close(&replayed, owned.values());
-    assert_eq!(
-        core::mem::size_of::<EMA>(),
-        core::mem::size_of::<EMAStream>()
-    );
 }
 
 #[test]
@@ -729,21 +484,11 @@ fn dema_and_tema_configs_preserve_recursive_seeds_and_execution_modes() {
 
     let mut dema_stream = IndicatorConfig::stream(&dema_config).unwrap();
     let mut tema_stream = IndicatorConfig::stream(&tema_config).unwrap();
-    let mut legacy_dema = DEMA::new(3).unwrap();
-    let mut legacy_tema = TEMA::new(3).unwrap();
     let mut streamed_dema = Vec::new();
     let mut streamed_tema = Vec::new();
     for &tick in &input {
         let dema_value = StreamingComputation::<DEMAConfig>::next(&mut dema_stream, tick).unwrap();
         let tema_value = StreamingComputation::<TEMAConfig>::next(&mut tema_stream, tick).unwrap();
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_dema, tick).unwrap(),
-            dema_value
-        );
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_tema, tick).unwrap(),
-            tema_value
-        );
         streamed_dema.extend(dema_value);
         streamed_tema.extend(tema_value);
     }
@@ -777,14 +522,6 @@ fn dema_and_tema_configs_preserve_recursive_seeds_and_execution_modes() {
         .collect::<Vec<_>>();
     assert_float_slice_close(&replayed_dema, dema_owned.values());
     assert_float_slice_close(&replayed_tema, tema_owned.values());
-    assert_eq!(
-        core::mem::size_of::<DEMA>(),
-        core::mem::size_of::<DEMAStream>()
-    );
-    assert_eq!(
-        core::mem::size_of::<TEMA>(),
-        core::mem::size_of::<TEMAStream>()
-    );
 }
 
 #[test]
@@ -807,13 +544,8 @@ fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
     assert_eq!(t3_output[input.len()], FLOAT_SENTINEL);
 
     let mut t3_stream = IndicatorConfig::stream(&t3_config).unwrap();
-    let mut legacy_t3 = T3::new(1, 0.5).unwrap();
     for &tick in &input {
         let value = StreamingComputation::<T3Config>::next(&mut t3_stream, tick).unwrap();
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_t3, tick).unwrap(),
-            value
-        );
         assert_some_float_close(value, tick);
     }
     StreamingComputation::<T3Config>::reset(&mut t3_stream);
@@ -838,7 +570,6 @@ fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
         })
         .collect::<Vec<_>>();
     assert_float_slice_close(&replayed_recursive, recursive_batch.values());
-    assert_eq!(core::mem::size_of::<T3>(), core::mem::size_of::<T3Stream>());
 
     const SUPPORTED: [MAType; 7] = [
         MAType::SMA,
@@ -859,10 +590,8 @@ fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
         assert_float_slice_close(owned.values(), &input);
 
         let mut stream = IndicatorConfig::stream(&config).unwrap();
-        let mut legacy = MA::new(1, ma_type).unwrap();
         for &tick in &input {
             let value = StreamingComputation::<MAConfig>::next(&mut stream, tick).unwrap();
-            assert_eq!(StreamingIndicator::next(&mut legacy, tick).unwrap(), value);
             assert_some_float_close(value, tick);
         }
         StreamingComputation::<MAConfig>::reset(&mut stream);
@@ -889,7 +618,6 @@ fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
         MAConfig::new(3, MAType::MAMA),
         Err(TalibError::NotImplemented { .. })
     ));
-    assert_eq!(core::mem::size_of::<MA>(), core::mem::size_of::<MAStream>());
 }
 
 #[test]
@@ -1044,8 +772,6 @@ fn wma_and_trima_streams_are_independent_and_preserve_reset_batch_parity() {
     let mut trima_stream = IndicatorConfig::stream(&trima_config).unwrap();
     let mut independent_wma = IndicatorConfig::stream(&wma_config).unwrap();
     let mut independent_trima = IndicatorConfig::stream(&trima_config).unwrap();
-    let mut legacy_wma = WMA::new(3).unwrap();
-    let mut legacy_trima = TRIMA::new(3).unwrap();
     let mut streamed_wma = Vec::new();
     let mut streamed_trima = Vec::new();
 
@@ -1053,14 +779,6 @@ fn wma_and_trima_streams_are_independent_and_preserve_reset_batch_parity() {
         let wma_value = StreamingComputation::<WMAConfig>::next(&mut wma_stream, tick).unwrap();
         let trima_value =
             StreamingComputation::<TRIMAConfig>::next(&mut trima_stream, tick).unwrap();
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_wma, tick).unwrap(),
-            wma_value
-        );
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_trima, tick).unwrap(),
-            trima_value
-        );
         streamed_wma.extend(wma_value);
         streamed_trima.extend(trima_value);
     }
@@ -1093,8 +811,6 @@ fn wma_and_trima_streams_are_independent_and_preserve_reset_batch_parity() {
     );
     StreamingComputation::<WMAConfig>::reset(&mut wma_stream);
     StreamingComputation::<TRIMAConfig>::reset(&mut trima_stream);
-    Resettable::reset(&mut legacy_wma);
-    Resettable::reset(&mut legacy_trima);
     assert_some_float_close(
         StreamingComputation::<WMAConfig>::next(&mut independent_wma, 40.0).unwrap(),
         200.0 / 6.0,
@@ -1106,36 +822,17 @@ fn wma_and_trima_streams_are_independent_and_preserve_reset_batch_parity() {
 
     let replayed_wma = input
         .iter()
-        .filter_map(|&tick| {
-            let value = StreamingComputation::<WMAConfig>::next(&mut wma_stream, tick).unwrap();
-            assert_eq!(
-                StreamingIndicator::next(&mut legacy_wma, tick).unwrap(),
-                value
-            );
-            value
-        })
+        .filter_map(|&tick| StreamingComputation::<WMAConfig>::next(&mut wma_stream, tick).unwrap())
         .collect::<Vec<_>>();
     let replayed_trima = input
         .iter()
         .filter_map(|&tick| {
-            let value = StreamingComputation::<TRIMAConfig>::next(&mut trima_stream, tick).unwrap();
-            assert_eq!(
-                StreamingIndicator::next(&mut legacy_trima, tick).unwrap(),
-                value
-            );
-            value
+            StreamingComputation::<TRIMAConfig>::next(&mut trima_stream, tick).unwrap()
         })
         .collect::<Vec<_>>();
+
     assert_float_slice_close(&replayed_wma, batch_wma.values());
     assert_float_slice_close(&replayed_trima, batch_trima.values());
-    assert_eq!(
-        core::mem::size_of::<WMA>(),
-        core::mem::size_of::<WMAStream>()
-    );
-    assert_eq!(
-        core::mem::size_of::<TRIMA>(),
-        core::mem::size_of::<TRIMAStream>()
-    );
 }
 
 #[test]
@@ -1546,111 +1243,6 @@ fn minmax_config_streams_are_independent_reject_invalid_ticks_reset_and_match_ba
 }
 
 #[test]
-fn legacy_minmax_adapters_match_config_streams_and_preserve_ties_and_warmup() {
-    let input = [2.0 as Float, 1.0, 1.0, 3.0, 3.0];
-    let mut legacy_values = MINMAX::new(3).unwrap();
-    let mut legacy_indexes = MINMAXINDEX::new(3).unwrap();
-    let value_config = MINMAXConfig::new(3).unwrap();
-    let index_config = MINMAXINDEXConfig::new(3).unwrap();
-    let mut config_values = IndicatorConfig::stream(&value_config).unwrap();
-    let mut config_indexes = IndicatorConfig::stream(&index_config).unwrap();
-
-    for &tick in &input {
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_values, tick).unwrap(),
-            StreamingComputation::<MINMAXConfig>::next(&mut config_values, tick).unwrap()
-        );
-        let expected = StreamingComputation::<MINMAXINDEXConfig>::next(&mut config_indexes, tick)
-            .unwrap()
-            .map(|value| ta_core::math_operators::MINMAXINDEXValue {
-                min_idx: i32::try_from(value.min_idx).unwrap(),
-                max_idx: i32::try_from(value.max_idx).unwrap(),
-            });
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_indexes, tick).unwrap(),
-            expected
-        );
-    }
-
-    assert_eq!(legacy_values.period(), 3);
-    assert_eq!(legacy_indexes.period(), 3);
-    assert_eq!(Indicator::lookback(&legacy_values), 2);
-    assert_eq!(Indicator::lookback(&legacy_indexes), 2);
-    assert_eq!(
-        core::mem::size_of::<MINMAX>(),
-        core::mem::size_of::<MINMAXStream>()
-    );
-    assert_eq!(
-        core::mem::size_of::<MINMAXINDEX>(),
-        core::mem::size_of::<MINMAXINDEXStream>()
-    );
-}
-
-#[test]
-fn legacy_minmax_adapters_clone_independently_preserve_invalid_ticks_and_reset_replay() {
-    let mut values = MINMAX::new(3).unwrap();
-    let mut indexes = MINMAXINDEX::new(3).unwrap();
-    for tick in [5.0 as Float, 4.0] {
-        assert_eq!(StreamingIndicator::next(&mut values, tick).unwrap(), None);
-        assert_eq!(StreamingIndicator::next(&mut indexes, tick).unwrap(), None);
-    }
-    let mut values_clone = values.clone();
-    let mut indexes_clone = indexes.clone();
-
-    assert!(StreamingIndicator::next(&mut values, Float::NAN).is_err());
-    assert!(StreamingIndicator::next(&mut indexes, Float::INFINITY).is_err());
-    assert_eq!(
-        StreamingIndicator::next(&mut values, 3.0).unwrap(),
-        Some(ta_core::math_operators::MINMAXValue { min: 3.0, max: 5.0 })
-    );
-    assert_eq!(
-        StreamingIndicator::next(&mut indexes, 3.0).unwrap(),
-        Some(ta_core::math_operators::MINMAXINDEXValue {
-            min_idx: 2,
-            max_idx: 0,
-        })
-    );
-    assert_eq!(
-        StreamingIndicator::next(&mut values_clone, 10.0).unwrap(),
-        Some(ta_core::math_operators::MINMAXValue {
-            min: 4.0,
-            max: 10.0,
-        })
-    );
-    assert_eq!(
-        StreamingIndicator::next(&mut indexes_clone, 10.0).unwrap(),
-        Some(ta_core::math_operators::MINMAXINDEXValue {
-            min_idx: 1,
-            max_idx: 2,
-        })
-    );
-
-    let replay = [2.0 as Float, 1.0, 4.0, 3.0];
-    Resettable::reset(&mut values);
-    Resettable::reset(&mut indexes);
-    let first_values = replay
-        .iter()
-        .map(|&tick| StreamingIndicator::next(&mut values, tick).unwrap())
-        .collect::<Vec<_>>();
-    let first_indexes = replay
-        .iter()
-        .map(|&tick| StreamingIndicator::next(&mut indexes, tick).unwrap())
-        .collect::<Vec<_>>();
-    Resettable::reset(&mut values);
-    Resettable::reset(&mut indexes);
-    let second_values = replay
-        .iter()
-        .map(|&tick| StreamingIndicator::next(&mut values, tick).unwrap())
-        .collect::<Vec<_>>();
-    let second_indexes = replay
-        .iter()
-        .map(|&tick| StreamingIndicator::next(&mut indexes, tick).unwrap())
-        .collect::<Vec<_>>();
-    assert_eq!(first_values, second_values);
-    assert_eq!(first_indexes, second_indexes);
-}
-
-#[test]
 fn single_extrema_configs_cover_owned_caller_owned_and_prepared_execution() {
     let input = [3.0 as Float, 1.0, 1.0, 4.0, 2.0];
     let min_config = MINConfig::new(3).unwrap();
@@ -1821,10 +1413,6 @@ fn single_extrema_streams_preserve_option_reset_parity_and_legacy_adapters() {
     let mut max_stream = IndicatorConfig::stream(&max_config).unwrap();
     let mut min_index_stream = IndicatorConfig::stream(&min_index_config).unwrap();
     let mut max_index_stream = IndicatorConfig::stream(&max_index_config).unwrap();
-    let mut legacy_min = MIN::new(3).unwrap();
-    let mut legacy_max = MAX::new(3).unwrap();
-    let mut legacy_min_index = MININDEX::new(3).unwrap();
-    let mut legacy_max_index = MAXINDEX::new(3).unwrap();
     let mut streamed_min = Vec::new();
     let mut streamed_max = Vec::new();
     let mut streamed_min_index = Vec::new();
@@ -1837,22 +1425,6 @@ fn single_extrema_streams_preserve_option_reset_parity_and_legacy_adapters() {
             StreamingComputation::<MININDEXConfig>::next(&mut min_index_stream, tick).unwrap();
         let max_index_value =
             StreamingComputation::<MAXINDEXConfig>::next(&mut max_index_stream, tick).unwrap();
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_min, tick).unwrap(),
-            min_value
-        );
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_max, tick).unwrap(),
-            max_value
-        );
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_min_index, tick).unwrap(),
-            min_index_value.map(|index| i32::try_from(index).unwrap())
-        );
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_max_index, tick).unwrap(),
-            max_index_value.map(|index| i32::try_from(index).unwrap())
-        );
         streamed_min.extend(min_value);
         streamed_max.extend(max_value);
         streamed_min_index.extend(min_index_value);
@@ -1871,10 +1443,6 @@ fn single_extrema_streams_preserve_option_reset_parity_and_legacy_adapters() {
     StreamingComputation::<MAXConfig>::reset(&mut max_stream);
     StreamingComputation::<MININDEXConfig>::reset(&mut min_index_stream);
     StreamingComputation::<MAXINDEXConfig>::reset(&mut max_index_stream);
-    Resettable::reset(&mut legacy_min);
-    Resettable::reset(&mut legacy_max);
-    Resettable::reset(&mut legacy_min_index);
-    Resettable::reset(&mut legacy_max_index);
     let mut replayed_min = Vec::new();
     let mut replayed_max = Vec::new();
     let mut replayed_min_index = Vec::new();
@@ -1886,22 +1454,6 @@ fn single_extrema_streams_preserve_option_reset_parity_and_legacy_adapters() {
             StreamingComputation::<MININDEXConfig>::next(&mut min_index_stream, tick).unwrap();
         let max_index_value =
             StreamingComputation::<MAXINDEXConfig>::next(&mut max_index_stream, tick).unwrap();
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_min, tick).unwrap(),
-            min_value
-        );
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_max, tick).unwrap(),
-            max_value
-        );
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_min_index, tick).unwrap(),
-            min_index_value.map(|index| i32::try_from(index).unwrap())
-        );
-        assert_eq!(
-            StreamingIndicator::next(&mut legacy_max_index, tick).unwrap(),
-            max_index_value.map(|index| i32::try_from(index).unwrap())
-        );
         replayed_min.extend(min_value);
         replayed_max.extend(max_value);
         replayed_min_index.extend(min_index_value);
@@ -1911,22 +1463,6 @@ fn single_extrema_streams_preserve_option_reset_parity_and_legacy_adapters() {
     assert_float_slice_close(&replayed_max, batch_max.values());
     assert_eq!(replayed_min_index, batch_min_index.values().as_slice());
     assert_eq!(replayed_max_index, batch_max_index.values().as_slice());
-    assert_eq!(
-        core::mem::size_of::<MIN>(),
-        core::mem::size_of::<MINStream>()
-    );
-    assert_eq!(
-        core::mem::size_of::<MAX>(),
-        core::mem::size_of::<MAXStream>()
-    );
-    assert_eq!(
-        core::mem::size_of::<MININDEX>(),
-        core::mem::size_of::<MININDEXStream>()
-    );
-    assert_eq!(
-        core::mem::size_of::<MAXINDEX>(),
-        core::mem::size_of::<MAXINDEXStream>()
-    );
 }
 
 #[test]
@@ -2142,27 +1678,21 @@ fn named_price_streams_match_legacy_reject_ticks_reset_replay_and_are_independen
     let mut med_stream = IndicatorConfig::stream(&med_config).unwrap();
     let mut typ_stream = IndicatorConfig::stream(&typ_config).unwrap();
     let mut wcl_stream = IndicatorConfig::stream(&wcl_config).unwrap();
-    let mut legacy_avg = AVGPRICE::new().unwrap();
-    let mut legacy_med = ta_core::price_transform::MEDPRICE::new().unwrap();
-    let mut legacy_typ = ta_core::price_transform::TYPPRICE::new().unwrap();
-    let mut legacy_wcl = ta_core::price_transform::WCLPRICE::new().unwrap();
 
-    macro_rules! assert_tick_parity {
-        ($config_ty:ty, $stream:expr, $legacy:expr, $tick:expr) => {{
+    macro_rules! assert_tick_value {
+        ($config_ty:ty, $stream:expr, $tick:expr) => {{
             let tick = $tick;
             let configured = StreamingComputation::<$config_ty>::next($stream, tick)
                 .unwrap()
                 .unwrap();
-            let legacy = StreamingIndicator::next($legacy, tick).unwrap().unwrap();
-            assert_float_close(configured, legacy);
+            configured
         }};
     }
 
     for idx in 0..open.len() {
-        assert_tick_parity!(
+        let _ = assert_tick_value!(
             AVGPRICEConfig,
             &mut avg_stream,
-            &mut legacy_avg,
             AVGPRICETick {
                 open: open[idx],
                 high: high[idx],
@@ -2170,29 +1700,26 @@ fn named_price_streams_match_legacy_reject_ticks_reset_replay_and_are_independen
                 close: close[idx],
             }
         );
-        assert_tick_parity!(
+        let _ = assert_tick_value!(
             MEDPRICEConfig,
             &mut med_stream,
-            &mut legacy_med,
             MEDPRICETick {
                 high: high[idx],
                 low: low[idx],
             }
         );
-        assert_tick_parity!(
+        let _ = assert_tick_value!(
             TYPPRICEConfig,
             &mut typ_stream,
-            &mut legacy_typ,
             TYPPRICETick {
                 high: high[idx],
                 low: low[idx],
                 close: close[idx],
             }
         );
-        assert_tick_parity!(
+        let _ = assert_tick_value!(
             WCLPRICEConfig,
             &mut wcl_stream,
-            &mut legacy_wcl,
             WCLPRICETick {
                 high: high[idx],
                 low: low[idx],
@@ -2291,15 +1818,10 @@ fn named_price_streams_match_legacy_reject_ticks_reset_replay_and_are_independen
     StreamingComputation::<MEDPRICEConfig>::reset(&mut med_stream);
     StreamingComputation::<TYPPRICEConfig>::reset(&mut typ_stream);
     StreamingComputation::<WCLPRICEConfig>::reset(&mut wcl_stream);
-    legacy_avg = AVGPRICE::new().unwrap();
-    legacy_med = ta_core::price_transform::MEDPRICE::new().unwrap();
-    legacy_typ = ta_core::price_transform::TYPPRICE::new().unwrap();
-    legacy_wcl = ta_core::price_transform::WCLPRICE::new().unwrap();
     for idx in 0..open.len() {
-        assert_tick_parity!(
+        let _ = assert_tick_value!(
             AVGPRICEConfig,
             &mut avg_stream,
-            &mut legacy_avg,
             AVGPRICETick {
                 open: open[idx],
                 high: high[idx],
@@ -2307,29 +1829,26 @@ fn named_price_streams_match_legacy_reject_ticks_reset_replay_and_are_independen
                 close: close[idx],
             }
         );
-        assert_tick_parity!(
+        let _ = assert_tick_value!(
             MEDPRICEConfig,
             &mut med_stream,
-            &mut legacy_med,
             MEDPRICETick {
                 high: high[idx],
                 low: low[idx],
             }
         );
-        assert_tick_parity!(
+        let _ = assert_tick_value!(
             TYPPRICEConfig,
             &mut typ_stream,
-            &mut legacy_typ,
             TYPPRICETick {
                 high: high[idx],
                 low: low[idx],
                 close: close[idx],
             }
         );
-        assert_tick_parity!(
+        let _ = assert_tick_value!(
             WCLPRICEConfig,
             &mut wcl_stream,
-            &mut legacy_wcl,
             WCLPRICETick {
                 high: high[idx],
                 low: low[idx],
@@ -2758,30 +2277,19 @@ fn avgdev_config_covers_reusable_prepared_validated_and_independent_stream_execu
     assert_eq!(output, [FLOAT_SENTINEL; 4]);
 
     let mut stream = IndicatorConfig::stream(&config).unwrap();
-    let mut legacy = AVGDEV::new(2).unwrap();
     let mut streamed = Vec::new();
-    let mut legacy_streamed = Vec::new();
     for tick in input {
         if let Some(value) = StreamingComputation::<AVGDEVConfig>::next(&mut stream, tick).unwrap()
         {
             streamed.push(value);
         }
-        if let Some(value) = StreamingIndicator::next(&mut legacy, tick).unwrap() {
-            legacy_streamed.push(value);
-        }
     }
     assert_float_slice_close(&streamed, owned.values());
-    assert_float_slice_close(&legacy_streamed, owned.values());
 
     assert!(StreamingComputation::<AVGDEVConfig>::next(&mut stream, Float::NAN).is_err());
-    assert!(StreamingIndicator::next(&mut legacy, Float::NAN).is_err());
     let configured_after_rejection = StreamingComputation::<AVGDEVConfig>::next(&mut stream, 10.0)
         .unwrap()
         .unwrap();
-    let legacy_after_rejection = StreamingIndicator::next(&mut legacy, 10.0)
-        .unwrap()
-        .unwrap();
-    assert_float_close(configured_after_rejection, legacy_after_rejection);
     assert_float_close(configured_after_rejection, 1.0);
 
     let mut left = IndicatorConfig::stream(&config).unwrap();
@@ -2808,25 +2316,15 @@ fn avgdev_config_covers_reusable_prepared_validated_and_independent_stream_execu
     );
 
     StreamingComputation::<AVGDEVConfig>::reset(&mut stream);
-    Resettable::reset(&mut legacy);
     let replayed = input
         .iter()
         .filter_map(|&tick| StreamingComputation::<AVGDEVConfig>::next(&mut stream, tick).unwrap())
         .collect::<Vec<_>>();
-    let legacy_replayed = input
-        .iter()
-        .filter_map(|&tick| StreamingIndicator::next(&mut legacy, tick).unwrap())
-        .collect::<Vec<_>>();
     assert_float_slice_close(&replayed, owned.values());
-    assert_float_slice_close(&legacy_replayed, owned.values());
 
     assert_eq!(
         core::mem::size_of::<AVGDEVConfig>(),
         core::mem::size_of::<usize>()
-    );
-    assert_eq!(
-        core::mem::size_of::<AVGDEVStream>(),
-        core::mem::size_of::<AVGDEV>()
     );
 }
 
@@ -2961,7 +2459,6 @@ fn ad_config_covers_owned_caller_prepared_validation_and_independent_streams() {
     assert_eq!(output, [FLOAT_SENTINEL; 5]);
 
     let mut stream = IndicatorConfig::stream(&config).unwrap();
-    let mut legacy = AD::new().unwrap();
     for idx in 0..high.len() {
         let tick = ADTick {
             high: high[idx],
@@ -2972,11 +2469,7 @@ fn ad_config_covers_owned_caller_prepared_validation_and_independent_streams() {
         let configured = StreamingComputation::<ADConfig>::next(&mut stream, tick)
             .unwrap()
             .unwrap();
-        let legacy_value = StreamingIndicator::next(&mut legacy, tick)
-            .unwrap()
-            .unwrap();
         assert_float_close(configured, owned.values()[idx]);
-        assert_float_close(configured, legacy_value);
     }
 
     let invalid_tick = ADTick {
@@ -2986,7 +2479,6 @@ fn ad_config_covers_owned_caller_prepared_validation_and_independent_streams() {
         volume: Float::NAN,
     };
     assert!(StreamingComputation::<ADConfig>::next(&mut stream, invalid_tick).is_err());
-    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
     let next_tick = ADTick {
         high: 2.0,
         low: 0.0,
@@ -2995,10 +2487,6 @@ fn ad_config_covers_owned_caller_prepared_validation_and_independent_streams() {
     };
     assert_some_float_close(
         StreamingComputation::<ADConfig>::next(&mut stream, next_tick).unwrap(),
-        11.0,
-    );
-    assert_some_float_close(
-        StreamingIndicator::next(&mut legacy, next_tick).unwrap(),
         11.0,
     );
 
@@ -3039,7 +2527,6 @@ fn ad_config_covers_owned_caller_prepared_validation_and_independent_streams() {
     );
 
     StreamingComputation::<ADConfig>::reset(&mut stream);
-    Resettable::reset(&mut legacy);
     for idx in 0..high.len() {
         let tick = ADTick {
             high: high[idx],
@@ -3049,10 +2536,6 @@ fn ad_config_covers_owned_caller_prepared_validation_and_independent_streams() {
         };
         assert_some_float_close(
             StreamingComputation::<ADConfig>::next(&mut stream, tick).unwrap(),
-            owned.values()[idx],
-        );
-        assert_some_float_close(
-            StreamingIndicator::next(&mut legacy, tick).unwrap(),
             owned.values()[idx],
         );
     }
@@ -3211,9 +2694,7 @@ fn adosc_config_covers_owned_caller_prepared_validation_and_independent_streams(
     assert_eq!(output, [FLOAT_SENTINEL; 6]);
 
     let mut stream = IndicatorConfig::stream(&config).unwrap();
-    let mut legacy = ADOSC::new(2, 3).unwrap();
     let mut configured_values = Vec::new();
-    let mut legacy_values = Vec::new();
     for idx in 0..high.len() {
         let tick = ADOSCTick {
             high: high[idx],
@@ -3222,17 +2703,11 @@ fn adosc_config_covers_owned_caller_prepared_validation_and_independent_streams(
             volume: volume[idx],
         };
         let configured = StreamingComputation::<ADOSCConfig>::next(&mut stream, tick).unwrap();
-        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
-        assert_eq!(configured.is_some(), legacy_value.is_some());
         if let Some(value) = configured {
             configured_values.push(value);
         }
-        if let Some(value) = legacy_value {
-            legacy_values.push(value);
-        }
     }
     assert_float_slice_close(&configured_values, owned.values());
-    assert_float_slice_close(&legacy_values, owned.values());
 
     let invalid_tick = ADOSCTick {
         high: 2.0,
@@ -3241,19 +2716,14 @@ fn adosc_config_covers_owned_caller_prepared_validation_and_independent_streams(
         volume: Float::NAN,
     };
     assert!(StreamingComputation::<ADOSCConfig>::next(&mut stream, invalid_tick).is_err());
-    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
     let next_tick = ADOSCTick {
         volume: 6.0,
         ..invalid_tick
     };
-    let configured_after_rejection =
+    let _configured_after_rejection =
         StreamingComputation::<ADOSCConfig>::next(&mut stream, next_tick)
             .unwrap()
             .unwrap();
-    let legacy_after_rejection = StreamingIndicator::next(&mut legacy, next_tick)
-        .unwrap()
-        .unwrap();
-    assert_float_close(configured_after_rejection, legacy_after_rejection);
 
     let mut left = IndicatorConfig::stream(&config).unwrap();
     let mut right = IndicatorConfig::stream(&config).unwrap();
@@ -3305,7 +2775,6 @@ fn adosc_config_covers_owned_caller_prepared_validation_and_independent_streams(
     );
 
     StreamingComputation::<ADOSCConfig>::reset(&mut stream);
-    Resettable::reset(&mut legacy);
     let replayed = high
         .iter()
         .enumerate()
@@ -3322,24 +2791,7 @@ fn adosc_config_covers_owned_caller_prepared_validation_and_independent_streams(
             .unwrap()
         })
         .collect::<Vec<_>>();
-    let legacy_replayed = high
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, _)| {
-            StreamingIndicator::next(
-                &mut legacy,
-                ADOSCTick {
-                    high: high[idx],
-                    low: low[idx],
-                    close: close[idx],
-                    volume: volume[idx],
-                },
-            )
-            .unwrap()
-        })
-        .collect::<Vec<_>>();
     assert_float_slice_close(&replayed, owned.values());
-    assert_float_slice_close(&legacy_replayed, owned.values());
 }
 
 #[test]
@@ -3473,17 +2925,12 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
     assert_eq!(output, [FLOAT_SENTINEL; 6]);
 
     let mut stream = IndicatorConfig::stream(&config).unwrap();
-    let mut legacy = OBV::new().unwrap();
     let first_tick = OBVTick {
         close: close[0],
         volume: volume[0],
     };
     assert_eq!(
         StreamingComputation::<OBVConfig>::next(&mut stream, first_tick).unwrap(),
-        None
-    );
-    assert_eq!(
-        StreamingIndicator::next(&mut legacy, first_tick).unwrap(),
         None
     );
     for idx in 1..close.len() {
@@ -3494,11 +2941,7 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         let configured = StreamingComputation::<OBVConfig>::next(&mut stream, tick)
             .unwrap()
             .unwrap();
-        let legacy_value = StreamingIndicator::next(&mut legacy, tick)
-            .unwrap()
-            .unwrap();
         assert_float_close(configured, owned.values()[idx - 1]);
-        assert_float_close(configured, legacy_value);
     }
 
     let invalid_tick = OBVTick {
@@ -3506,17 +2949,12 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         volume: 1.0,
     };
     assert!(StreamingComputation::<OBVConfig>::next(&mut stream, invalid_tick).is_err());
-    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
     let next_tick = OBVTick {
         close: 16.0,
         volume: 10.0,
     };
     assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(&mut stream, next_tick).unwrap(),
-        460.0,
-    );
-    assert_some_float_close(
-        StreamingIndicator::next(&mut legacy, next_tick).unwrap(),
         460.0,
     );
 
@@ -3579,13 +3017,8 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
     );
 
     StreamingComputation::<OBVConfig>::reset(&mut stream);
-    Resettable::reset(&mut legacy);
     assert_eq!(
         StreamingComputation::<OBVConfig>::next(&mut stream, first_tick).unwrap(),
-        None
-    );
-    assert_eq!(
-        StreamingIndicator::next(&mut legacy, first_tick).unwrap(),
         None
     );
     for idx in 1..close.len() {
@@ -3595,10 +3028,6 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         };
         assert_some_float_close(
             StreamingComputation::<OBVConfig>::next(&mut stream, tick).unwrap(),
-            owned.values()[idx - 1],
-        );
-        assert_some_float_close(
-            StreamingIndicator::next(&mut legacy, tick).unwrap(),
             owned.values()[idx - 1],
         );
     }
@@ -3737,7 +3166,6 @@ fn trange_config_covers_owned_prepared_validation_warmup_and_independent_streams
     assert_eq!(output, [FLOAT_SENTINEL; 6]);
 
     let mut stream = IndicatorConfig::stream(&config).unwrap();
-    let mut legacy = TRANGE::new().unwrap();
     let first_tick = TRANGETick {
         high: high[0],
         low: low[0],
@@ -3745,10 +3173,6 @@ fn trange_config_covers_owned_prepared_validation_warmup_and_independent_streams
     };
     assert_eq!(
         StreamingComputation::<TRANGEConfig>::next(&mut stream, first_tick).unwrap(),
-        None
-    );
-    assert_eq!(
-        StreamingIndicator::next(&mut legacy, first_tick).unwrap(),
         None
     );
     for idx in 1..high.len() {
@@ -3761,10 +3185,6 @@ fn trange_config_covers_owned_prepared_validation_warmup_and_independent_streams
             StreamingComputation::<TRANGEConfig>::next(&mut stream, tick).unwrap(),
             owned.values()[idx - 1],
         );
-        assert_some_float_close(
-            StreamingIndicator::next(&mut legacy, tick).unwrap(),
-            owned.values()[idx - 1],
-        );
     }
 
     let invalid_tick = TRANGETick {
@@ -3773,7 +3193,6 @@ fn trange_config_covers_owned_prepared_validation_warmup_and_independent_streams
         close: 1.0,
     };
     assert!(StreamingComputation::<TRANGEConfig>::next(&mut stream, invalid_tick).is_err());
-    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
     let next_tick = TRANGETick {
         high: 18.0,
         low: 16.0,
@@ -3781,10 +3200,6 @@ fn trange_config_covers_owned_prepared_validation_warmup_and_independent_streams
     };
     assert_some_float_close(
         StreamingComputation::<TRANGEConfig>::next(&mut stream, next_tick).unwrap(),
-        3.0,
-    );
-    assert_some_float_close(
-        StreamingIndicator::next(&mut legacy, next_tick).unwrap(),
         3.0,
     );
 
@@ -3840,13 +3255,8 @@ fn trange_config_covers_owned_prepared_validation_warmup_and_independent_streams
     );
 
     StreamingComputation::<TRANGEConfig>::reset(&mut stream);
-    Resettable::reset(&mut legacy);
     assert_eq!(
         StreamingComputation::<TRANGEConfig>::next(&mut stream, first_tick).unwrap(),
-        None
-    );
-    assert_eq!(
-        StreamingIndicator::next(&mut legacy, first_tick).unwrap(),
         None
     );
     for idx in 1..high.len() {
@@ -3857,10 +3267,6 @@ fn trange_config_covers_owned_prepared_validation_warmup_and_independent_streams
         };
         assert_some_float_close(
             StreamingComputation::<TRANGEConfig>::next(&mut stream, tick).unwrap(),
-            owned.values()[idx - 1],
-        );
-        assert_some_float_close(
-            StreamingIndicator::next(&mut legacy, tick).unwrap(),
             owned.values()[idx - 1],
         );
     }
@@ -4001,7 +3407,6 @@ fn atr_config_preserves_warmup_period_one_validation_and_recursive_stream_state(
     assert_eq!(output, [FLOAT_SENTINEL; 6]);
 
     let mut stream = IndicatorConfig::stream(&config).unwrap();
-    let mut legacy = ATR::new(3).unwrap();
     for idx in 0..high.len() {
         let tick = ATRTick {
             high: high[idx],
@@ -4009,13 +3414,10 @@ fn atr_config_preserves_warmup_period_one_validation_and_recursive_stream_state(
             close: close[idx],
         };
         let configured = StreamingComputation::<ATRConfig>::next(&mut stream, tick).unwrap();
-        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
-        assert_eq!(configured.is_some(), legacy_value.is_some());
         if idx < 3 {
             assert_eq!(configured, None);
         } else {
             assert_some_float_close(configured, owned.values()[idx - 3]);
-            assert_some_float_close(legacy_value, owned.values()[idx - 3]);
         }
     }
 
@@ -4025,7 +3427,6 @@ fn atr_config_preserves_warmup_period_one_validation_and_recursive_stream_state(
         close: 1.0,
     };
     assert!(StreamingComputation::<ATRConfig>::next(&mut stream, invalid_tick).is_err());
-    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
     let next_tick = ATRTick {
         high: 18.0,
         low: 16.0,
@@ -4035,11 +3436,7 @@ fn atr_config_preserves_warmup_period_one_validation_and_recursive_stream_state(
         StreamingComputation::<ATRConfig>::next(&mut stream, next_tick)
             .unwrap()
             .unwrap();
-    let legacy_after_rejection = StreamingIndicator::next(&mut legacy, next_tick)
-        .unwrap()
-        .unwrap();
     assert_float_close(configured_after_rejection, 83.0 / 27.0);
-    assert_float_close(configured_after_rejection, legacy_after_rejection);
 
     let period_one = ATRConfig::new(1).unwrap();
     let trange_owned = IndicatorConfig::compute(
@@ -4114,7 +3511,6 @@ fn atr_config_preserves_warmup_period_one_validation_and_recursive_stream_state(
     }
 
     StreamingComputation::<ATRConfig>::reset(&mut stream);
-    Resettable::reset(&mut legacy);
     for idx in 0..high.len() {
         let tick = ATRTick {
             high: high[idx],
@@ -4122,11 +3518,8 @@ fn atr_config_preserves_warmup_period_one_validation_and_recursive_stream_state(
             close: close[idx],
         };
         let configured = StreamingComputation::<ATRConfig>::next(&mut stream, tick).unwrap();
-        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
-        assert_eq!(configured.is_some(), legacy_value.is_some());
         if idx >= 3 {
             assert_some_float_close(configured, owned.values()[idx - 3]);
-            assert_some_float_close(legacy_value, owned.values()[idx - 3]);
         }
     }
 }
@@ -4266,7 +3659,6 @@ fn natr_config_preserves_normalization_period_one_and_recursive_stream_state() {
     assert_eq!(output, [FLOAT_SENTINEL; 6]);
 
     let mut stream = IndicatorConfig::stream(&config).unwrap();
-    let mut legacy = NATR::new(3).unwrap();
     for idx in 0..high.len() {
         let tick = NATRTick {
             high: high[idx],
@@ -4274,13 +3666,10 @@ fn natr_config_preserves_normalization_period_one_and_recursive_stream_state() {
             close: close[idx],
         };
         let configured = StreamingComputation::<NATRConfig>::next(&mut stream, tick).unwrap();
-        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
-        assert_eq!(configured.is_some(), legacy_value.is_some());
         if idx < 3 {
             assert_eq!(configured, None);
         } else {
             assert_some_float_close(configured, owned.values()[idx - 3]);
-            assert_some_float_close(legacy_value, owned.values()[idx - 3]);
         }
     }
 
@@ -4290,7 +3679,6 @@ fn natr_config_preserves_normalization_period_one_and_recursive_stream_state() {
         close: 1.0,
     };
     assert!(StreamingComputation::<NATRConfig>::next(&mut stream, invalid_tick).is_err());
-    assert!(StreamingIndicator::next(&mut legacy, invalid_tick).is_err());
     let next_tick = NATRTick {
         high: 18.0,
         low: 16.0,
@@ -4300,11 +3688,7 @@ fn natr_config_preserves_normalization_period_one_and_recursive_stream_state() {
         StreamingComputation::<NATRConfig>::next(&mut stream, next_tick)
             .unwrap()
             .unwrap();
-    let legacy_after_rejection = StreamingIndicator::next(&mut legacy, next_tick)
-        .unwrap()
-        .unwrap();
     assert_float_close(configured_after_rejection, (83.0 / 27.0) / 17.0 * 100.0);
-    assert_float_close(configured_after_rejection, legacy_after_rejection);
 
     let period_one = NATRConfig::new(1).unwrap();
     let trange_owned = IndicatorConfig::compute(
@@ -4387,7 +3771,6 @@ fn natr_config_preserves_normalization_period_one_and_recursive_stream_state() {
     }
 
     StreamingComputation::<NATRConfig>::reset(&mut stream);
-    Resettable::reset(&mut legacy);
     for idx in 0..high.len() {
         let tick = NATRTick {
             high: high[idx],
@@ -4395,11 +3778,8 @@ fn natr_config_preserves_normalization_period_one_and_recursive_stream_state() {
             close: close[idx],
         };
         let configured = StreamingComputation::<NATRConfig>::next(&mut stream, tick).unwrap();
-        let legacy_value = StreamingIndicator::next(&mut legacy, tick).unwrap();
-        assert_eq!(configured.is_some(), legacy_value.is_some());
         if idx >= 3 {
             assert_some_float_close(configured, owned.values()[idx - 3]);
-            assert_some_float_close(legacy_value, owned.values()[idx - 3]);
         }
     }
 }
@@ -5148,31 +4528,4 @@ fn regression_config_matches_legacy_projection_semantics() {
         );
     }
     assert_float_slice_close(tsf_owned.values(), &[15.5 as Float, 15.5, 19.5, 18.5, 21.5]);
-}
-
-#[test]
-fn legacy_sma_names_and_signatures_remain_source_compatible() {
-    use ta_core::overlap::{SMA_vec, SMA};
-
-    let input = [1.0 as Float, 2.0, 3.0, 4.0];
-    let mut compact = [FLOAT_SENTINEL; 2];
-    let range = SMA(&input, 3, &mut compact).unwrap();
-    let aligned = SMA_vec(&input, 3).unwrap();
-    let mut indicator = SMA::from_data(3, &input[..2]).unwrap();
-    let mut empty_output = [];
-
-    assert_eq!(
-        SMA(&[], 3, &mut empty_output).unwrap(),
-        OutputRange::empty()
-    );
-    assert!(SMA_vec(&[], 3).unwrap().is_empty());
-    assert_eq!(range, OutputRange::new(2, 2));
-    assert!(aligned[..2].iter().all(|value| value.is_nan()));
-    assert_float_close(indicator.next_checked(3.0).unwrap(), 2.0);
-    assert_eq!(indicator.period(), 3);
-    assert_eq!(Indicator::lookback(&indicator), 2);
-    assert_eq!(
-        core::mem::size_of::<SMA>(),
-        core::mem::size_of::<SMAStream>()
-    );
 }

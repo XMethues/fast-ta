@@ -3,9 +3,8 @@
 use super::moments::{statistic_lookback, RegressionFit, RollingRegression};
 use crate::common::validate_finite_value;
 use crate::{
-    compact_buffer, padded_from_compact, validate_finite_slice, validate_input_len,
-    validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig, OutputRange,
-    PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator, TalibError,
+    validate_finite_slice, validate_input_len, validate_output_len, CompactOutput, Float,
+    IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -96,7 +95,7 @@ fn regression_batch(
 }
 
 macro_rules! define_regression_indicator {
-    ($name:ident, $vec_name:ident, $config:ident, $runner:ident, $stream:ident, $projection:expr, $description:literal) => {
+    ($name:ident, $config:ident, $runner:ident, $stream:ident, $projection:expr, $description:literal) => {
         #[doc = concat!("TA-Lib-style ", $description, " batch function.")]
         #[allow(non_snake_case)]
         pub fn $name(
@@ -105,98 +104,6 @@ macro_rules! define_regression_indicator {
             out_real: &mut [Float],
         ) -> Result<OutputRange> {
             regression_batch(stringify!($name), real, timeperiod, $projection, out_real)
-        }
-
-        #[doc = concat!("Computes ", $description, " into a full-length padded vector.")]
-        #[allow(non_snake_case)]
-        pub fn $vec_name(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-            let mut compact = compact_buffer::<Float>(real.len());
-            let range = $name(real, timeperiod, &mut compact)?;
-            Ok(padded_from_compact(
-                real.len(),
-                range,
-                &compact[..range.nb_element],
-            ))
-        }
-
-        #[doc = concat!($description, " indicator.")]
-        #[allow(non_camel_case_types)]
-        #[derive(Debug, Clone)]
-        pub struct $name {
-            period: usize,
-            regression: RollingRegression,
-        }
-
-        impl $name {
-            #[doc = concat!("Creates a new ", $description, " indicator.")]
-            pub fn new(timeperiod: usize) -> Result<Self> {
-                statistic_lookback(timeperiod, 2, 0)?;
-                Ok(Self {
-                    period: timeperiod,
-                    regression: RollingRegression::new(timeperiod),
-                })
-            }
-
-            /// Returns the configured period.
-            pub const fn period(&self) -> usize {
-                self.period
-            }
-
-            /// Computes compact outputs using this indicator's period.
-            pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-                $name(real, self.period, out_real)
-            }
-
-            /// Computes full-length padded outputs using this indicator's period.
-            pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-                $vec_name(real, self.period)
-            }
-
-            /// Checked streaming update that returns `Float::NAN` during warm-up.
-            pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-                Ok(self.next(input)?.unwrap_or(Float::NAN))
-            }
-        }
-
-        impl Indicator for $name {
-            type Input<'a> = &'a [Float];
-            type OutputMut<'a> = &'a mut [Float];
-            type OutputOwned = Vec<Float>;
-
-            fn lookback(&self) -> usize {
-                self.period - 1
-            }
-
-            fn compute<'a>(
-                &self,
-                input: Self::Input<'a>,
-                output: Self::OutputMut<'a>,
-            ) -> Result<OutputRange> {
-                $name(input, self.period, output)
-            }
-
-            fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-                $vec_name(input, self.period)
-            }
-        }
-
-        impl StreamingIndicator for $name {
-            type Tick = Float;
-            type TickOutput = Float;
-
-            fn next(&mut self, input: Float) -> Result<Option<Float>> {
-                validate_finite_slice("input", &[input])?;
-                Ok(self
-                    .regression
-                    .push(input)
-                    .map(|fit| project(fit, self.period, $projection)))
-            }
-        }
-
-        impl Resettable for $name {
-            fn reset(&mut self) {
-                self.regression.reset();
-            }
         }
 
         #[doc = concat!("Immutable ", $description, " Indicator Configuration.")]
@@ -356,7 +263,6 @@ macro_rules! define_regression_indicator {
 
 define_regression_indicator!(
     LINEARREG,
-    LINEARREG_vec,
     LINEARREGConfig,
     LINEARREGBatchRunner,
     LINEARREGStream,
@@ -365,7 +271,6 @@ define_regression_indicator!(
 );
 define_regression_indicator!(
     LINEARREG_SLOPE,
-    LINEARREG_SLOPE_vec,
     LINEARREG_SLOPEConfig,
     LINEARREG_SLOPEBatchRunner,
     LINEARREG_SLOPEStream,
@@ -374,7 +279,6 @@ define_regression_indicator!(
 );
 define_regression_indicator!(
     LINEARREG_INTERCEPT,
-    LINEARREG_INTERCEPT_vec,
     LINEARREG_INTERCEPTConfig,
     LINEARREG_INTERCEPTBatchRunner,
     LINEARREG_INTERCEPTStream,
@@ -383,7 +287,6 @@ define_regression_indicator!(
 );
 define_regression_indicator!(
     LINEARREG_ANGLE,
-    LINEARREG_ANGLE_vec,
     LINEARREG_ANGLEConfig,
     LINEARREG_ANGLEBatchRunner,
     LINEARREG_ANGLEStream,
@@ -392,7 +295,6 @@ define_regression_indicator!(
 );
 define_regression_indicator!(
     TSF,
-    TSF_vec,
     TSFConfig,
     TSFBatchRunner,
     TSFStream,

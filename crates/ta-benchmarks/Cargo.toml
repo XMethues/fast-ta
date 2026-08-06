@@ -14,9 +14,7 @@ categories = ["development-tools::profiling", "development-tools::testing"]
 name = "basic"
 harness = false
 
-[[bench]]
-name = "first_tranche"
-harness = false
+
 
 [[bench]]
 name = "execution_baselines"

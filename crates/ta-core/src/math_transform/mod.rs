@@ -1,19 +1,17 @@
 //! Math Transform functions.
 //!
 //! These are unary element-wise transforms over one real input series. They use
-//! strict finite-input validation, compact zero-copy output buffers, padded
-//! convenience wrappers, immutable configurations, reusable batch runners,
-//! and independent per-tick streams. Finite values outside an operation's
-//! mathematical domain remain valid inputs: the underlying IEEE-754 operation
-//! returns its defined `NaN` or infinity result without changing the output
-//! range.
+//! strict finite-input validation, compact zero-copy output buffers, immutable
+//! configurations, reusable batch runners, and independent per-tick streams.
+//! Finite values outside an operation's mathematical domain remain valid
+//! inputs: the underlying IEEE-754 operation returns its defined `NaN` or
+//! infinity result without changing the output range.
 
 mod functions {
     use crate::common::validate_finite_value;
     use crate::{
-        compact_buffer, padded_from_compact, validate_finite_slice, validate_output_len,
-        CompactOutput, Float, Indicator, IndicatorConfig, OutputRange, PreparedBatchRunner, Result,
-        StreamingComputation, StreamingIndicator, TalibError,
+        validate_finite_slice, validate_output_len, CompactOutput, Float, IndicatorConfig,
+        OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
     };
 
     #[cfg(not(feature = "std"))]
@@ -24,7 +22,6 @@ mod functions {
     macro_rules! define_transform {
         (
             $name:ident,
-            $vec_name:ident,
             $config:ident,
             $runner:ident,
             $stream:ident,
@@ -63,18 +60,6 @@ mod functions {
                 let len = $config::validate_input(real)?;
                 validate_output_len(stringify!($name), out_real.len(), len)?;
                 Ok($config::compute_validated(real, out_real))
-            }
-
-            #[doc = concat!("Computes ", stringify!($name), " into a full-length vector.")]
-            #[allow(non_snake_case)]
-            pub fn $vec_name(real: &[Float]) -> Result<Vec<Float>> {
-                let mut compact = compact_buffer::<Float>(real.len());
-                let range = $name(real, &mut compact)?;
-                Ok(padded_from_compact(
-                    real.len(),
-                    range,
-                    &compact[..range.nb_element],
-                ))
             }
 
             impl crate::traits::sealed::Sealed for $config {}
@@ -177,76 +162,11 @@ mod functions {
                 #[inline]
                 fn reset(&mut self) {}
             }
-
-            #[doc = concat!(stringify!($name), " struct surface.")]
-            #[derive(Debug, Clone, Copy)]
-            pub struct $name {
-                _private: (),
-            }
-
-            impl $name {
-                #[doc = concat!("Creates a ", stringify!($name), " calculator.")]
-                pub fn new() -> Result<Self> {
-                    Ok(Self { _private: () })
-                }
-
-                /// Computes compact outputs.
-                pub fn compute(
-                    &self,
-                    real: &[Float],
-                    out_real: &mut [Float],
-                ) -> Result<OutputRange> {
-                    $name(real, out_real)
-                }
-
-                /// Computes full-length outputs.
-                pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-                    $vec_name(real)
-                }
-            }
-
-            impl Indicator for $name {
-                type Input<'a> = &'a [Float];
-                type OutputMut<'a> = &'a mut [Float];
-                type OutputOwned = Vec<Float>;
-
-                fn lookback(&self) -> usize {
-                    0
-                }
-
-                fn compute<'a>(
-                    &self,
-                    inputs: Self::Input<'a>,
-                    outputs: Self::OutputMut<'a>,
-                ) -> Result<OutputRange> {
-                    $name(inputs, outputs)
-                }
-
-                fn compute_to_vec<'a>(
-                    &self,
-                    inputs: Self::Input<'a>,
-                ) -> Result<Self::OutputOwned> {
-                    $vec_name(inputs)
-                }
-            }
-
-            impl StreamingIndicator for $name {
-                type Tick = Float;
-                type TickOutput = Float;
-
-                #[inline]
-                fn next(&mut self, input: Float) -> Result<Option<Float>> {
-                    validate_finite_value("input", 0, input)?;
-                    let operation = $operation;
-                    Ok(Some(operation(input)))
-                }
-            }
         };
     }
 
     define_transform!(
         ACOS,
-        ACOS_vec,
         ACOSConfig,
         ACOSBatchRunner,
         ACOSStream,
@@ -254,7 +174,6 @@ mod functions {
     );
     define_transform!(
         ASIN,
-        ASIN_vec,
         ASINConfig,
         ASINBatchRunner,
         ASINStream,
@@ -262,7 +181,6 @@ mod functions {
     );
     define_transform!(
         ATAN,
-        ATAN_vec,
         ATANConfig,
         ATANBatchRunner,
         ATANStream,
@@ -270,71 +188,45 @@ mod functions {
     );
     define_transform!(
         CEIL,
-        CEIL_vec,
         CEILConfig,
         CEILBatchRunner,
         CEILStream,
         |value: Float| value.ceil()
     );
-    define_transform!(
-        COS,
-        COS_vec,
-        COSConfig,
-        COSBatchRunner,
-        COSStream,
-        |value: Float| value.cos()
-    );
+    define_transform!(COS, COSConfig, COSBatchRunner, COSStream, |value: Float| {
+        value.cos()
+    });
     define_transform!(
         COSH,
-        COSH_vec,
         COSHConfig,
         COSHBatchRunner,
         COSHStream,
         |value: Float| value.cosh()
     );
-    define_transform!(
-        EXP,
-        EXP_vec,
-        EXPConfig,
-        EXPBatchRunner,
-        EXPStream,
-        |value: Float| value.exp()
-    );
+    define_transform!(EXP, EXPConfig, EXPBatchRunner, EXPStream, |value: Float| {
+        value.exp()
+    });
     define_transform!(
         FLOOR,
-        FLOOR_vec,
         FLOORConfig,
         FLOORBatchRunner,
         FLOORStream,
         |value: Float| value.floor()
     );
-    define_transform!(
-        LN,
-        LN_vec,
-        LNConfig,
-        LNBatchRunner,
-        LNStream,
-        |value: Float| value.ln()
-    );
+    define_transform!(LN, LNConfig, LNBatchRunner, LNStream, |value: Float| value
+        .ln());
     define_transform!(
         LOG10,
-        LOG10_vec,
         LOG10Config,
         LOG10BatchRunner,
         LOG10Stream,
         |value: Float| value.log10()
     );
-    define_transform!(
-        SIN,
-        SIN_vec,
-        SINConfig,
-        SINBatchRunner,
-        SINStream,
-        |value: Float| value.sin()
-    );
+    define_transform!(SIN, SINConfig, SINBatchRunner, SINStream, |value: Float| {
+        value.sin()
+    });
     define_transform!(
         SINH,
-        SINH_vec,
         SINHConfig,
         SINHBatchRunner,
         SINHStream,
@@ -342,23 +234,16 @@ mod functions {
     );
     define_transform!(
         SQRT,
-        SQRT_vec,
         SQRTConfig,
         SQRTBatchRunner,
         SQRTStream,
         |value: Float| value.sqrt()
     );
-    define_transform!(
-        TAN,
-        TAN_vec,
-        TANConfig,
-        TANBatchRunner,
-        TANStream,
-        |value: Float| value.tan()
-    );
+    define_transform!(TAN, TANConfig, TANBatchRunner, TANStream, |value: Float| {
+        value.tan()
+    });
     define_transform!(
         TANH,
-        TANH_vec,
         TANHConfig,
         TANHBatchRunner,
         TANHStream,
@@ -367,14 +252,12 @@ mod functions {
 }
 
 pub use functions::{
-    ACOSBatchRunner, ACOSConfig, ACOSStream, ACOS_vec, ASINBatchRunner, ASINConfig, ASINStream,
-    ASIN_vec, ATANBatchRunner, ATANConfig, ATANStream, ATAN_vec, CEILBatchRunner, CEILConfig,
-    CEILStream, CEIL_vec, COSBatchRunner, COSConfig, COSHBatchRunner, COSHConfig, COSHStream,
-    COSH_vec, COSStream, COS_vec, EXPBatchRunner, EXPConfig, EXPStream, EXP_vec, FLOORBatchRunner,
-    FLOORConfig, FLOORStream, FLOOR_vec, LNBatchRunner, LNConfig, LNStream, LN_vec,
-    LOG10BatchRunner, LOG10Config, LOG10Stream, LOG10_vec, SINBatchRunner, SINConfig,
-    SINHBatchRunner, SINHConfig, SINHStream, SINH_vec, SINStream, SIN_vec, SQRTBatchRunner,
-    SQRTConfig, SQRTStream, SQRT_vec, TANBatchRunner, TANConfig, TANHBatchRunner, TANHConfig,
-    TANHStream, TANH_vec, TANStream, TAN_vec, ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN,
-    LOG10, SIN, SINH, SQRT, TAN, TANH,
+    ACOSBatchRunner, ACOSConfig, ACOSStream, ASINBatchRunner, ASINConfig, ASINStream,
+    ATANBatchRunner, ATANConfig, ATANStream, CEILBatchRunner, CEILConfig, CEILStream,
+    COSBatchRunner, COSConfig, COSHBatchRunner, COSHConfig, COSHStream, COSStream, EXPBatchRunner,
+    EXPConfig, EXPStream, FLOORBatchRunner, FLOORConfig, FLOORStream, LNBatchRunner, LNConfig,
+    LNStream, LOG10BatchRunner, LOG10Config, LOG10Stream, SINBatchRunner, SINConfig,
+    SINHBatchRunner, SINHConfig, SINHStream, SINStream, SQRTBatchRunner, SQRTConfig, SQRTStream,
+    TANBatchRunner, TANConfig, TANHBatchRunner, TANHConfig, TANHStream, TANStream, ACOS, ASIN,
+    ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN, TANH,
 };

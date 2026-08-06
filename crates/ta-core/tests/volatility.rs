@@ -1,8 +1,8 @@
 use ta_core::volatility::{
-    ATRInput, ATRTick, ATR_vec, NATRInput, NATRTick, NATR_vec, TRANGEInput, TRANGETick, TRANGE_vec,
-    ATR, NATR, TRANGE,
+    ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
+    TRANGETick, ATR, NATR, TRANGE,
 };
-use ta_core::{Float, Indicator, OutputRange, Resettable, StreamingIndicator};
+use ta_core::{Float, IndicatorConfig, OutputRange, StreamingComputation};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(
@@ -27,30 +27,15 @@ fn trange_function_writes_compact_outputs() {
 }
 
 #[test]
-fn trange_vec_returns_padded_outputs() {
+fn trange_config_implements_indicator_compute() {
     let high = [10.0, 12.0, 11.0, 15.0];
     let low = [8.0, 9.0, 10.0, 13.0];
     let close = [9.0, 11.0, 10.0, 14.0];
-
-    let output = TRANGE_vec(&high, &low, &close).unwrap();
-
-    assert_eq!(output.len(), high.len());
-    assert!(output[0].is_nan());
-    assert_close(output[1], 3.0);
-    assert_close(output[2], 1.0);
-    assert_close(output[3], 5.0);
-}
-
-#[test]
-fn trange_struct_implements_indicator_compute() {
-    let high = [10.0, 12.0, 11.0, 15.0];
-    let low = [8.0, 9.0, 10.0, 13.0];
-    let close = [9.0, 11.0, 10.0, 14.0];
-    let trange = TRANGE::new().unwrap();
+    let config = TRANGEConfig::new();
     let mut output = [0.0; 4];
 
-    let range = Indicator::compute(
-        &trange,
+    let range = IndicatorConfig::compute_into(
+        &config,
         TRANGEInput {
             high: &high,
             low: &low,
@@ -60,60 +45,73 @@ fn trange_struct_implements_indicator_compute() {
     )
     .unwrap();
 
-    assert_eq!(trange.lookback(), 1);
+    assert_eq!(IndicatorConfig::lookback(&config), 1);
     assert_eq!(range, OutputRange::new(1, 3));
     assert_close(output[0], 3.0);
 }
 
 #[test]
 fn trange_streaming_next_and_reset_are_safe() {
-    let mut trange = TRANGE::new().unwrap();
+    let config = TRANGEConfig::new();
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
 
-    assert!(trange
-        .next_checked(TRANGETick {
+    assert!(StreamingComputation::<TRANGEConfig>::next(
+        &mut stream,
+        TRANGETick {
             high: 10.0,
             low: 8.0,
             close: 9.0,
-        })
-        .unwrap()
-        .is_nan());
+        }
+    )
+    .unwrap()
+    .is_none());
     assert_close(
-        trange
-            .next_checked(TRANGETick {
+        StreamingComputation::<TRANGEConfig>::next(
+            &mut stream,
+            TRANGETick {
                 high: 12.0,
                 low: 9.0,
                 close: 11.0,
-            })
-            .unwrap(),
+            },
+        )
+        .unwrap()
+        .unwrap(),
         3.0,
     );
     assert_close(
-        trange
-            .next_checked(TRANGETick {
+        StreamingComputation::<TRANGEConfig>::next(
+            &mut stream,
+            TRANGETick {
                 high: 11.0,
                 low: 10.0,
                 close: 10.0,
-            })
-            .unwrap(),
+            },
+        )
+        .unwrap()
+        .unwrap(),
         1.0,
     );
 
-    trange.reset();
-    assert!(trange
-        .next_checked(TRANGETick {
+    StreamingComputation::<TRANGEConfig>::reset(&mut stream);
+    assert!(StreamingComputation::<TRANGEConfig>::next(
+        &mut stream,
+        TRANGETick {
             high: 15.0,
             low: 13.0,
             close: 14.0,
-        })
-        .unwrap()
-        .is_nan());
-    assert!(trange
-        .next(TRANGETick {
+        }
+    )
+    .unwrap()
+    .is_none());
+    assert!(StreamingComputation::<TRANGEConfig>::next(
+        &mut stream,
+        TRANGETick {
             high: Float::NAN,
             low: 13.0,
             close: 14.0,
-        })
-        .is_err());
+        }
+    )
+    .is_err());
 }
 
 #[test]
@@ -149,29 +147,15 @@ fn atr_function_writes_compact_outputs() {
 }
 
 #[test]
-fn atr_vec_returns_padded_outputs() {
+fn atr_config_implements_indicator_compute() {
     let high = [10.0, 12.0, 11.0, 15.0, 16.0];
     let low = [8.0, 9.0, 10.0, 13.0, 14.0];
     let close = [9.0, 11.0, 10.0, 14.0, 15.0];
-
-    let output = ATR_vec(&high, &low, &close, 3).unwrap();
-
-    assert_eq!(output.len(), high.len());
-    assert!(output[..3].iter().all(|value| value.is_nan()));
-    assert_close(output[3], 3.0);
-    assert_close(output[4], 8.0 / 3.0);
-}
-
-#[test]
-fn atr_struct_implements_indicator_compute() {
-    let high = [10.0, 12.0, 11.0, 15.0, 16.0];
-    let low = [8.0, 9.0, 10.0, 13.0, 14.0];
-    let close = [9.0, 11.0, 10.0, 14.0, 15.0];
-    let atr = ATR::new(3).unwrap();
+    let config = ATRConfig::new(3).unwrap();
     let mut output = [0.0; 5];
 
-    let range = Indicator::compute(
-        &atr,
+    let range = IndicatorConfig::compute_into(
+        &config,
         ATRInput {
             high: &high,
             low: &low,
@@ -181,15 +165,16 @@ fn atr_struct_implements_indicator_compute() {
     )
     .unwrap();
 
-    assert_eq!(atr.period(), 3);
-    assert_eq!(atr.lookback(), 3);
+    assert_eq!(config.period(), 3);
+    assert_eq!(IndicatorConfig::lookback(&config), 3);
     assert_eq!(range, OutputRange::new(3, 2));
     assert_close(output[0], 3.0);
 }
 
 #[test]
 fn atr_streaming_next_and_reset_are_safe() {
-    let mut atr = ATR::new(3).unwrap();
+    let config = ATRConfig::new(3).unwrap();
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
 
     for tick in [
         ATRTick {
@@ -208,44 +193,58 @@ fn atr_streaming_next_and_reset_are_safe() {
             close: 10.0,
         },
     ] {
-        assert!(atr.next_checked(tick).unwrap().is_nan());
+        assert!(StreamingComputation::<ATRConfig>::next(&mut stream, tick)
+            .unwrap()
+            .is_none());
     }
 
     assert_close(
-        atr.next_checked(ATRTick {
-            high: 15.0,
-            low: 13.0,
-            close: 14.0,
-        })
+        StreamingComputation::<ATRConfig>::next(
+            &mut stream,
+            ATRTick {
+                high: 15.0,
+                low: 13.0,
+                close: 14.0,
+            },
+        )
+        .unwrap()
         .unwrap(),
         3.0,
     );
     assert_close(
-        atr.next_checked(ATRTick {
-            high: 16.0,
-            low: 14.0,
-            close: 15.0,
-        })
+        StreamingComputation::<ATRConfig>::next(
+            &mut stream,
+            ATRTick {
+                high: 16.0,
+                low: 14.0,
+                close: 15.0,
+            },
+        )
+        .unwrap()
         .unwrap(),
         8.0 / 3.0,
     );
 
-    atr.reset();
-    assert!(atr
-        .next_checked(ATRTick {
+    StreamingComputation::<ATRConfig>::reset(&mut stream);
+    assert!(StreamingComputation::<ATRConfig>::next(
+        &mut stream,
+        ATRTick {
             high: 10.0,
             low: 8.0,
             close: 9.0,
-        })
-        .unwrap()
-        .is_nan());
-    assert!(atr
-        .next(ATRTick {
+        }
+    )
+    .unwrap()
+    .is_none());
+    assert!(StreamingComputation::<ATRConfig>::next(
+        &mut stream,
+        ATRTick {
             high: Float::NAN,
             low: 8.0,
             close: 9.0,
-        })
-        .is_err());
+        }
+    )
+    .is_err());
 }
 
 #[test]
@@ -267,8 +266,8 @@ fn atr_period_one_matches_trange() {
 
 #[test]
 fn atr_rejects_invalid_inputs() {
-    assert!(ATR::new(0).is_err());
-    assert!(ATR::new(usize::MAX).is_err());
+    assert!(ATRConfig::new(0).is_err());
+    assert!(ATRConfig::new(usize::MAX).is_err());
 
     let mut output = [0.0; 5];
     assert!(ATR(
@@ -314,29 +313,15 @@ fn natr_function_writes_compact_outputs() {
 }
 
 #[test]
-fn natr_vec_returns_padded_outputs() {
+fn natr_config_implements_indicator_compute() {
     let high = [10.0, 12.0, 11.0, 15.0, 16.0];
     let low = [8.0, 9.0, 10.0, 13.0, 14.0];
     let close = [9.0, 11.0, 10.0, 14.0, 15.0];
-
-    let output = NATR_vec(&high, &low, &close, 3).unwrap();
-
-    assert_eq!(output.len(), high.len());
-    assert!(output[..3].iter().all(|value| value.is_nan()));
-    assert_close(output[3], (3.0 / 14.0) * 100.0);
-    assert_close(output[4], ((8.0 / 3.0) / 15.0) * 100.0);
-}
-
-#[test]
-fn natr_struct_implements_indicator_compute() {
-    let high = [10.0, 12.0, 11.0, 15.0, 16.0];
-    let low = [8.0, 9.0, 10.0, 13.0, 14.0];
-    let close = [9.0, 11.0, 10.0, 14.0, 15.0];
-    let natr = NATR::new(3).unwrap();
+    let config = NATRConfig::new(3).unwrap();
     let mut output = [0.0; 5];
 
-    let range = Indicator::compute(
-        &natr,
+    let range = IndicatorConfig::compute_into(
+        &config,
         NATRInput {
             high: &high,
             low: &low,
@@ -346,15 +331,16 @@ fn natr_struct_implements_indicator_compute() {
     )
     .unwrap();
 
-    assert_eq!(natr.period(), 3);
-    assert_eq!(natr.lookback(), 3);
+    assert_eq!(config.period(), 3);
+    assert_eq!(IndicatorConfig::lookback(&config), 3);
     assert_eq!(range, OutputRange::new(3, 2));
     assert_close(output[0], (3.0 / 14.0) * 100.0);
 }
 
 #[test]
 fn natr_streaming_next_and_reset_are_safe() {
-    let mut natr = NATR::new(3).unwrap();
+    let config = NATRConfig::new(3).unwrap();
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
 
     for tick in [
         NATRTick {
@@ -373,44 +359,58 @@ fn natr_streaming_next_and_reset_are_safe() {
             close: 10.0,
         },
     ] {
-        assert!(natr.next_checked(tick).unwrap().is_nan());
+        assert!(StreamingComputation::<NATRConfig>::next(&mut stream, tick)
+            .unwrap()
+            .is_none());
     }
 
     assert_close(
-        natr.next_checked(NATRTick {
-            high: 15.0,
-            low: 13.0,
-            close: 14.0,
-        })
+        StreamingComputation::<NATRConfig>::next(
+            &mut stream,
+            NATRTick {
+                high: 15.0,
+                low: 13.0,
+                close: 14.0,
+            },
+        )
+        .unwrap()
         .unwrap(),
         (3.0 / 14.0) * 100.0,
     );
     assert_close(
-        natr.next_checked(NATRTick {
-            high: 16.0,
-            low: 14.0,
-            close: 15.0,
-        })
+        StreamingComputation::<NATRConfig>::next(
+            &mut stream,
+            NATRTick {
+                high: 16.0,
+                low: 14.0,
+                close: 15.0,
+            },
+        )
+        .unwrap()
         .unwrap(),
         ((8.0 / 3.0) / 15.0) * 100.0,
     );
 
-    natr.reset();
-    assert!(natr
-        .next_checked(NATRTick {
+    StreamingComputation::<NATRConfig>::reset(&mut stream);
+    assert!(StreamingComputation::<NATRConfig>::next(
+        &mut stream,
+        NATRTick {
             high: 10.0,
             low: 8.0,
             close: 9.0,
-        })
-        .unwrap()
-        .is_nan());
-    assert!(natr
-        .next(NATRTick {
+        }
+    )
+    .unwrap()
+    .is_none());
+    assert!(StreamingComputation::<NATRConfig>::next(
+        &mut stream,
+        NATRTick {
             high: Float::NAN,
             low: 8.0,
             close: 9.0,
-        })
-        .is_err());
+        }
+    )
+    .is_err());
 }
 
 #[test]
@@ -445,8 +445,8 @@ fn natr_period_one_matches_trange() {
 
 #[test]
 fn natr_rejects_invalid_inputs() {
-    assert!(NATR::new(0).is_err());
-    assert!(NATR::new(usize::MAX).is_err());
+    assert!(NATRConfig::new(0).is_err());
+    assert!(NATRConfig::new(usize::MAX).is_err());
 
     let mut output = [0.0; 5];
     assert!(NATR(

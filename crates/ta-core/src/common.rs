@@ -136,27 +136,6 @@ impl<O> CompactOutput<O> {
         self.values
     }
 }
-
-/// Padding value used by full-length convenience output vectors.
-pub trait PadValue: Copy {
-    /// Returns the value used for positions outside [`OutputRange`].
-    fn pad_value() -> Self;
-}
-
-impl PadValue for Float {
-    #[inline]
-    fn pad_value() -> Self {
-        Float::NAN
-    }
-}
-
-impl PadValue for i32 {
-    #[inline]
-    fn pad_value() -> Self {
-        0
-    }
-}
-
 /// Returns the number of compact outputs for an input length and lookback.
 #[inline]
 pub fn output_count(input_len: usize, lookback: usize) -> usize {
@@ -264,39 +243,6 @@ pub fn validate_finite_slices(slices: &[(&str, &[Float])]) -> Result<()> {
         validate_finite_slice(name, values)?;
     }
     Ok(())
-}
-
-/// Builds a full-length padded vector from compact outputs and their range.
-pub fn padded_from_compact<T>(input_len: usize, range: OutputRange, compact: &[T]) -> Vec<T>
-where
-    T: PadValue,
-{
-    let mut output = Vec::new();
-    output.resize(input_len, T::pad_value());
-    copy_compact_to_padded(range, compact, &mut output);
-    output
-}
-
-/// Copies compact outputs into their full-length padded positions.
-pub fn copy_compact_to_padded<T>(range: OutputRange, compact: &[T], padded: &mut [T])
-where
-    T: PadValue,
-{
-    let count = range.nb_element.min(compact.len());
-    let end = range.beg_idx + count;
-    if end <= padded.len() {
-        padded[range.beg_idx..end].copy_from_slice(&compact[..count]);
-    }
-}
-
-/// Allocates a compact output buffer large enough for any first-tranche function.
-pub fn compact_buffer<T>(input_len: usize) -> Vec<T>
-where
-    T: PadValue,
-{
-    let mut output = Vec::new();
-    output.resize(input_len, T::pad_value());
-    output
 }
 
 #[cfg(test)]

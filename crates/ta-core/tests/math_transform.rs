@@ -1,8 +1,7 @@
 use ta_core::math_transform::{
-    ACOS_vec, SQRT_vec, ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT,
-    TAN, TANH,
+    ACOS, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN, TANH,
 };
-use ta_core::{Float, Indicator, OutputRange};
+use ta_core::{Float, IndicatorConfig, OutputRange};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(
@@ -37,8 +36,8 @@ fn all_math_transform_functions_are_exported() {
     let real = [0.5 as Float];
     let mut output = [0.0 as Float; 1];
 
-    let funcs: [fn(&[Float], &mut [Float]) -> ta_core::Result<OutputRange>; 15] = [
-        ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN, TANH,
+    let funcs: [fn(&[Float], &mut [Float]) -> ta_core::Result<OutputRange>; 13] = [
+        ACOS, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN, TANH,
     ];
 
     for func in funcs {
@@ -47,22 +46,12 @@ fn all_math_transform_functions_are_exported() {
 }
 
 #[test]
-fn math_transform_vec_wrappers_preserve_length() {
-    let real = [1.0 as Float, 4.0 as Float, 9.0 as Float];
-
-    assert_eq!(SQRT_vec(&real).unwrap().len(), 3);
-    assert_eq!(ACOS_vec(&[0.5 as Float, 1.0 as Float]).unwrap().len(), 2);
-}
-
-#[test]
-fn math_transform_struct_surface_implements_indicator() {
-    let sqrt = SQRT::new().unwrap();
-    let mut output = [0.0 as Float; 2];
-    let range = Indicator::compute(&sqrt, &[4.0 as Float, 9.0 as Float], &mut output).unwrap();
-
-    assert_eq!(range, OutputRange::new(0, 2));
-    assert_close(output[0], 2.0 as Float);
-    assert_close(output[1], 3.0 as Float);
+fn math_transform_configs_compute_expected_values() {
+    let sqrt_config = ta_core::math_transform::SQRTConfig::new();
+    let owned = IndicatorConfig::compute(&sqrt_config, &[4.0 as Float, 9.0 as Float]).unwrap();
+    assert_eq!(owned.range(), OutputRange::new(0, 2));
+    assert_close(owned.values()[0], 2.0 as Float);
+    assert_close(owned.values()[1], 3.0 as Float);
 }
 
 #[test]

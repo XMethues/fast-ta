@@ -16,9 +16,9 @@ use support::{
 use ta_core::{
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
-        MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXOutputMut,
-        MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MULTConfig, SUBConfig, SUMConfig,
-        ADD, DIV, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX, MULT, SUB, SUM,
+        MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXValuesMut, MINMAXValuesMut,
+        MULTConfig, SUBConfig, SUMConfig, ADD, DIV, MAX, MAXINDEX, MIN, MININDEX, MINMAX,
+        MINMAXINDEX, MULT, SUB, SUM,
     },
     math_transform::{
         ACOSConfig, ASINConfig, ATANConfig, CEILConfig, COSConfig, COSHConfig, EXPConfig,
@@ -49,8 +49,7 @@ use ta_core::{
         ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
         OBVTick, AD, ADOSC, OBV,
     },
-    Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
-    StreamingIndicator,
+    Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
 };
 
 const SIZES: &[usize] = &[64, 4_096, 65_536];
@@ -61,10 +60,6 @@ const EXECUTION_MATRIX: &[(usize, usize)] = &[
     (65_536, 14),
     (65_536, 512),
 ];
-
-fn ma_ema_indicator(period: usize) -> ta_core::Result<MA> {
-    MA::new(period, MAType::EMA)
-}
 
 fn ma_ema_config(period: usize) -> ta_core::Result<MAConfig> {
     MAConfig::new(period, MAType::EMA)
@@ -81,12 +76,12 @@ fn bench_sma_one_shot(c: &mut Criterion) {
             &size,
             |b, &size| {
                 let input = series_fixture(size, 0);
-                let indicator = SMA::new(black_box(PERIOD)).expect("valid period");
+                let config = SMAConfig::new(black_box(PERIOD)).expect("valid period");
                 let mut output = vec![0.0 as Float; output_len(size, PERIOD)];
 
                 b.iter(|| {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         black_box(input.as_slice()),
                         black_box(output.as_mut_slice()),
                     )
@@ -143,13 +138,13 @@ fn bench_sma_one_shot(c: &mut Criterion) {
             &size,
             |b, &size| {
                 let input = series_fixture(size, 0);
-                let indicator = SMA::new(black_box(PERIOD)).expect("valid period");
+                let config = SMAConfig::new(black_box(PERIOD)).expect("valid period");
 
                 b.iter_batched(
                     || (),
                     |_| {
-                        let output = Indicator::compute_to_vec(
-                            black_box(&indicator),
+                        let output = IndicatorConfig::compute(
+                            black_box(&config),
                             black_box(input.as_slice()),
                         )
                         .expect("valid SMA fixture");
@@ -175,12 +170,12 @@ fn bench_avgprice_one_shot(c: &mut Criterion) {
             &size,
             |b, &size| {
                 let ohlc = ohlc_fixture(size);
-                let indicator = AVGPRICE::new().expect("valid AVGPRICE configuration");
+                let config = AVGPRICEConfig::new();
                 let mut output = vec![0.0 as Float; size];
 
                 b.iter(|| {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         black_box(AVGPRICEInput {
                             open: ohlc.open.as_slice(),
                             high: ohlc.high.as_slice(),
@@ -200,13 +195,13 @@ fn bench_avgprice_one_shot(c: &mut Criterion) {
             &size,
             |b, &size| {
                 let ohlc = ohlc_fixture(size);
-                let indicator = AVGPRICE::new().expect("valid AVGPRICE configuration");
+                let config = AVGPRICEConfig::new();
 
                 b.iter_batched(
                     || (),
                     |_| {
-                        let output = Indicator::compute_to_vec(
-                            black_box(&indicator),
+                        let output = IndicatorConfig::compute(
+                            black_box(&config),
                             black_box(AVGPRICEInput {
                                 open: ohlc.open.as_slice(),
                                 high: ohlc.high.as_slice(),
@@ -237,16 +232,16 @@ fn bench_minmax_one_shot(c: &mut Criterion) {
             &size,
             |b, &size| {
                 let input = series_fixture(size, 0);
-                let indicator = MINMAX::new(black_box(PERIOD)).expect("valid period");
+                let config = MINMAXConfig::new(black_box(PERIOD)).expect("valid period");
                 let output_len = output_len(size, PERIOD);
                 let mut min = vec![0.0 as Float; output_len];
                 let mut max = vec![0.0 as Float; output_len];
 
                 b.iter(|| {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         black_box(input.as_slice()),
-                        MINMAXOutputMut {
+                        MINMAXValuesMut {
                             min: black_box(min.as_mut_slice()),
                             max: black_box(max.as_mut_slice()),
                         },
@@ -262,13 +257,13 @@ fn bench_minmax_one_shot(c: &mut Criterion) {
             &size,
             |b, &size| {
                 let input = series_fixture(size, 0);
-                let indicator = MINMAX::new(black_box(PERIOD)).expect("valid period");
+                let config = MINMAXConfig::new(black_box(PERIOD)).expect("valid period");
 
                 b.iter_batched(
                     || (),
                     |_| {
-                        let output = Indicator::compute_to_vec(
-                            black_box(&indicator),
+                        let output = IndicatorConfig::compute(
+                            black_box(&config),
                             black_box(input.as_slice()),
                         )
                         .expect("valid MINMAX fixture");
@@ -294,16 +289,16 @@ fn bench_minmaxindex_one_shot(c: &mut Criterion) {
             &size,
             |b, &size| {
                 let input = series_fixture(size, 0);
-                let indicator = MINMAXINDEX::new(black_box(PERIOD)).expect("valid period");
+                let config = MINMAXINDEXConfig::new(black_box(PERIOD)).expect("valid period");
                 let output_len = output_len(size, PERIOD);
-                let mut min_idx = vec![0_i32; output_len];
-                let mut max_idx = vec![0_i32; output_len];
+                let mut min_idx = vec![0_usize; output_len];
+                let mut max_idx = vec![0_usize; output_len];
 
                 b.iter(|| {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         black_box(input.as_slice()),
-                        MINMAXINDEXOutputMut {
+                        MINMAXINDEXValuesMut {
                             min_idx: black_box(min_idx.as_mut_slice()),
                             max_idx: black_box(max_idx.as_mut_slice()),
                         },
@@ -319,13 +314,13 @@ fn bench_minmaxindex_one_shot(c: &mut Criterion) {
             &size,
             |b, &size| {
                 let input = series_fixture(size, 0);
-                let indicator = MINMAXINDEX::new(black_box(PERIOD)).expect("valid period");
+                let config = MINMAXINDEXConfig::new(black_box(PERIOD)).expect("valid period");
 
                 b.iter_batched(
                     || (),
                     |_| {
-                        let output = Indicator::compute_to_vec(
-                            black_box(&indicator),
+                        let output = IndicatorConfig::compute(
+                            black_box(&config),
                             black_box(input.as_slice()),
                         )
                         .expect("valid MINMAXINDEX fixture");
@@ -374,15 +369,15 @@ fn register_minmax_matrix_path(
             &(size, period),
             |b, &(size, period)| {
                 let input = series_fixture(size, 0);
-                let indicator = MINMAX::new(black_box(period)).expect("valid period");
+                let config = MINMAXConfig::new(black_box(period)).expect("valid period");
                 let count = output_len(size, period);
                 let mut min = vec![0.0 as Float; count];
                 let mut max = vec![0.0 as Float; count];
                 b.iter(|| {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         black_box(input.as_slice()),
-                        MINMAXOutputMut {
+                        MINMAXValuesMut {
                             min: black_box(min.as_mut_slice()),
                             max: black_box(max.as_mut_slice()),
                         },
@@ -445,12 +440,12 @@ fn register_minmax_matrix_path(
             &(size, period),
             |b, &(size, period)| {
                 let input = series_fixture(size, 0);
-                let indicator = MINMAX::new(black_box(period)).expect("valid period");
+                let config = MINMAXConfig::new(black_box(period)).expect("valid period");
                 b.iter_batched(
                     || (),
                     |_| {
-                        let output = Indicator::compute_to_vec(
-                            black_box(&indicator),
+                        let output = IndicatorConfig::compute(
+                            black_box(&config),
                             black_box(input.as_slice()),
                         )
                         .expect("valid legacy owned MINMAX fixture");
@@ -521,15 +516,15 @@ fn register_minmaxindex_matrix_path(
             &(size, period),
             |b, &(size, period)| {
                 let input = series_fixture(size, 0);
-                let indicator = MINMAXINDEX::new(black_box(period)).expect("valid period");
+                let config = MINMAXINDEXConfig::new(black_box(period)).expect("valid period");
                 let count = output_len(size, period);
-                let mut min_idx = vec![0_i32; count];
-                let mut max_idx = vec![0_i32; count];
+                let mut min_idx = vec![0_usize; count];
+                let mut max_idx = vec![0_usize; count];
                 b.iter(|| {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         black_box(input.as_slice()),
-                        MINMAXINDEXOutputMut {
+                        MINMAXINDEXValuesMut {
                             min_idx: black_box(min_idx.as_mut_slice()),
                             max_idx: black_box(max_idx.as_mut_slice()),
                         },
@@ -592,12 +587,12 @@ fn register_minmaxindex_matrix_path(
             &(size, period),
             |b, &(size, period)| {
                 let input = series_fixture(size, 0);
-                let indicator = MINMAXINDEX::new(black_box(period)).expect("valid period");
+                let config = MINMAXINDEXConfig::new(black_box(period)).expect("valid period");
                 b.iter_batched(
                     || (),
                     |_| {
-                        let output = Indicator::compute_to_vec(
-                            black_box(&indicator),
+                        let output = IndicatorConfig::compute(
+                            black_box(&config),
                             black_box(input.as_slice()),
                         )
                         .expect("valid legacy owned MINMAXINDEX fixture");
@@ -719,7 +714,7 @@ macro_rules! for_each_stream_sample {
 
 fn bench_universe(c: &mut Criterion) {
     let universe = universe_fixtures();
-    let indicator = SMA::new(PERIOD).expect("valid period");
+    let config = SMAConfig::new(PERIOD).expect("valid period");
     let mut output = vec![0.0 as Float; output_len(REPEATED_SERIES_LEN, PERIOD)];
     let mut group = c.benchmark_group("indicator_execution/current/repeated");
     group.throughput(Throughput::Elements(
@@ -729,8 +724,8 @@ fn bench_universe(c: &mut Criterion) {
     group.bench_function("universe/SMA/caller_compact_reuse", |b| {
         b.iter(|| {
             for series in &universe {
-                let range = Indicator::compute(
-                    black_box(&indicator),
+                let range = IndicatorConfig::compute_into(
+                    black_box(&config),
                     black_box(series.as_slice()),
                     black_box(output.as_mut_slice()),
                 )
@@ -745,9 +740,9 @@ fn bench_universe(c: &mut Criterion) {
 
 fn bench_parameter_sweep(c: &mut Criterion) {
     let input = series_fixture(REPEATED_SERIES_LEN, 0);
-    let indicators = SWEEP_PERIODS
+    let configs = SWEEP_PERIODS
         .iter()
-        .map(|&period| SMA::new(period).expect("valid sweep period"))
+        .map(|&period| SMAConfig::new(period).expect("valid sweep period"))
         .collect::<Vec<_>>();
     let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
     let mut group = c.benchmark_group("indicator_execution/current/repeated");
@@ -757,9 +752,9 @@ fn bench_parameter_sweep(c: &mut Criterion) {
 
     group.bench_function("parameter_sweep/SMA/caller_compact_reuse", |b| {
         b.iter(|| {
-            for indicator in &indicators {
-                let range = Indicator::compute(
-                    black_box(indicator),
+            for config in &configs {
+                let range = IndicatorConfig::compute_into(
+                    black_box(config),
                     black_box(input.as_slice()),
                     black_box(output.as_mut_slice()),
                 )
@@ -773,8 +768,8 @@ fn bench_parameter_sweep(c: &mut Criterion) {
 }
 
 fn bench_per_worker_predecessor(c: &mut Criterion) {
-    let indicators = (0..WORKERS)
-        .map(|_| SMA::new(PERIOD).expect("valid period"))
+    let configs = (0..WORKERS)
+        .map(|_| SMAConfig::new(PERIOD).expect("valid period"))
         .collect::<Vec<_>>();
     let inputs = worker_fixtures();
     let mut outputs = (0..WORKERS)
@@ -785,11 +780,11 @@ fn bench_per_worker_predecessor(c: &mut Criterion) {
 
     group.bench_function("no_prepared_runner/per_worker_instances", |b| {
         b.iter(|| {
-            for ((indicator, input), output) in
-                indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
+            for ((config, input), output) in
+                configs.iter().zip(inputs.iter()).zip(outputs.iter_mut())
             {
-                let range = Indicator::compute(
-                    black_box(indicator),
+                let range = IndicatorConfig::compute_into(
+                    black_box(config),
                     black_box(input.as_slice()),
                     black_box(output.as_mut_slice()),
                 )
@@ -910,16 +905,20 @@ fn bench_multi_instrument_streaming(c: &mut Criterion) {
     ));
 
     group.bench_function("SMA/independent_multi_instrument_instances", |b| {
+        let config = SMAConfig::new(PERIOD).expect("valid period");
         b.iter_batched_ref(
             || {
                 (0..STREAM_INSTRUMENTS)
-                    .map(|_| SMA::new(PERIOD).expect("valid period"))
+                    .map(|_| IndicatorConfig::stream(&config).expect("valid period"))
                     .collect::<Vec<_>>()
             },
             |streams| {
                 for_each_stream_sample!(streams, &inputs, |stream, input| {
-                    let output = StreamingIndicator::next(black_box(stream), black_box(input))
-                        .expect("valid streaming fixture");
+                    let output = StreamingComputation::<SMAConfig>::next(
+                        black_box(stream),
+                        black_box(input),
+                    )
+                    .expect("valid streaming fixture");
                     black_box(output);
                 });
             },
@@ -965,16 +964,16 @@ fn bench_minmax_repeated_and_streaming(c: &mut Criterion) {
     ));
     group.bench_function("universe/current_caller_compact", |b| {
         let universe = universe_fixtures();
-        let indicator = MINMAX::new(PERIOD).expect("valid period");
+        let config = MINMAXConfig::new(PERIOD).expect("valid period");
         let count = output_len(REPEATED_SERIES_LEN, PERIOD);
         let mut min = vec![0.0 as Float; count];
         let mut max = vec![0.0 as Float; count];
         b.iter(|| {
             for input in &universe {
-                let range = Indicator::compute(
-                    black_box(&indicator),
+                let range = IndicatorConfig::compute_into(
+                    black_box(&config),
                     black_box(input.as_slice()),
-                    MINMAXOutputMut {
+                    MINMAXValuesMut {
                         min: black_box(min.as_mut_slice()),
                         max: black_box(max.as_mut_slice()),
                     },
@@ -1034,17 +1033,17 @@ fn bench_minmax_repeated_and_streaming(c: &mut Criterion) {
     ));
     group.bench_function("parameter_sweep/current_caller_compact", |b| {
         let input = series_fixture(REPEATED_SERIES_LEN, 0);
-        let indicators = SWEEP_PERIODS
+        let configs = SWEEP_PERIODS
             .iter()
-            .map(|&period| MINMAX::new(period).expect("valid sweep period"))
+            .map(|&period| MINMAXConfig::new(period).expect("valid sweep period"))
             .collect::<Vec<_>>();
         let mut outputs = extrema_sweep_outputs(0.0 as Float);
         b.iter(|| {
-            for (indicator, (min, max)) in indicators.iter().zip(outputs.iter_mut()) {
-                let range = Indicator::compute(
-                    black_box(indicator),
+            for (config, (min, max)) in configs.iter().zip(outputs.iter_mut()) {
+                let range = IndicatorConfig::compute_into(
+                    black_box(config),
                     black_box(input.as_slice()),
-                    MINMAXOutputMut {
+                    MINMAXValuesMut {
                         min: black_box(min.as_mut_slice()),
                         max: black_box(max.as_mut_slice()),
                     },
@@ -1108,19 +1107,19 @@ fn bench_minmax_repeated_and_streaming(c: &mut Criterion) {
 
     group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
     group.bench_function("per_worker/current_instances", |b| {
-        let indicators = (0..WORKERS)
-            .map(|_| MINMAX::new(PERIOD).expect("valid period"))
+        let configs = (0..WORKERS)
+            .map(|_| MINMAXConfig::new(PERIOD).expect("valid period"))
             .collect::<Vec<_>>();
         let inputs = worker_fixtures();
         let mut outputs = extrema_worker_outputs(0.0 as Float);
         b.iter(|| {
-            for ((indicator, input), (min, max)) in
-                indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
+            for ((config, input), (min, max)) in
+                configs.iter().zip(inputs.iter()).zip(outputs.iter_mut())
             {
-                let range = Indicator::compute(
-                    black_box(indicator),
+                let range = IndicatorConfig::compute_into(
+                    black_box(config),
                     black_box(input.as_slice()),
-                    MINMAXOutputMut {
+                    MINMAXValuesMut {
                         min: black_box(min.as_mut_slice()),
                         max: black_box(max.as_mut_slice()),
                     },
@@ -1164,17 +1163,21 @@ fn bench_minmax_repeated_and_streaming(c: &mut Criterion) {
     group.throughput(Throughput::Elements(
         (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
     ));
+    let minmax_stream_config = MINMAXConfig::new(PERIOD).expect("valid period");
     group.bench_function("streaming/legacy_instances", |b| {
         b.iter_batched_ref(
             || {
                 (0..STREAM_INSTRUMENTS)
-                    .map(|_| MINMAX::new(PERIOD).expect("valid period"))
+                    .map(|_| IndicatorConfig::stream(&minmax_stream_config).expect("valid period"))
                     .collect::<Vec<_>>()
             },
             |streams| {
                 for_each_stream_sample!(streams, &inputs, |stream, input| {
-                    let output = StreamingIndicator::next(black_box(stream), black_box(input))
-                        .expect("valid legacy MINMAX streaming fixture");
+                    let output = StreamingComputation::<MINMAXConfig>::next(
+                        black_box(stream),
+                        black_box(input),
+                    )
+                    .expect("valid legacy MINMAX streaming fixture");
                     black_box(output);
                 });
             },
@@ -1214,16 +1217,16 @@ fn bench_minmaxindex_repeated_and_streaming(c: &mut Criterion) {
     ));
     group.bench_function("universe/current_caller_compact", |b| {
         let universe = universe_fixtures();
-        let indicator = MINMAXINDEX::new(PERIOD).expect("valid period");
+        let config = MINMAXINDEXConfig::new(PERIOD).expect("valid period");
         let count = output_len(REPEATED_SERIES_LEN, PERIOD);
-        let mut min_idx = vec![0_i32; count];
-        let mut max_idx = vec![0_i32; count];
+        let mut min_idx = vec![0_usize; count];
+        let mut max_idx = vec![0_usize; count];
         b.iter(|| {
             for input in &universe {
-                let range = Indicator::compute(
-                    black_box(&indicator),
+                let range = IndicatorConfig::compute_into(
+                    black_box(&config),
                     black_box(input.as_slice()),
-                    MINMAXINDEXOutputMut {
+                    MINMAXINDEXValuesMut {
                         min_idx: black_box(min_idx.as_mut_slice()),
                         max_idx: black_box(max_idx.as_mut_slice()),
                     },
@@ -1283,17 +1286,17 @@ fn bench_minmaxindex_repeated_and_streaming(c: &mut Criterion) {
     ));
     group.bench_function("parameter_sweep/current_caller_compact", |b| {
         let input = series_fixture(REPEATED_SERIES_LEN, 0);
-        let indicators = SWEEP_PERIODS
+        let configs = SWEEP_PERIODS
             .iter()
-            .map(|&period| MINMAXINDEX::new(period).expect("valid sweep period"))
+            .map(|&period| MINMAXINDEXConfig::new(period).expect("valid sweep period"))
             .collect::<Vec<_>>();
-        let mut outputs = extrema_sweep_outputs(0_i32);
+        let mut outputs = extrema_sweep_outputs(0_usize);
         b.iter(|| {
-            for (indicator, (min_idx, max_idx)) in indicators.iter().zip(outputs.iter_mut()) {
-                let range = Indicator::compute(
-                    black_box(indicator),
+            for (config, (min_idx, max_idx)) in configs.iter().zip(outputs.iter_mut()) {
+                let range = IndicatorConfig::compute_into(
+                    black_box(config),
                     black_box(input.as_slice()),
-                    MINMAXINDEXOutputMut {
+                    MINMAXINDEXValuesMut {
                         min_idx: black_box(min_idx.as_mut_slice()),
                         max_idx: black_box(max_idx.as_mut_slice()),
                     },
@@ -1357,19 +1360,19 @@ fn bench_minmaxindex_repeated_and_streaming(c: &mut Criterion) {
 
     group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
     group.bench_function("per_worker/current_instances", |b| {
-        let indicators = (0..WORKERS)
-            .map(|_| MINMAXINDEX::new(PERIOD).expect("valid period"))
+        let configs = (0..WORKERS)
+            .map(|_| MINMAXINDEXConfig::new(PERIOD).expect("valid period"))
             .collect::<Vec<_>>();
         let inputs = worker_fixtures();
-        let mut outputs = extrema_worker_outputs(0_i32);
+        let mut outputs = extrema_worker_outputs(0_usize);
         b.iter(|| {
-            for ((indicator, input), (min_idx, max_idx)) in
-                indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
+            for ((config, input), (min_idx, max_idx)) in
+                configs.iter().zip(inputs.iter()).zip(outputs.iter_mut())
             {
-                let range = Indicator::compute(
-                    black_box(indicator),
+                let range = IndicatorConfig::compute_into(
+                    black_box(config),
                     black_box(input.as_slice()),
-                    MINMAXINDEXOutputMut {
+                    MINMAXINDEXValuesMut {
                         min_idx: black_box(min_idx.as_mut_slice()),
                         max_idx: black_box(max_idx.as_mut_slice()),
                     },
@@ -1413,17 +1416,23 @@ fn bench_minmaxindex_repeated_and_streaming(c: &mut Criterion) {
     group.throughput(Throughput::Elements(
         (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
     ));
+    let minmaxindex_stream_config = MINMAXINDEXConfig::new(PERIOD).expect("valid period");
     group.bench_function("streaming/legacy_instances", |b| {
         b.iter_batched_ref(
             || {
                 (0..STREAM_INSTRUMENTS)
-                    .map(|_| MINMAXINDEX::new(PERIOD).expect("valid period"))
+                    .map(|_| {
+                        IndicatorConfig::stream(&minmaxindex_stream_config).expect("valid period")
+                    })
                     .collect::<Vec<_>>()
             },
             |streams| {
                 for_each_stream_sample!(streams, &inputs, |stream, input| {
-                    let output = StreamingIndicator::next(black_box(stream), black_box(input))
-                        .expect("valid legacy MINMAXINDEX streaming fixture");
+                    let output = StreamingComputation::<MINMAXINDEXConfig>::next(
+                        black_box(stream),
+                        black_box(input),
+                    )
+                    .expect("valid legacy MINMAXINDEX streaming fixture");
                     black_box(output);
                 });
             },
@@ -1496,16 +1505,16 @@ macro_rules! define_single_output_workloads {
             ));
             group.bench_function("universe/current_caller_compact", |b| {
                 let universe = universe_fixtures();
-                let indicator = $current_new(PERIOD).expect("valid period");
-                let mut output: Vec<$current_type> =
+                let config = $config_new(PERIOD).expect("valid period");
+                let mut output: Vec<$config_type> =
                     vec![
-                        $current_initial;
+                        $config_initial;
                         single_output_len(REPEATED_SERIES_LEN, PERIOD, $lookback_multiplier,)
                     ];
                 b.iter(|| {
                     for input in &universe {
-                        let range = Indicator::compute(
-                            black_box(&indicator),
+                        let range = IndicatorConfig::compute_into(
+                            black_box(&config),
                             black_box(input.as_slice()),
                             black_box(output.as_mut_slice()),
                         )
@@ -1574,18 +1583,18 @@ macro_rules! define_single_output_workloads {
             ));
             group.bench_function("parameter_sweep/current_caller_compact", |b| {
                 let input = series_fixture(REPEATED_SERIES_LEN, 0);
-                let indicators = SWEEP_PERIODS
+                let configs = SWEEP_PERIODS
                     .iter()
-                    .map(|&period| $current_new(period).expect("valid sweep period"))
+                    .map(|&period| $config_new(period).expect("valid sweep period"))
                     .collect::<Vec<_>>();
-                let mut outputs = single_output_sweep_outputs::<$current_type>(
-                    $current_initial,
+                let mut outputs = single_output_sweep_outputs::<$config_type>(
+                    $config_initial,
                     $lookback_multiplier,
                 );
                 b.iter(|| {
-                    for (indicator, output) in indicators.iter().zip(outputs.iter_mut()) {
-                        let range = Indicator::compute(
-                            black_box(indicator),
+                    for (config, output) in configs.iter().zip(outputs.iter_mut()) {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(config),
                             black_box(input.as_slice()),
                             black_box(output.as_mut_slice()),
                         )
@@ -1660,20 +1669,20 @@ macro_rules! define_single_output_workloads {
 
             group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
             group.bench_function("per_worker/current_instances", |b| {
-                let indicators = (0..WORKERS)
-                    .map(|_| $current_new(PERIOD).expect("valid period"))
+                let configs = (0..WORKERS)
+                    .map(|_| $config_new(PERIOD).expect("valid period"))
                     .collect::<Vec<_>>();
                 let inputs = worker_fixtures();
-                let mut outputs = single_output_worker_outputs::<$current_type>(
-                    $current_initial,
+                let mut outputs = single_output_worker_outputs::<$config_type>(
+                    $config_initial,
                     $lookback_multiplier,
                 );
                 b.iter(|| {
-                    for ((indicator, input), output) in
-                        indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
+                    for ((config, input), output) in
+                        configs.iter().zip(inputs.iter()).zip(outputs.iter_mut())
                     {
-                        let range = Indicator::compute(
-                            black_box(indicator),
+                        let range = IndicatorConfig::compute_into(
+                            black_box(config),
                             black_box(input.as_slice()),
                             black_box(output.as_mut_slice()),
                         )
@@ -1724,22 +1733,28 @@ macro_rules! define_single_output_workloads {
             group.throughput(Throughput::Elements(
                 (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
             ));
+            let legacy_stream_config = $config_new(PERIOD).expect("valid period");
             group.bench_function("streaming/legacy_instances", |b| {
                 b.iter_batched_ref(
                     || {
                         (0..STREAM_INSTRUMENTS)
-                            .map(|_| $current_new(PERIOD).expect("valid period"))
+                            .map(|_| {
+                                IndicatorConfig::stream(&legacy_stream_config)
+                                    .expect("valid period")
+                            })
                             .collect::<Vec<_>>()
                     },
                     |streams| {
                         for_each_stream_sample!(streams, &inputs, |stream, input| {
-                            let output =
-                                StreamingIndicator::next(black_box(stream), black_box(input))
-                                    .expect(concat!(
-                                        "valid legacy ",
-                                        stringify!($indicator),
-                                        " stream"
-                                    ));
+                            let output = StreamingComputation::<$config>::next(
+                                black_box(stream),
+                                black_box(input),
+                            )
+                            .expect(concat!(
+                                "valid legacy ",
+                                stringify!($indicator),
+                                " stream"
+                            ));
                             black_box(output);
                         });
                     },
@@ -1782,7 +1797,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/single_extrema_workloads/MIN",
     MIN,
     MINConfig,
-    MIN::new,
+    MINConfig::new,
     MINConfig::new,
     1,
     Float,
@@ -1795,7 +1810,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/single_extrema_workloads/MAX",
     MAX,
     MAXConfig,
-    MAX::new,
+    MAXConfig::new,
     MAXConfig::new,
     1,
     Float,
@@ -1808,7 +1823,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/arithmetic_workloads/SUM",
     SUM,
     SUMConfig,
-    SUM::new,
+    SUMConfig::new,
     SUMConfig::new,
     1,
     Float,
@@ -1821,8 +1836,8 @@ define_single_output_workloads!(
     "indicator_execution/expanded/rolling_statistics_workloads/VAR",
     VAR,
     VARConfig,
-    var_with_default_nbdev,
-    var_config_with_default_nbdev,
+    VARConfig::with_default_nbdev,
+    VARConfig::with_default_nbdev,
     1,
     Float,
     0.0 as Float,
@@ -1834,8 +1849,8 @@ define_single_output_workloads!(
     "indicator_execution/expanded/rolling_statistics_workloads/STDDEV",
     STDDEV,
     STDDEVConfig,
-    stddev_with_default_nbdev,
-    stddev_config_with_default_nbdev,
+    STDDEVConfig::with_default_nbdev,
+    STDDEVConfig::with_default_nbdev,
     1,
     Float,
     0.0 as Float,
@@ -1847,7 +1862,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/rolling_statistics_workloads/LINEARREG",
     LINEARREG,
     LINEARREGConfig,
-    LINEARREG::new,
+    LINEARREGConfig::new,
     LINEARREGConfig::new,
     1,
     Float,
@@ -1860,7 +1875,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/rolling_statistics_workloads/LINEARREG_SLOPE",
     LINEARREG_SLOPE,
     LINEARREG_SLOPEConfig,
-    LINEARREG_SLOPE::new,
+    LINEARREG_SLOPEConfig::new,
     LINEARREG_SLOPEConfig::new,
     1,
     Float,
@@ -1873,7 +1888,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/rolling_statistics_workloads/LINEARREG_INTERCEPT",
     LINEARREG_INTERCEPT,
     LINEARREG_INTERCEPTConfig,
-    LINEARREG_INTERCEPT::new,
+    LINEARREG_INTERCEPTConfig::new,
     LINEARREG_INTERCEPTConfig::new,
     1,
     Float,
@@ -1886,7 +1901,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/rolling_statistics_workloads/LINEARREG_ANGLE",
     LINEARREG_ANGLE,
     LINEARREG_ANGLEConfig,
-    LINEARREG_ANGLE::new,
+    LINEARREG_ANGLEConfig::new,
     LINEARREG_ANGLEConfig::new,
     1,
     Float,
@@ -1899,7 +1914,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/rolling_statistics_workloads/TSF",
     TSF,
     TSFConfig,
-    TSF::new,
+    TSFConfig::new,
     TSFConfig::new,
     1,
     Float,
@@ -1912,11 +1927,11 @@ define_single_output_workloads!(
     "indicator_execution/expanded/single_extrema_workloads/MININDEX",
     MININDEX,
     MININDEXConfig,
-    MININDEX::new,
+    MININDEXConfig::new,
     MININDEXConfig::new,
     1,
-    i32,
-    0_i32,
+    usize,
+    0_usize,
     usize,
     0_usize
 );
@@ -1925,11 +1940,11 @@ define_single_output_workloads!(
     "indicator_execution/expanded/single_extrema_workloads/MAXINDEX",
     MAXINDEX,
     MAXINDEXConfig,
-    MAXINDEX::new,
+    MAXINDEXConfig::new,
     MAXINDEXConfig::new,
     1,
-    i32,
-    0_i32,
+    usize,
+    0_usize,
     usize,
     0_usize
 );
@@ -1963,16 +1978,15 @@ macro_rules! define_single_output_benchmark {
                             &(size, period),
                             |b, &(size, period)| {
                                 let input = series_fixture(size, 0);
-                                let indicator =
-                                    $current_new(black_box(period)).expect("valid period");
-                                let mut output: Vec<$current_type> =
+                                let config = $config_new(black_box(period)).expect("valid period");
+                                let mut output: Vec<$config_type> =
                                     vec![
-                                        $current_initial;
+                                        $config_initial;
                                         single_output_len(size, period, $lookback_multiplier)
                                     ];
                                 b.iter(|| {
-                                    let range = Indicator::compute(
-                                        black_box(&indicator),
+                                    let range = IndicatorConfig::compute_into(
+                                        black_box(&config),
                                         black_box(input.as_slice()),
                                         black_box(output.as_mut_slice()),
                                     )
@@ -2032,13 +2046,12 @@ macro_rules! define_single_output_benchmark {
                             &(size, period),
                             |b, &(size, period)| {
                                 let input = series_fixture(size, 0);
-                                let indicator =
-                                    $current_new(black_box(period)).expect("valid period");
+                                let config = $config_new(black_box(period)).expect("valid period");
                                 b.iter_batched(
                                     || (),
                                     |_| {
-                                        let output = Indicator::compute_to_vec(
-                                            black_box(&indicator),
+                                        let output = IndicatorConfig::compute(
+                                            black_box(&config),
                                             black_box(input.as_slice()),
                                         )
                                         .expect(concat!(
@@ -2097,12 +2110,11 @@ macro_rules! bench_parameter_free_transform {
                         &size,
                         |b, &size| {
                             let input = $fixture(size, 0);
-                            let indicator =
-                                $indicator::new().expect("valid parameter-free indicator");
+                            let config = $config::new();
                             let mut output = vec![0.0 as Float; size];
                             b.iter(|| {
-                                let range = Indicator::compute(
-                                    black_box(&indicator),
+                                let range = IndicatorConfig::compute_into(
+                                    black_box(&config),
                                     black_box(input.as_slice()),
                                     black_box(output.as_mut_slice()),
                                 )
@@ -2166,13 +2178,12 @@ macro_rules! bench_parameter_free_transform {
                         &size,
                         |b, &size| {
                             let input = $fixture(size, 0);
-                            let indicator =
-                                $indicator::new().expect("valid parameter-free indicator");
+                            let config = $config::new();
                             b.iter_batched(
                                 || (),
                                 |_| {
-                                    let output = Indicator::compute_to_vec(
-                                        black_box(&indicator),
+                                    let output = IndicatorConfig::compute(
+                                        black_box(&config),
                                         black_box(input.as_slice()),
                                     )
                                     .expect(concat!(
@@ -2224,12 +2235,12 @@ macro_rules! bench_parameter_free_transform {
         ));
         group.bench_function("universe/current_caller_compact", |b| {
             let universe = math_transform_fixtures(UNIVERSE_INSTRUMENTS, $fixture);
-            let indicator = $indicator::new().expect("valid parameter-free indicator");
+            let config = $config::new();
             let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
             b.iter(|| {
                 for input in &universe {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         black_box(input.as_slice()),
                         black_box(output.as_mut_slice()),
                     )
@@ -2287,19 +2298,17 @@ macro_rules! bench_parameter_free_transform {
 
         group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
         group.bench_function("per_worker/current_instances", |b| {
-            let indicators = (0..WORKERS)
-                .map(|_| $indicator::new().expect("valid parameter-free indicator"))
-                .collect::<Vec<_>>();
+            let configs = (0..WORKERS).map(|_| $config::new()).collect::<Vec<_>>();
             let inputs = math_transform_fixtures(WORKERS, $fixture);
             let mut outputs = (0..WORKERS)
                 .map(|_| vec![0.0 as Float; REPEATED_SERIES_LEN])
                 .collect::<Vec<_>>();
             b.iter(|| {
-                for ((indicator, input), output) in
-                    indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
+                for ((config, input), output) in
+                    configs.iter().zip(inputs.iter()).zip(outputs.iter_mut())
                 {
-                    let range = Indicator::compute(
-                        black_box(indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(config),
                         black_box(input.as_slice()),
                         black_box(output.as_mut_slice()),
                     )
@@ -2349,17 +2358,28 @@ macro_rules! bench_parameter_free_transform {
         group.throughput(Throughput::Elements(
             (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
         ));
+        let legacy_stream_config = $config::new();
         group.bench_function("streaming/legacy_instances", |b| {
             b.iter_batched_ref(
                 || {
                     (0..STREAM_INSTRUMENTS)
-                        .map(|_| $indicator::new().expect("valid parameter-free indicator"))
+                        .map(|_| {
+                            IndicatorConfig::stream(&legacy_stream_config)
+                                .expect("valid parameter-free stream")
+                        })
                         .collect::<Vec<_>>()
                 },
                 |streams| {
                     for_each_stream_sample!(streams, &inputs, |stream, input| {
-                        let output = StreamingIndicator::next(black_box(stream), black_box(input))
-                            .expect(concat!("valid legacy ", stringify!($indicator), " stream"));
+                        let output = StreamingComputation::<$config>::next(
+                            black_box(stream),
+                            black_box(input),
+                        )
+                        .expect(concat!(
+                            "valid legacy ",
+                            stringify!($indicator),
+                            " stream"
+                        ));
                         black_box(output);
                     });
                 },
@@ -2411,26 +2431,7 @@ fn bench_math_transform_execution(c: &mut Criterion) {
     bench_parameter_free_transform!(c, SIN, SINConfig, series_fixture);
     bench_parameter_free_transform!(c, SINH, SINHConfig, series_fixture);
     bench_parameter_free_transform!(c, SQRT, SQRTConfig, series_fixture);
-    bench_parameter_free_transform!(c, TAN, TANConfig, series_fixture);
-    bench_parameter_free_transform!(c, TANH, TANHConfig, series_fixture);
 }
-
-fn var_with_default_nbdev(period: usize) -> ta_core::Result<VAR> {
-    VAR::with_default_nbdev(period)
-}
-
-fn var_config_with_default_nbdev(period: usize) -> ta_core::Result<VARConfig> {
-    VARConfig::with_default_nbdev(period)
-}
-
-fn stddev_with_default_nbdev(period: usize) -> ta_core::Result<STDDEV> {
-    STDDEV::with_default_nbdev(period)
-}
-
-fn stddev_config_with_default_nbdev(period: usize) -> ta_core::Result<STDDEVConfig> {
-    STDDEVConfig::with_default_nbdev(period)
-}
-
 struct PairFixture {
     real0: Vec<Float>,
     real1: Vec<Float>,
@@ -2481,12 +2482,11 @@ macro_rules! bench_binary_operator {
                         &size,
                         |b, &size| {
                             let (real0, real1) = binary_fixture(size, 0);
-                            let indicator =
-                                $indicator::new().expect("valid parameter-free indicator");
+                            let config = $config::new();
                             let mut output = vec![0.0 as Float; size];
                             b.iter(|| {
-                                let range = Indicator::compute(
-                                    black_box(&indicator),
+                                let range = IndicatorConfig::compute_into(
+                                    black_box(&config),
                                     BinaryInput {
                                         real0: black_box(real0.as_slice()),
                                         real1: black_box(real1.as_slice()),
@@ -2559,13 +2559,12 @@ macro_rules! bench_binary_operator {
                         &size,
                         |b, &size| {
                             let (real0, real1) = binary_fixture(size, 0);
-                            let indicator =
-                                $indicator::new().expect("valid parameter-free indicator");
+                            let config = $config::new();
                             b.iter_batched(
                                 || (),
                                 |_| {
-                                    let output = Indicator::compute_to_vec(
-                                        black_box(&indicator),
+                                    let output = IndicatorConfig::compute(
+                                        black_box(&config),
                                         BinaryInput {
                                             real0: black_box(real0.as_slice()),
                                             real1: black_box(real1.as_slice()),
@@ -2623,12 +2622,12 @@ macro_rules! bench_binary_operator {
         ));
         group.bench_function("universe/current_caller_compact", |b| {
             let universe = binary_fixtures(UNIVERSE_INSTRUMENTS);
-            let indicator = $indicator::new().expect("valid parameter-free indicator");
+            let config = $config::new();
             let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
             b.iter(|| {
                 for (real0, real1) in &universe {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         BinaryInput {
                             real0: black_box(real0.as_slice()),
                             real1: black_box(real1.as_slice()),
@@ -2695,19 +2694,17 @@ macro_rules! bench_binary_operator {
 
         group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
         group.bench_function("per_worker/current_instances", |b| {
-            let indicators = (0..WORKERS)
-                .map(|_| $indicator::new().expect("valid parameter-free indicator"))
-                .collect::<Vec<_>>();
+            let configs = (0..WORKERS).map(|_| $config::new()).collect::<Vec<_>>();
             let inputs = binary_fixtures(WORKERS);
             let mut outputs = (0..WORKERS)
                 .map(|_| vec![0.0 as Float; REPEATED_SERIES_LEN])
                 .collect::<Vec<_>>();
             b.iter(|| {
-                for ((indicator, (real0, real1)), output) in
-                    indicators.iter().zip(inputs.iter()).zip(outputs.iter_mut())
+                for ((config, (real0, real1)), output) in
+                    configs.iter().zip(inputs.iter()).zip(outputs.iter_mut())
                 {
-                    let range = Indicator::compute(
-                        black_box(indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(config),
                         BinaryInput {
                             real0: black_box(real0.as_slice()),
                             real1: black_box(real1.as_slice()),
@@ -2763,17 +2760,28 @@ macro_rules! bench_binary_operator {
         group.throughput(Throughput::Elements(
             (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
         ));
+        let legacy_stream_config = $config::new();
         group.bench_function("streaming/legacy_instances", |b| {
             b.iter_batched_ref(
                 || {
                     (0..STREAM_INSTRUMENTS)
-                        .map(|_| $indicator::new().expect("valid parameter-free indicator"))
+                        .map(|_| {
+                            IndicatorConfig::stream(&legacy_stream_config)
+                                .expect("valid parameter-free stream")
+                        })
                         .collect::<Vec<_>>()
                 },
                 |streams| {
                     for_each_stream_sample!(streams, &inputs, |stream, input| {
-                        let output = StreamingIndicator::next(black_box(stream), black_box(input))
-                            .expect(concat!("valid legacy ", stringify!($indicator), " stream"));
+                        let output = StreamingComputation::<$config>::next(
+                            black_box(stream),
+                            black_box(input),
+                        )
+                        .expect(concat!(
+                            "valid legacy ",
+                            stringify!($indicator),
+                            " stream"
+                        ));
                         black_box(output);
                     });
                 },
@@ -2843,12 +2851,11 @@ macro_rules! define_named_input_benchmarks {
                     &size,
                     |b, &size| {
                         let ohlc = ($fixture_ctor)(size);
-                        let indicator =
-                            ($indicator_ctor)().expect("valid multi-series configuration");
+                        let config = ($config_ctor)();
                         let mut output = vec![0.0 as Float; size];
                         b.iter(|| {
-                            let range = Indicator::compute(
-                                black_box(&indicator),
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&config),
                                 black_box($input {
                                     $($field: ohlc.$field.as_slice()),+
                                 }),
@@ -2909,13 +2916,12 @@ macro_rules! define_named_input_benchmarks {
                     &size,
                     |b, &size| {
                         let ohlc = ($fixture_ctor)(size);
-                        let indicator =
-                            ($indicator_ctor)().expect("valid multi-series configuration");
+                        let config = ($config_ctor)();
                         b.iter_batched(
                             || (),
                             |_| {
-                                let output = Indicator::compute_to_vec(
-                                    black_box(&indicator),
+                                let output = IndicatorConfig::compute(
+                                    black_box(&config),
                                     black_box($input {
                                         $($field: ohlc.$field.as_slice()),+
                                     }),
@@ -2964,12 +2970,12 @@ macro_rules! define_named_input_benchmarks {
                 let universe = (0..UNIVERSE_INSTRUMENTS)
                     .map(|_| ($fixture_ctor)(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
-                let indicator = ($indicator_ctor)().expect("valid multi-series configuration");
+                let config = ($config_ctor)();
                 let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
                 b.iter(|| {
                     for ohlc in &universe {
-                        let range = Indicator::compute(
-                            black_box(&indicator),
+                        let range = IndicatorConfig::compute_into(
+                            black_box(&config),
                             black_box($input {
                                 $($field: ohlc.$field.as_slice()),+
                             }),
@@ -3028,17 +3034,15 @@ macro_rules! define_named_input_benchmarks {
             ));
             group.bench_function("per_worker/current_instances", |b| {
                 let ohlc = ($fixture_ctor)(REPEATED_SERIES_LEN);
-                let indicators = (0..WORKERS)
-                    .map(|_| {
-                        ($indicator_ctor)().expect("valid multi-series configuration")
-                    })
+                let configs = (0..WORKERS)
+                    .map(|_| ($config_ctor)())
                     .collect::<Vec<_>>();
                 let mut outputs =
                     vec![vec![0.0 as Float; REPEATED_SERIES_LEN]; WORKERS];
                 b.iter(|| {
-                    for (indicator, output) in indicators.iter().zip(outputs.iter_mut()) {
-                        let range = Indicator::compute(
-                            black_box(indicator),
+                    for (config, output) in configs.iter().zip(outputs.iter_mut()) {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(config),
                             black_box($input {
                                 $($field: ohlc.$field.as_slice()),+
                             }),
@@ -3075,6 +3079,7 @@ macro_rules! define_named_input_benchmarks {
             group.throughput(Throughput::Elements(
                 (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
             ));
+            let legacy_stream_config = ($config_ctor)();
             group.bench_function("streaming/legacy_instances", |b| {
                 let inputs = (0..STREAM_INSTRUMENTS)
                     .map(|_| ($fixture_ctor)(REPEATED_SERIES_LEN))
@@ -3083,14 +3088,15 @@ macro_rules! define_named_input_benchmarks {
                     || {
                         (0..STREAM_INSTRUMENTS)
                             .map(|_| {
-                                ($indicator_ctor)().expect("valid multi-series configuration")
+                                IndicatorConfig::stream(&legacy_stream_config)
+                                    .expect("valid multi-series configuration")
                             })
                             .collect::<Vec<_>>()
                     },
                     |streams| {
                         for idx in 0..REPEATED_SERIES_LEN {
                             for (stream, ohlc) in streams.iter_mut().zip(inputs.iter()) {
-                                let output = StreamingIndicator::next(
+                                let output = StreamingComputation::<$config>::next(
                                     black_box(stream),
                                     black_box($tick {
                                         $($field: ohlc.$field[idx]),+
@@ -3104,11 +3110,11 @@ macro_rules! define_named_input_benchmarks {
                     BatchSize::LargeInput,
                 );
             });
+            let config = ($config_ctor)();
             group.bench_function("streaming/config_streams", |b| {
                 let inputs = (0..STREAM_INSTRUMENTS)
                     .map(|_| ($fixture_ctor)(REPEATED_SERIES_LEN))
                     .collect::<Vec<_>>();
-                let config = ($config_ctor)();
                 b.iter_batched_ref(
                     || {
                         (0..STREAM_INSTRUMENTS)
@@ -3143,7 +3149,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/single_extrema/MIN",
     MIN,
     MINConfig,
-    MIN::new,
+    MINConfig::new,
     MINConfig::new,
     1,
     Float,
@@ -3156,7 +3162,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/single_extrema/MAX",
     MAX,
     MAXConfig,
-    MAX::new,
+    MAXConfig::new,
     MAXConfig::new,
     1,
     Float,
@@ -3169,7 +3175,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/arithmetic/SUM",
     SUM,
     SUMConfig,
-    SUM::new,
+    SUMConfig::new,
     SUMConfig::new,
     1,
     Float,
@@ -3182,8 +3188,8 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/rolling_statistics/VAR",
     VAR,
     VARConfig,
-    var_with_default_nbdev,
-    var_config_with_default_nbdev,
+    VARConfig::with_default_nbdev,
+    VARConfig::with_default_nbdev,
     1,
     Float,
     0.0 as Float,
@@ -3195,8 +3201,8 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/rolling_statistics/STDDEV",
     STDDEV,
     STDDEVConfig,
-    stddev_with_default_nbdev,
-    stddev_config_with_default_nbdev,
+    STDDEVConfig::with_default_nbdev,
+    STDDEVConfig::with_default_nbdev,
     1,
     Float,
     0.0 as Float,
@@ -3208,7 +3214,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/rolling_statistics/LINEARREG",
     LINEARREG,
     LINEARREGConfig,
-    LINEARREG::new,
+    LINEARREGConfig::new,
     LINEARREGConfig::new,
     1,
     Float,
@@ -3221,7 +3227,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/rolling_statistics/LINEARREG_SLOPE",
     LINEARREG_SLOPE,
     LINEARREG_SLOPEConfig,
-    LINEARREG_SLOPE::new,
+    LINEARREG_SLOPEConfig::new,
     LINEARREG_SLOPEConfig::new,
     1,
     Float,
@@ -3234,7 +3240,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/rolling_statistics/LINEARREG_INTERCEPT",
     LINEARREG_INTERCEPT,
     LINEARREG_INTERCEPTConfig,
-    LINEARREG_INTERCEPT::new,
+    LINEARREG_INTERCEPTConfig::new,
     LINEARREG_INTERCEPTConfig::new,
     1,
     Float,
@@ -3247,7 +3253,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/rolling_statistics/LINEARREG_ANGLE",
     LINEARREG_ANGLE,
     LINEARREG_ANGLEConfig,
-    LINEARREG_ANGLE::new,
+    LINEARREG_ANGLEConfig::new,
     LINEARREG_ANGLEConfig::new,
     1,
     Float,
@@ -3260,7 +3266,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/rolling_statistics/TSF",
     TSF,
     TSFConfig,
-    TSF::new,
+    TSFConfig::new,
     TSFConfig::new,
     1,
     Float,
@@ -3273,11 +3279,11 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/single_extrema/MININDEX",
     MININDEX,
     MININDEXConfig,
-    MININDEX::new,
+    MININDEXConfig::new,
     MININDEXConfig::new,
     1,
-    i32,
-    0_i32,
+    usize,
+    0_usize,
     usize,
     0_usize
 );
@@ -3286,11 +3292,11 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/single_extrema/MAXINDEX",
     MAXINDEX,
     MAXINDEXConfig,
-    MAXINDEX::new,
+    MAXINDEXConfig::new,
     MAXINDEXConfig::new,
     1,
-    i32,
-    0_i32,
+    usize,
+    0_usize,
     usize,
     0_usize
 );
@@ -3300,7 +3306,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/windowed_overlap_workloads/WMA",
     WMA,
     WMAConfig,
-    WMA::new,
+    WMAConfig::new,
     WMAConfig::new,
     1,
     Float,
@@ -3313,7 +3319,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/windowed_overlap_workloads/TRIMA",
     TRIMA,
     TRIMAConfig,
-    TRIMA::new,
+    TRIMAConfig::new,
     TRIMAConfig::new,
     1,
     Float,
@@ -3326,7 +3332,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/windowed_overlap/WMA",
     WMA,
     WMAConfig,
-    WMA::new,
+    WMAConfig::new,
     WMAConfig::new,
     1,
     Float,
@@ -3339,7 +3345,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/windowed_overlap/TRIMA",
     TRIMA,
     TRIMAConfig,
-    TRIMA::new,
+    TRIMAConfig::new,
     TRIMAConfig::new,
     1,
     Float,
@@ -3353,7 +3359,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/recursive_overlap_workloads/EMA",
     EMA,
     EMAConfig,
-    EMA::new,
+    EMAConfig::new,
     EMAConfig::new,
     1,
     Float,
@@ -3366,7 +3372,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/recursive_overlap_workloads/DEMA",
     DEMA,
     DEMAConfig,
-    DEMA::new,
+    DEMAConfig::new,
     DEMAConfig::new,
     2,
     Float,
@@ -3379,7 +3385,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/recursive_overlap_workloads/TEMA",
     TEMA,
     TEMAConfig,
-    TEMA::new,
+    TEMAConfig::new,
     TEMAConfig::new,
     3,
     Float,
@@ -3392,7 +3398,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/recursive_overlap_workloads/T3",
     T3,
     T3Config,
-    T3::with_default_vfactor,
+    T3Config::with_default_vfactor,
     T3Config::with_default_vfactor,
     6,
     Float,
@@ -3405,7 +3411,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/recursive_overlap_workloads/MA_EMA",
     MA,
     MAConfig,
-    ma_ema_indicator,
+    ma_ema_config,
     ma_ema_config,
     1,
     Float,
@@ -3418,7 +3424,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/recursive_overlap/EMA",
     EMA,
     EMAConfig,
-    EMA::new,
+    EMAConfig::new,
     EMAConfig::new,
     1,
     Float,
@@ -3431,7 +3437,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/recursive_overlap/DEMA",
     DEMA,
     DEMAConfig,
-    DEMA::new,
+    DEMAConfig::new,
     DEMAConfig::new,
     2,
     Float,
@@ -3444,7 +3450,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/recursive_overlap/TEMA",
     TEMA,
     TEMAConfig,
-    TEMA::new,
+    TEMAConfig::new,
     TEMAConfig::new,
     3,
     Float,
@@ -3457,7 +3463,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/recursive_overlap/T3",
     T3,
     T3Config,
-    T3::with_default_vfactor,
+    T3Config::with_default_vfactor,
     T3Config::with_default_vfactor,
     6,
     Float,
@@ -3470,7 +3476,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/recursive_overlap/MA_EMA",
     MA,
     MAConfig,
-    ma_ema_indicator,
+    ma_ema_config,
     ma_ema_config,
     1,
     Float,
@@ -3484,7 +3490,7 @@ define_single_output_benchmark!(
     "indicator_execution/expanded/price_transform/AVGDEV",
     AVGDEV,
     AVGDEVConfig,
-    AVGDEV::new,
+    AVGDEVConfig::new,
     AVGDEVConfig::new,
     1,
     Float,
@@ -3497,7 +3503,7 @@ define_single_output_workloads!(
     "indicator_execution/expanded/price_transform_workloads/AVGDEV",
     AVGDEV,
     AVGDEVConfig,
-    AVGDEV::new,
+    AVGDEVConfig::new,
     AVGDEVConfig::new,
     1,
     Float,
@@ -3519,7 +3525,6 @@ macro_rules! define_hlc_parameter_sweep {
             let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
 
             for &period in SWEEP_PERIODS {
-                let indicator = $indicator::new(period).expect("valid volatility sweep period");
                 let config = $config::new(period).expect("valid volatility sweep period");
                 let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
                     .expect("valid volatility sweep capacity");
@@ -3530,8 +3535,8 @@ macro_rules! define_hlc_parameter_sweep {
                     &period,
                     |b, _| {
                         b.iter(|| {
-                            let range = Indicator::compute(
-                                black_box(&indicator),
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&config),
                                 black_box($input {
                                     high: ohlc.high.as_slice(),
                                     low: ohlc.low.as_slice(),
@@ -3608,12 +3613,6 @@ macro_rules! define_paired_statistic_parameter_sweep {
         fn $name(c: &mut Criterion) {
             let mut group = c.benchmark_group($group_name);
             let fixture = paired_fixture(REPEATED_SERIES_LEN);
-            let indicators = SWEEP_PERIODS
-                .iter()
-                .map(|&period| {
-                    $indicator::new(period).expect("valid paired-statistic sweep period")
-                })
-                .collect::<Vec<_>>();
             let configs = SWEEP_PERIODS
                 .iter()
                 .map(|&period| $config::new(period).expect("valid paired-statistic sweep period"))
@@ -3632,9 +3631,9 @@ macro_rules! define_paired_statistic_parameter_sweep {
 
             group.bench_function("current_caller_compact", |b| {
                 b.iter(|| {
-                    for indicator in &indicators {
-                        let range = Indicator::compute(
-                            black_box(indicator),
+                    for config in &configs {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(config),
                             PairInput {
                                 real0: black_box(fixture.real0.as_slice()),
                                 real1: black_box(fixture.real1.as_slice()),
@@ -3706,7 +3705,6 @@ fn bench_adosc_parameter_sweep(c: &mut Criterion) {
         let fastperiod = core::cmp::max(1, slowperiod / 2);
         let config =
             ADOSCConfig::new(fastperiod, slowperiod).expect("valid ADOSC sweep parameters");
-        let indicator = ADOSC::new(fastperiod, slowperiod).expect("valid ADOSC sweep parameters");
         let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
             .expect("valid ADOSC sweep capacity");
         group.throughput(Throughput::Elements(REPEATED_SERIES_LEN as u64));
@@ -3716,8 +3714,8 @@ fn bench_adosc_parameter_sweep(c: &mut Criterion) {
             &slowperiod,
             |b, _| {
                 b.iter(|| {
-                    let range = Indicator::compute(
-                        black_box(&indicator),
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
                         black_box(ADOSCInput {
                             high: ohlc.high.as_slice(),
                             low: ohlc.low.as_slice(),
@@ -3782,7 +3780,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/price_transform_workloads/AVGPRICE",
     AVGPRICE,
     AVGPRICEConfig,
-    AVGPRICE::new,
+    AVGPRICEConfig::new,
     AVGPRICEConfig::new,
     ohlc_fixture,
     AVGPRICEInput,
@@ -3796,7 +3794,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/price_transform_workloads/MEDPRICE",
     MEDPRICE,
     MEDPRICEConfig,
-    MEDPRICE::new,
+    MEDPRICEConfig::new,
     MEDPRICEConfig::new,
     ohlc_fixture,
     MEDPRICEInput,
@@ -3810,7 +3808,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/price_transform_workloads/TYPPRICE",
     TYPPRICE,
     TYPPRICEConfig,
-    TYPPRICE::new,
+    TYPPRICEConfig::new,
     TYPPRICEConfig::new,
     ohlc_fixture,
     TYPPRICEInput,
@@ -3824,7 +3822,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/price_transform_workloads/WCLPRICE",
     WCLPRICE,
     WCLPRICEConfig,
-    WCLPRICE::new,
+    WCLPRICEConfig::new,
     WCLPRICEConfig::new,
     ohlc_fixture,
     WCLPRICEInput,
@@ -3839,7 +3837,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/volume_workloads/AD",
     AD,
     ADConfig,
-    AD::new,
+    ADConfig::new,
     ADConfig::new,
     ohlc_fixture,
     ADInput,
@@ -3853,7 +3851,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/volume_workloads/ADOSC",
     ADOSC,
     ADOSCConfig,
-    || ADOSC::new(PERIOD / 2, PERIOD),
+    || ADOSCConfig::new(PERIOD / 2, PERIOD).expect("valid ADOSC parameters"),
     || ADOSCConfig::new(PERIOD / 2, PERIOD).expect("valid ADOSC parameters"),
     ohlc_fixture,
     ADOSCInput,
@@ -3867,7 +3865,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/volume_workloads/OBV",
     OBV,
     OBVConfig,
-    OBV::new,
+    OBVConfig::new,
     OBVConfig::new,
     ohlc_fixture,
     OBVInput,
@@ -3882,7 +3880,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/volatility_workloads/TRANGE",
     TRANGE,
     TRANGEConfig,
-    TRANGE::new,
+    TRANGEConfig::new,
     TRANGEConfig::new,
     ohlc_fixture,
     TRANGEInput,
@@ -3896,7 +3894,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/volatility_workloads/ATR",
     ATR,
     ATRConfig,
-    || ATR::new(PERIOD),
+    || ATRConfig::new(PERIOD).expect("valid ATR period"),
     || ATRConfig::new(PERIOD).expect("valid ATR period"),
     ohlc_fixture,
     ATRInput,
@@ -3910,7 +3908,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/volatility_workloads/NATR",
     NATR,
     NATRConfig,
-    || NATR::new(PERIOD),
+    || NATRConfig::new(PERIOD).expect("valid NATR period"),
     || NATRConfig::new(PERIOD).expect("valid NATR period"),
     ohlc_fixture,
     NATRInput,
@@ -3924,7 +3922,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/rolling_statistics_workloads/CORREL",
     CORREL,
     CORRELConfig,
-    || CORREL::new(PERIOD),
+    || CORRELConfig::new(PERIOD).expect("valid CORREL period"),
     || CORRELConfig::new(PERIOD).expect("valid CORREL period"),
     paired_fixture,
     PairInput,
@@ -3938,7 +3936,7 @@ define_named_input_benchmarks!(
     "indicator_execution/expanded/rolling_statistics_workloads/BETA",
     BETA,
     BETAConfig,
-    || BETA::new(PERIOD),
+    || BETAConfig::new(PERIOD).expect("valid BETA period"),
     || BETAConfig::new(PERIOD).expect("valid BETA period"),
     paired_fixture,
     PairInput,

@@ -1,12 +1,10 @@
 //! Weighted Moving Average (WMA).
 //!
-//! Valid batch outputs are written compactly. Padded wrappers preserve input
-//! length and fill warm-up positions with `Float::NAN`.
+//! Valid batch outputs are written compactly.
 
 use crate::{
-    compact_buffer, padded_from_compact, period_lookback, validate_finite_slice,
-    validate_input_len, validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig,
-    OutputRange, PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator,
+    period_lookback, validate_finite_slice, validate_input_len, validate_output_len, CompactOutput,
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation,
     TalibError,
 };
 
@@ -65,18 +63,6 @@ pub fn WMA(real: &[Float], timeperiod: usize, out_real: &mut [Float]) -> Result<
     let (lookback, count) = validate_wma_input(real, timeperiod)?;
     validate_output_len("WMA", out_real.len(), count)?;
     Ok(wma_kernel(real, timeperiod, lookback, count, out_real))
-}
-
-/// Computes WMA into a full-length vector padded with `Float::NAN` before the lookback.
-#[allow(non_snake_case)]
-pub fn WMA_vec(real: &[Float], timeperiod: usize) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(real.len());
-    let range = WMA(real, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        real.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
 }
 
 /// Immutable Weighted Moving Average Indicator Configuration.
@@ -202,11 +188,6 @@ impl WMAStream {
             count: 0,
         })
     }
-
-    #[inline]
-    const fn period(&self) -> usize {
-        self.period
-    }
 }
 
 impl crate::traits::sealed::Sealed for WMAStream {}
@@ -241,88 +222,5 @@ impl StreamingComputation<WMAConfig> for WMAStream {
         self.buffer.fill(0.0 as Float);
         self.index = 0;
         self.count = 0;
-    }
-}
-
-/// Legacy Weighted Moving Average indicator.
-///
-/// This compatibility adapter keeps the historical combined batch/streaming
-/// signatures while storing only its [`WMAStream`] execution state.
-#[derive(Debug, Clone)]
-pub struct WMA {
-    stream: WMAStream,
-}
-
-impl WMA {
-    /// Creates a new legacy WMA indicator.
-    pub fn new(timeperiod: usize) -> Result<Self> {
-        let config = WMAConfig::new(timeperiod)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { stream })
-    }
-
-    /// Returns the configured period.
-    #[inline]
-    pub const fn period(&self) -> usize {
-        self.stream.period()
-    }
-
-    /// Computes compact WMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute(&self, real: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
-        WMA(real, self.period(), out_real)
-    }
-
-    /// Computes full-length padded WMA outputs using this indicator's period.
-    #[inline]
-    pub fn compute_to_vec(&self, real: &[Float]) -> Result<Vec<Float>> {
-        WMA_vec(real, self.period())
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: Float) -> Result<Float> {
-        Ok(StreamingIndicator::next(self, input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for WMA {
-    type Input<'a> = &'a [Float];
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    #[inline]
-    fn lookback(&self) -> usize {
-        self.period() - 1
-    }
-
-    #[inline]
-    fn compute<'a>(
-        &self,
-        inputs: Self::Input<'a>,
-        outputs: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        WMA(inputs, self.period(), outputs)
-    }
-
-    #[inline]
-    fn compute_to_vec<'a>(&self, inputs: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        WMA_vec(inputs, self.period())
-    }
-}
-
-impl StreamingIndicator for WMA {
-    type Tick = Float;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Float) -> Result<Option<Float>> {
-        StreamingComputation::<WMAConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for WMA {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<WMAConfig>::reset(&mut self.stream);
     }
 }

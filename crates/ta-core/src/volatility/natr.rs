@@ -1,9 +1,8 @@
 //! Normalized Average True Range (NATR).
 
 use crate::{
-    compact_buffer, padded_from_compact, validate_finite_slices, validate_input_len,
-    validate_output_len, CompactOutput, Float, Indicator, IndicatorConfig, OutputRange,
-    PreparedBatchRunner, Resettable, Result, StreamingComputation, StreamingIndicator, TalibError,
+    validate_finite_slices, validate_input_len, validate_output_len, CompactOutput, Float,
+    IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
 };
 
 #[cfg(not(feature = "std"))]
@@ -113,22 +112,6 @@ pub fn NATR(
     Ok(natr_kernel(input, timeperiod, lookback, count, out_real))
 }
 
-/// Computes Normalized Average True Range into a full-length vector.
-#[allow(non_snake_case)]
-pub fn NATR_vec(
-    high: &[Float],
-    low: &[Float],
-    close: &[Float],
-    timeperiod: usize,
-) -> Result<Vec<Float>> {
-    let mut compact = compact_buffer::<Float>(high.len());
-    let range = NATR(high, low, close, timeperiod, &mut compact)?;
-    Ok(padded_from_compact(
-        high.len(),
-        range,
-        &compact[..range.nb_element],
-    ))
-}
 /// Immutable Normalized Average True Range Indicator Configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NATRConfig {
@@ -291,103 +274,5 @@ impl StreamingComputation<NATRConfig> for NATRStream {
         self.count = 0;
         self.true_range_sum = 0.0 as Float;
         self.value = 0.0 as Float;
-    }
-}
-
-/// Normalized Average True Range compatibility adapter.
-#[derive(Debug, Clone)]
-pub struct NATR {
-    config: NATRConfig,
-    stream: NATRStream,
-}
-
-impl NATR {
-    /// Creates a new Normalized Average True Range indicator.
-    pub fn new(timeperiod: usize) -> Result<Self> {
-        let config = NATRConfig::new(timeperiod)?;
-        let stream = IndicatorConfig::stream(&config)?;
-        Ok(Self { config, stream })
-    }
-
-    /// Returns the configured period.
-    #[inline]
-    pub const fn period(&self) -> usize {
-        self.config.period()
-    }
-
-    /// Computes compact NATR outputs using this indicator's period.
-    #[inline]
-    pub fn compute(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-        out_real: &mut [Float],
-    ) -> Result<OutputRange> {
-        NATR(high, low, close, self.config.period, out_real)
-    }
-
-    /// Computes full-length padded NATR outputs using this indicator's period.
-    #[inline]
-    pub fn compute_to_vec(
-        &self,
-        high: &[Float],
-        low: &[Float],
-        close: &[Float],
-    ) -> Result<Vec<Float>> {
-        NATR_vec(high, low, close, self.config.period)
-    }
-
-    /// Checked streaming update that returns `Float::NAN` during warm-up.
-    pub fn next_checked(&mut self, input: NATRTick) -> Result<Float> {
-        Ok(self.next(input)?.unwrap_or(Float::NAN))
-    }
-}
-
-impl Indicator for NATR {
-    type Input<'a> = NATRInput<'a>;
-    type OutputMut<'a> = &'a mut [Float];
-    type OutputOwned = Vec<Float>;
-
-    #[inline]
-    fn lookback(&self) -> usize {
-        self.config.period
-    }
-
-    #[inline]
-    fn compute<'a>(
-        &self,
-        input: Self::Input<'a>,
-        output: Self::OutputMut<'a>,
-    ) -> Result<OutputRange> {
-        NATR(
-            input.high,
-            input.low,
-            input.close,
-            self.config.period,
-            output,
-        )
-    }
-
-    #[inline]
-    fn compute_to_vec<'a>(&self, input: Self::Input<'a>) -> Result<Self::OutputOwned> {
-        NATR_vec(input.high, input.low, input.close, self.config.period)
-    }
-}
-
-impl StreamingIndicator for NATR {
-    type Tick = NATRTick;
-    type TickOutput = Float;
-
-    #[inline]
-    fn next(&mut self, input: Self::Tick) -> Result<Option<Self::TickOutput>> {
-        StreamingComputation::<NATRConfig>::next(&mut self.stream, input)
-    }
-}
-
-impl Resettable for NATR {
-    #[inline]
-    fn reset(&mut self) {
-        StreamingComputation::<NATRConfig>::reset(&mut self.stream);
     }
 }

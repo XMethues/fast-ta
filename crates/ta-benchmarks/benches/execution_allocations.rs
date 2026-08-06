@@ -1,4 +1,4 @@
-//! Isolated allocation baselines for legacy and Rust-first Indicator execution.
+//! Isolated allocation baselines for Rust-first Indicator execution.
 //!
 //! Run with `cargo bench -p ta-benchmarks --bench execution_allocations`.
 //! Output is TSV so it can be copied into `EXECUTION_BASELINES.md`. Peak bytes
@@ -20,38 +20,40 @@ use support::{
 use ta_core::{
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
-        MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXOutputMut,
-        MINMAXINDEXValuesMut, MINMAXOutputMut, MINMAXValuesMut, MULTConfig, SUBConfig, SUMConfig,
-        MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX,
+        MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXValuesMut, MINMAXValuesMut,
+        MULTConfig, SUBConfig, SUMConfig, ADD, DIV, MAX, MAXINDEX, MIN, MININDEX, MINMAX,
+        MINMAXINDEX, MULT, SUB, SUM,
     },
     math_transform::{
         ACOSConfig, ASINConfig, ATANConfig, CEILConfig, COSConfig, COSHConfig, EXPConfig,
         FLOORConfig, LNConfig, LOG10Config, SINConfig, SINHConfig, SQRTConfig, TANConfig,
-        TANHConfig,
+        TANHConfig, ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN,
+        TANH,
     },
     overlap::{
         DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
-        WMAConfig, SMA,
+        WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
     },
     price_transform::{
         AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
-        WCLPRICETick, AVGPRICE,
+        WCLPRICETick, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
     },
     statistic::{
         BETAConfig, CORRELConfig, LINEARREGConfig, LINEARREG_ANGLEConfig,
         LINEARREG_INTERCEPTConfig, LINEARREG_SLOPEConfig, PairInput, PairTick, STDDEVConfig,
-        TSFConfig, VARConfig,
+        TSFConfig, VARConfig, BETA, CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT,
+        LINEARREG_SLOPE, STDDEV, TSF, VAR,
     },
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
-        TRANGETick,
+        TRANGETick, ATR, NATR, TRANGE,
     },
     volume::{
-        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
+        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
+        OBVTick, AD, ADOSC, OBV,
     },
-    Float, Indicator, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
-    StreamingIndicator,
+    Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
 };
 
 const REPEATED_MINMAX_CALLS: usize = 8;
@@ -211,34 +213,28 @@ fn profile_setup() {
     let profile = print_profile(&scenario, || SMAConfig::new(PERIOD).expect("valid period"));
     assert_zero_allocations(&scenario, profile);
 
-    print_profile(&format!("setup/SMA_instance/period_{PERIOD}"), || {
-        SMA::new(PERIOD).expect("valid period")
-    });
-
-    print_profile(&format!("setup/per_worker_SMA_instances/{WORKERS}"), || {
+    print_profile(&format!("setup/SMAConfig/per_worker/{WORKERS}"), || {
         (0..WORKERS)
-            .map(|_| SMA::new(PERIOD).expect("valid period"))
+            .map(|_| SMAConfig::new(PERIOD).expect("valid period"))
             .collect::<Vec<_>>()
     });
 
     print_profile(
-        &format!(
-            "setup/parameter_sweep_SMA_instances/{}",
-            SWEEP_PERIODS.len()
-        ),
+        &format!("setup/SMAConfig/parameter_sweep/{}", SWEEP_PERIODS.len()),
         || {
             SWEEP_PERIODS
                 .iter()
-                .map(|&period| SMA::new(period).expect("valid period"))
+                .map(|&period| SMAConfig::new(period).expect("valid period"))
                 .collect::<Vec<_>>()
         },
     );
 
     print_profile(
-        &format!("setup/streaming_SMA_instances/{STREAM_INSTRUMENTS}"),
+        &format!("setup/SMAConfig/streaming/{STREAM_INSTRUMENTS}"),
         || {
+            let config = SMAConfig::new(PERIOD).expect("valid period");
             (0..STREAM_INSTRUMENTS)
-                .map(|_| SMA::new(PERIOD).expect("valid period"))
+                .map(|_| IndicatorConfig::stream(&config).expect("valid period"))
                 .collect::<Vec<_>>()
         },
     );
@@ -271,21 +267,7 @@ fn profile_one_shot() {
         compact_bytes,
     );
 
-    let sma = SMA::new(PERIOD).expect("valid period");
-    let mut sma_output = vec![0.0 as Float; output_len(PROFILE_SIZE, PERIOD)];
-    print_profile(
-        &format!("one_shot/SMA/caller_compact/{PROFILE_SIZE}"),
-        || {
-            Indicator::compute(&sma, input.as_slice(), sma_output.as_mut_slice())
-                .expect("valid SMA fixture")
-        },
-    );
-    print_profile(
-        &format!("one_shot/SMA/owned_legacy_aligned/{PROFILE_SIZE}"),
-        || Indicator::compute_to_vec(&sma, input.as_slice()).expect("valid SMA fixture"),
-    );
-
-    let avgprice = AVGPRICE::new().expect("valid AVGPRICE configuration");
+    let avgprice_config = AVGPRICEConfig::new();
     let avgprice_input = AVGPRICEInput {
         open: ohlc.open.as_slice(),
         high: ohlc.high.as_slice(),
@@ -294,28 +276,28 @@ fn profile_one_shot() {
     };
     let mut avgprice_output = vec![0.0 as Float; PROFILE_SIZE];
     print_profile(
-        &format!("one_shot/AVGPRICE/caller_compact/{PROFILE_SIZE}"),
+        &format!("one_shot/AVGPRICEConfig/caller_compact/{PROFILE_SIZE}"),
         || {
-            Indicator::compute(&avgprice, avgprice_input, avgprice_output.as_mut_slice())
-                .expect("valid AVGPRICE fixture")
+            IndicatorConfig::compute_into(
+                &avgprice_config,
+                avgprice_input,
+                avgprice_output.as_mut_slice(),
+            )
+            .expect("valid AVGPRICE fixture")
         },
     );
-    print_profile(
-        &format!("one_shot/AVGPRICE/owned_legacy_aligned/{PROFILE_SIZE}"),
-        || Indicator::compute_to_vec(&avgprice, avgprice_input).expect("valid AVGPRICE fixture"),
-    );
 
-    let minmax = MINMAX::new(PERIOD).expect("valid period");
+    let minmax_config = MINMAXConfig::new(PERIOD).expect("valid period");
     let output_len = output_len(PROFILE_SIZE, PERIOD);
     let mut min = vec![0.0 as Float; output_len];
     let mut max = vec![0.0 as Float; output_len];
     print_profile(
-        &format!("one_shot/MINMAX/caller_compact/{PROFILE_SIZE}"),
+        &format!("one_shot/MINMAXConfig/caller_compact/{PROFILE_SIZE}"),
         || {
-            Indicator::compute(
-                &minmax,
+            IndicatorConfig::compute_into(
+                &minmax_config,
                 input.as_slice(),
-                MINMAXOutputMut {
+                MINMAXValuesMut {
                     min: min.as_mut_slice(),
                     max: max.as_mut_slice(),
                 },
@@ -323,33 +305,22 @@ fn profile_one_shot() {
             .expect("valid MINMAX fixture")
         },
     );
-    print_profile(
-        &format!("one_shot/MINMAX/owned_legacy_aligned/{PROFILE_SIZE}"),
-        || Indicator::compute_to_vec(&minmax, input.as_slice()).expect("valid MINMAX fixture"),
-    );
 
-    let minmaxindex = MINMAXINDEX::new(PERIOD).expect("valid period");
-    let mut min_idx = vec![0_i32; output_len];
-    let mut max_idx = vec![0_i32; output_len];
+    let minmaxindex_config = MINMAXINDEXConfig::new(PERIOD).expect("valid period");
+    let mut min_idx = vec![0_usize; output_len];
+    let mut max_idx = vec![0_usize; output_len];
     print_profile(
-        &format!("one_shot/MINMAXINDEX/caller_compact/{PROFILE_SIZE}"),
+        &format!("one_shot/MINMAXINDEXConfig/caller_compact/{PROFILE_SIZE}"),
         || {
-            Indicator::compute(
-                &minmaxindex,
+            IndicatorConfig::compute_into(
+                &minmaxindex_config,
                 input.as_slice(),
-                MINMAXINDEXOutputMut {
+                MINMAXINDEXValuesMut {
                     min_idx: min_idx.as_mut_slice(),
                     max_idx: max_idx.as_mut_slice(),
                 },
             )
             .expect("valid MINMAXINDEX fixture")
-        },
-    );
-    print_profile(
-        &format!("one_shot/MINMAXINDEX/owned_legacy_aligned/{PROFILE_SIZE}"),
-        || {
-            Indicator::compute_to_vec(&minmaxindex, input.as_slice())
-                .expect("valid MINMAXINDEX fixture")
         },
     );
 }
@@ -623,39 +594,7 @@ fn profile_single_extrema_execution() {
 
     let mut values = vec![0.0 as Float; count];
     let mut indexes = vec![0_usize; count];
-    let min = MIN::new(PERIOD).expect("valid period");
-    let max = MAX::new(PERIOD).expect("valid period");
-    let min_index = MININDEX::new(PERIOD).expect("valid period");
-    let max_index = MAXINDEX::new(PERIOD).expect("valid period");
-    let mut legacy_indexes = vec![0_i32; count];
 
-    let scenario = format!("one_shot/MIN/current_caller_compact/{PROFILE_SIZE}");
-    let profile = print_profile(&scenario, || {
-        Indicator::compute(&min, input.as_slice(), values.as_mut_slice())
-            .expect("valid MIN fixture")
-    });
-    assert_profile(&scenario, profile, 1, scratch_bytes, scratch_bytes, 0);
-
-    let scenario = format!("one_shot/MAX/current_caller_compact/{PROFILE_SIZE}");
-    let profile = print_profile(&scenario, || {
-        Indicator::compute(&max, input.as_slice(), values.as_mut_slice())
-            .expect("valid MAX fixture")
-    });
-    assert_profile(&scenario, profile, 1, scratch_bytes, scratch_bytes, 0);
-
-    let scenario = format!("one_shot/MININDEX/current_caller_compact/{PROFILE_SIZE}");
-    let profile = print_profile(&scenario, || {
-        Indicator::compute(&min_index, input.as_slice(), legacy_indexes.as_mut_slice())
-            .expect("valid MININDEX fixture")
-    });
-    assert_profile(&scenario, profile, 1, scratch_bytes, scratch_bytes, 0);
-
-    let scenario = format!("one_shot/MAXINDEX/current_caller_compact/{PROFILE_SIZE}");
-    let profile = print_profile(&scenario, || {
-        Indicator::compute(&max_index, input.as_slice(), legacy_indexes.as_mut_slice())
-            .expect("valid MAXINDEX fixture")
-    });
-    assert_profile(&scenario, profile, 1, scratch_bytes, scratch_bytes, 0);
     let scenario = format!("one_shot/MINConfig/caller_compact/{PROFILE_SIZE}");
     let profile = print_profile(&scenario, || {
         IndicatorConfig::compute_into(&min_config, input.as_slice(), values.as_mut_slice())
@@ -1922,7 +1861,7 @@ fn profile_repeated_workloads() {
     let universe = (0..UNIVERSE_INSTRUMENTS)
         .map(|seed| series_fixture(PROFILE_SIZE, seed))
         .collect::<Vec<_>>();
-    let sma = SMA::new(PERIOD).expect("valid period");
+    let sma_config = SMAConfig::new(PERIOD).expect("valid period");
     let mut universe_output = vec![0.0 as Float; output_len(PROFILE_SIZE, PERIOD)];
     print_profile(
         &format!("repeated/universe_SMA/caller_compact/{UNIVERSE_INSTRUMENTS}x{PROFILE_SIZE}"),
@@ -1930,8 +1869,12 @@ fn profile_repeated_workloads() {
             let mut last_range = None;
             for series in &universe {
                 last_range = Some(
-                    Indicator::compute(&sma, series.as_slice(), universe_output.as_mut_slice())
-                        .expect("valid Universe fixture"),
+                    IndicatorConfig::compute_into(
+                        &sma_config,
+                        series.as_slice(),
+                        universe_output.as_mut_slice(),
+                    )
+                    .expect("valid Universe fixture"),
                 );
                 black_box(universe_output.as_slice());
             }
@@ -1942,7 +1885,7 @@ fn profile_repeated_workloads() {
     let sweep_input = series_fixture(PROFILE_SIZE, 0);
     let sweep = SWEEP_PERIODS
         .iter()
-        .map(|&period| SMA::new(period).expect("valid period"))
+        .map(|&period| SMAConfig::new(period).expect("valid period"))
         .collect::<Vec<_>>();
     let mut sweep_output = vec![0.0 as Float; PROFILE_SIZE];
     print_profile(
@@ -1952,10 +1895,10 @@ fn profile_repeated_workloads() {
         ),
         || {
             let mut last_range = None;
-            for indicator in &sweep {
+            for config in &sweep {
                 last_range = Some(
-                    Indicator::compute(
-                        indicator,
+                    IndicatorConfig::compute_into(
+                        config,
                         sweep_input.as_slice(),
                         sweep_output.as_mut_slice(),
                     )
@@ -1967,8 +1910,8 @@ fn profile_repeated_workloads() {
         },
     );
 
-    let workers = (0..WORKERS)
-        .map(|_| SMA::new(PERIOD).expect("valid period"))
+    let worker_configs = (0..WORKERS)
+        .map(|_| SMAConfig::new(PERIOD).expect("valid period"))
         .collect::<Vec<_>>();
     let worker_inputs = (0..WORKERS)
         .map(|seed| series_fixture(PROFILE_SIZE, seed))
@@ -1980,13 +1923,13 @@ fn profile_repeated_workloads() {
         &format!("repeated/no_prepared_runner/per_worker_instances/{WORKERS}x{PROFILE_SIZE}"),
         || {
             let mut last_range = None;
-            for ((indicator, input), output) in workers
+            for ((config, input), output) in worker_configs
                 .iter()
                 .zip(worker_inputs.iter())
                 .zip(worker_outputs.iter_mut())
             {
                 last_range = Some(
-                    Indicator::compute(indicator, input.as_slice(), output.as_mut_slice())
+                    IndicatorConfig::compute_into(config, input.as_slice(), output.as_mut_slice())
                         .expect("valid per-worker fixture"),
                 );
                 black_box(output.as_slice());
@@ -1995,7 +1938,7 @@ fn profile_repeated_workloads() {
         },
     );
 
-    let minmax = MINMAX::new(PERIOD).expect("valid period");
+    let minmax_config = MINMAXConfig::new(PERIOD).expect("valid period");
     let minmax_input = series_fixture(PROFILE_SIZE, 0);
     let output_len = output_len(PROFILE_SIZE, PERIOD);
     let mut min = vec![0.0 as Float; output_len];
@@ -2006,10 +1949,10 @@ fn profile_repeated_workloads() {
             let mut last_range = None;
             for _ in 0..REPEATED_MINMAX_CALLS {
                 last_range = Some(
-                    Indicator::compute(
-                        &minmax,
+                    IndicatorConfig::compute_into(
+                        &minmax_config,
                         minmax_input.as_slice(),
-                        MINMAXOutputMut {
+                        MINMAXValuesMut {
                             min: min.as_mut_slice(),
                             max: max.as_mut_slice(),
                         },
@@ -2050,24 +1993,6 @@ fn profile_repeated_workloads() {
         last_output
     });
     assert_zero_allocations(&scenario, profile);
-
-    let mut streams = (0..STREAM_INSTRUMENTS)
-        .map(|_| SMA::new(PERIOD).expect("valid period"))
-        .collect::<Vec<_>>();
-    print_profile(
-        &format!("streaming/SMA/independent_instances/{STREAM_INSTRUMENTS}x{PROFILE_SIZE}"),
-        || {
-            let mut last_output = None;
-            for tick in &stream_inputs {
-                for (stream, &input) in streams.iter_mut().zip(tick.iter()) {
-                    last_output =
-                        StreamingIndicator::next(stream, input).expect("valid streaming fixture");
-                    black_box(last_output);
-                }
-            }
-            last_output
-        },
-    );
 }
 
 fn main() {
