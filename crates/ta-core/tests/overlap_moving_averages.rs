@@ -1,8 +1,8 @@
 use ta_core::overlap::{
-    DEMAConfig, EMAConfig, MAConfig, MAType, T3Config, T3_with_default_vfactor, TEMAConfig,
+    DEMAConfig, EMAConfig, MAConfig, PeriodMAType, T3Config, T3_with_default_vfactor, TEMAConfig,
     TRIMAConfig, WMAConfig, DEMA, EMA, MA, T3, T3_DEFAULT_VFACTOR, TEMA, TRIMA, WMA,
 };
-use ta_core::{Float, OutputRange, TalibError};
+use ta_core::{Float, OutputRange};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(
@@ -141,25 +141,25 @@ fn ma_dispatches_to_implemented_moving_averages() {
     let mut dispatched = [0.0; 8];
     let mut direct = [0.0; 8];
 
-    let cases: [MAType; 6] = [
-        MAType::SMA,
-        MAType::EMA,
-        MAType::WMA,
-        MAType::DEMA,
-        MAType::TEMA,
-        MAType::TRIMA,
+    let cases: [PeriodMAType; 6] = [
+        PeriodMAType::SMA,
+        PeriodMAType::EMA,
+        PeriodMAType::WMA,
+        PeriodMAType::DEMA,
+        PeriodMAType::TEMA,
+        PeriodMAType::TRIMA,
     ];
     for matype in cases {
         dispatched.fill(0.0);
         direct.fill(0.0);
         let dispatched_range = MA(&real, 3, matype, &mut dispatched).unwrap();
         let direct_range = match matype {
-            MAType::SMA => ta_core::overlap::SMA(&real, 3, &mut direct).unwrap(),
-            MAType::EMA => EMA(&real, 3, &mut direct).unwrap(),
-            MAType::WMA => WMA(&real, 3, &mut direct).unwrap(),
-            MAType::DEMA => DEMA(&real, 3, &mut direct).unwrap(),
-            MAType::TEMA => TEMA(&real, 3, &mut direct).unwrap(),
-            MAType::TRIMA => TRIMA(&real, 3, &mut direct).unwrap(),
+            PeriodMAType::SMA => ta_core::overlap::SMA(&real, 3, &mut direct).unwrap(),
+            PeriodMAType::EMA => EMA(&real, 3, &mut direct).unwrap(),
+            PeriodMAType::WMA => WMA(&real, 3, &mut direct).unwrap(),
+            PeriodMAType::DEMA => DEMA(&real, 3, &mut direct).unwrap(),
+            PeriodMAType::TEMA => TEMA(&real, 3, &mut direct).unwrap(),
+            PeriodMAType::TRIMA => TRIMA(&real, 3, &mut direct).unwrap(),
             _ => unreachable!("cases only contain implemented types"),
         };
         assert_eq!(dispatched_range, direct_range);
@@ -171,7 +171,7 @@ fn ma_dispatches_to_implemented_moving_averages() {
 
     dispatched.fill(0.0);
     direct.fill(0.0);
-    let t3_dispatched = MA(&real, 2, MAType::T3, &mut dispatched).unwrap();
+    let t3_dispatched = MA(&real, 2, PeriodMAType::T3, &mut dispatched).unwrap();
     let t3_direct = T3_with_default_vfactor(&real, 2, &mut direct).unwrap();
     assert_eq!(t3_dispatched, t3_direct);
     assert_eq!(
@@ -186,7 +186,7 @@ fn ma_function_writes_compact_outputs() {
     let mut ma_output = [0.0; 5];
     let mut ema_output = [0.0; 5];
 
-    let ma_range = MA(&real, 3, MAType::EMA, &mut ma_output).unwrap();
+    let ma_range = MA(&real, 3, PeriodMAType::EMA, &mut ma_output).unwrap();
     let ema_range = EMA(&real, 3, &mut ema_output).unwrap();
 
     assert_eq!(ma_range, ema_range);
@@ -195,13 +195,23 @@ fn ma_function_writes_compact_outputs() {
 }
 
 #[test]
-fn ma_rejects_unsupported_kama_and_mama_until_implemented() {
-    let real = [1.0, 2.0, 3.0, 4.0];
-    let mut output = [0.0; 4];
+fn every_selectable_moving_average_uses_its_period() {
+    let cases = [
+        PeriodMAType::SMA,
+        PeriodMAType::EMA,
+        PeriodMAType::WMA,
+        PeriodMAType::DEMA,
+        PeriodMAType::TEMA,
+        PeriodMAType::TRIMA,
+        PeriodMAType::T3,
+    ];
 
-    let kama_err = MA(&real, 3, MAType::KAMA, &mut output).unwrap_err();
-    assert!(matches!(kama_err, TalibError::NotImplemented { .. }));
-
-    let mama_err = MAConfig::new(3, MAType::MAMA).unwrap_err();
-    assert!(matches!(mama_err, TalibError::NotImplemented { .. }));
+    for ma_type in cases {
+        let short = MAConfig::new(2, ma_type).unwrap();
+        let long = MAConfig::new(3, ma_type).unwrap();
+        assert!(
+            ta_core::IndicatorConfig::lookback(&short) < ta_core::IndicatorConfig::lookback(&long),
+            "{ma_type:?} must apply its configured Period"
+        );
+    }
 }

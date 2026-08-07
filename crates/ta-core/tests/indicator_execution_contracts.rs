@@ -18,8 +18,8 @@ use ta_core::{
         TANHStream, TANStream,
     },
     overlap::{
-        DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
-        WMAConfig, T3_DEFAULT_VFACTOR,
+        DEMAConfig, EMAConfig, MAConfig, PeriodMAType, SMAConfig, T3Config, TEMAConfig,
+        TRIMAConfig, WMAConfig, T3_DEFAULT_VFACTOR,
     },
     price_transform::{
         AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
@@ -571,14 +571,14 @@ fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
         .collect::<Vec<_>>();
     assert_float_slice_close(&replayed_recursive, recursive_batch.values());
 
-    const SUPPORTED: [MAType; 7] = [
-        MAType::SMA,
-        MAType::EMA,
-        MAType::WMA,
-        MAType::DEMA,
-        MAType::TEMA,
-        MAType::TRIMA,
-        MAType::T3,
+    const SUPPORTED: [PeriodMAType; 7] = [
+        PeriodMAType::SMA,
+        PeriodMAType::EMA,
+        PeriodMAType::WMA,
+        PeriodMAType::DEMA,
+        PeriodMAType::TEMA,
+        PeriodMAType::TRIMA,
+        PeriodMAType::T3,
     ];
     for ma_type in SUPPORTED {
         let config = MAConfig::new(1, ma_type).unwrap();
@@ -602,22 +602,13 @@ fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
         assert_float_slice_close(&replayed, owned.values());
     }
 
-    let ema_dispatch = MAConfig::new(3, MAType::EMA).unwrap();
+    let ema_dispatch = MAConfig::new(3, PeriodMAType::EMA).unwrap();
     assert_eq!(IndicatorConfig::lookback(&ema_dispatch), 2);
     let mut ma_runner = IndicatorConfig::prepare_batch(&ema_dispatch, input.len()).unwrap();
     let mut ma_output = [FLOAT_SENTINEL; 3];
     PreparedBatchRunner::<MAConfig>::compute_into(&mut ma_runner, &input, &mut ma_output).unwrap();
     assert_float_slice_close(&ma_output[..2], &[2.0, 3.0]);
     assert_eq!(ma_output[2], FLOAT_SENTINEL);
-
-    assert!(matches!(
-        MAConfig::new(3, MAType::KAMA),
-        Err(TalibError::NotImplemented { .. })
-    ));
-    assert!(matches!(
-        MAConfig::new(3, MAType::MAMA),
-        Err(TalibError::NotImplemented { .. })
-    ));
 }
 
 #[test]
@@ -627,7 +618,7 @@ fn recursive_configs_reject_non_finite_ema_intermediates() {
     let dema_config = DEMAConfig::new(2).unwrap();
     let tema_config = TEMAConfig::new(2).unwrap();
     let t3_config = T3Config::with_default_vfactor(2).unwrap();
-    let ma_config = MAConfig::new(2, MAType::T3).unwrap();
+    let ma_config = MAConfig::new(2, PeriodMAType::T3).unwrap();
 
     assert!(IndicatorConfig::compute_into(&dema_config, &input, &mut output).is_err());
     assert!(IndicatorConfig::compute_into(&tema_config, &input, &mut output).is_err());

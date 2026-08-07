@@ -6,13 +6,33 @@ use crate::{
 };
 
 #[cfg(not(feature = "std"))]
-use alloc::{format, vec::Vec};
+use alloc::vec::Vec;
 #[cfg(feature = "std")]
-use std::{format, vec::Vec};
+use std::vec::Vec;
 
-/// Official TA-Lib moving-average type selector.
+/// Supported Period-based Moving Average selector.
+///
+/// This selector is closed over implemented, single-output definitions.
+/// Definitions with different configuration or output shapes use their own
+/// Indicator Configurations instead.
+///
+/// `KAMA` is not selectable before its dedicated implementation exists:
+///
+/// ```compile_fail,E0599
+/// use ta_core::overlap::PeriodMAType;
+///
+/// let _ = PeriodMAType::KAMA;
+/// ```
+///
+/// `MAMA` is not Period-based and is never selectable here:
+///
+/// ```compile_fail,E0599
+/// use ta_core::overlap::PeriodMAType;
+///
+/// let _ = PeriodMAType::MAMA;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MAType {
+pub enum PeriodMAType {
     /// Simple Moving Average.
     SMA,
     /// Exponential Moving Average.
@@ -25,84 +45,44 @@ pub enum MAType {
     TEMA,
     /// Triangular Moving Average.
     TRIMA,
-    /// Kaufman Adaptive Moving Average (not implemented in this tranche).
-    KAMA,
-    /// MESA Adaptive Moving Average (not implemented in this tranche).
-    MAMA,
     /// T3 Moving Average.
     T3,
 }
 
-impl MAType {
-    /// Official TA-Lib integer id for this moving-average type.
-    pub const fn talib_id(self) -> usize {
-        match self {
-            Self::SMA => 0,
-            Self::EMA => 1,
-            Self::WMA => 2,
-            Self::DEMA => 3,
-            Self::TEMA => 4,
-            Self::TRIMA => 5,
-            Self::KAMA => 6,
-            Self::MAMA => 7,
-            Self::T3 => 8,
-        }
-    }
-
-    /// Stable display label used in error messages.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::SMA => "SMA",
-            Self::EMA => "EMA",
-            Self::WMA => "WMA",
-            Self::DEMA => "DEMA",
-            Self::TEMA => "TEMA",
-            Self::TRIMA => "TRIMA",
-            Self::KAMA => "KAMA",
-            Self::MAMA => "MAMA",
-            Self::T3 => "T3",
-        }
-    }
-}
-
-fn unsupported_ma_type(matype: MAType) -> TalibError {
-    TalibError::not_implemented(format!("MAType::{}", matype.as_str()))
-}
-
-fn ma_lookback(timeperiod: usize, matype: MAType) -> Result<usize> {
+fn ma_lookback(timeperiod: usize, matype: PeriodMAType) -> Result<usize> {
     let lookback = period_lookback("timeperiod", timeperiod)?;
     match matype {
-        MAType::SMA | MAType::EMA | MAType::WMA | MAType::TRIMA => Ok(lookback),
-        MAType::DEMA => lookback
+        PeriodMAType::SMA | PeriodMAType::EMA | PeriodMAType::WMA | PeriodMAType::TRIMA => {
+            Ok(lookback)
+        }
+        PeriodMAType::DEMA => lookback
             .checked_mul(2)
             .ok_or_else(|| TalibError::invalid_period(timeperiod, "DEMA lookback would overflow")),
-        MAType::TEMA => lookback
+        PeriodMAType::TEMA => lookback
             .checked_mul(3)
             .ok_or_else(|| TalibError::invalid_period(timeperiod, "TEMA lookback would overflow")),
-        MAType::T3 => lookback
+        PeriodMAType::T3 => lookback
             .checked_mul(6)
             .ok_or_else(|| TalibError::invalid_period(timeperiod, "T3 lookback would overflow")),
-        MAType::KAMA | MAType::MAMA => Err(unsupported_ma_type(matype)),
     }
 }
 
-/// TA-Lib-style generic Moving Average dispatcher.
+/// Period-based Moving Average dispatcher.
 #[allow(non_snake_case)]
 pub fn MA(
     real: &[Float],
     timeperiod: usize,
-    matype: MAType,
+    matype: PeriodMAType,
     out_real: &mut [Float],
 ) -> Result<OutputRange> {
     match matype {
-        MAType::SMA => super::sma::SMA(real, timeperiod, out_real),
-        MAType::EMA => super::ema::EMA(real, timeperiod, out_real),
-        MAType::WMA => super::wma::WMA(real, timeperiod, out_real),
-        MAType::DEMA => super::dema::DEMA(real, timeperiod, out_real),
-        MAType::TEMA => super::tema::TEMA(real, timeperiod, out_real),
-        MAType::TRIMA => super::trima::TRIMA(real, timeperiod, out_real),
-        MAType::KAMA | MAType::MAMA => Err(unsupported_ma_type(matype)),
-        MAType::T3 => super::t3::T3_with_default_vfactor(real, timeperiod, out_real),
+        PeriodMAType::SMA => super::sma::SMA(real, timeperiod, out_real),
+        PeriodMAType::EMA => super::ema::EMA(real, timeperiod, out_real),
+        PeriodMAType::WMA => super::wma::WMA(real, timeperiod, out_real),
+        PeriodMAType::DEMA => super::dema::DEMA(real, timeperiod, out_real),
+        PeriodMAType::TEMA => super::tema::TEMA(real, timeperiod, out_real),
+        PeriodMAType::TRIMA => super::trima::TRIMA(real, timeperiod, out_real),
+        PeriodMAType::T3 => super::t3::T3_with_default_vfactor(real, timeperiod, out_real),
     }
 }
 
@@ -110,13 +90,13 @@ pub fn MA(
 fn ma_kernel(
     real: &[Float],
     timeperiod: usize,
-    matype: MAType,
+    matype: PeriodMAType,
     lookback: usize,
     count: usize,
     out_real: &mut [Float],
 ) -> Result<OutputRange> {
     match matype {
-        MAType::SMA => {
+        PeriodMAType::SMA => {
             super::sma::sma_kernel(
                 real,
                 timeperiod,
@@ -130,18 +110,18 @@ fn ma_kernel(
                 Ok(OutputRange::new(lookback, count))
             }
         }
-        MAType::EMA => Ok(super::ema::ema_kernel(
+        PeriodMAType::EMA => Ok(super::ema::ema_kernel(
             real, timeperiod, lookback, count, out_real,
         )),
-        MAType::WMA => Ok(super::wma::wma_kernel(
+        PeriodMAType::WMA => Ok(super::wma::wma_kernel(
             real, timeperiod, lookback, count, out_real,
         )),
-        MAType::DEMA => super::dema::dema_kernel(real, timeperiod, lookback, count, out_real),
-        MAType::TEMA => super::tema::tema_kernel(real, timeperiod, lookback, count, out_real),
-        MAType::TRIMA => Ok(super::trima::trima_kernel(
+        PeriodMAType::DEMA => super::dema::dema_kernel(real, timeperiod, lookback, count, out_real),
+        PeriodMAType::TEMA => super::tema::tema_kernel(real, timeperiod, lookback, count, out_real),
+        PeriodMAType::TRIMA => Ok(super::trima::trima_kernel(
             real, timeperiod, lookback, count, out_real,
         )),
-        MAType::T3 => super::t3::t3_kernel(
+        PeriodMAType::T3 => super::t3::t3_kernel(
             real,
             timeperiod,
             super::t3::T3_DEFAULT_VFACTOR,
@@ -149,20 +129,19 @@ fn ma_kernel(
             count,
             out_real,
         ),
-        MAType::KAMA | MAType::MAMA => Err(unsupported_ma_type(matype)),
     }
 }
 
-/// Immutable generic Moving Average Indicator Configuration.
+/// Immutable Period-based Moving Average Indicator Configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MAConfig {
     period: usize,
-    matype: MAType,
+    matype: PeriodMAType,
 }
 
 impl MAConfig {
     /// Creates a configuration for the selected moving-average definition.
-    pub fn new(timeperiod: usize, matype: MAType) -> Result<Self> {
+    pub fn new(timeperiod: usize, matype: PeriodMAType) -> Result<Self> {
         ma_lookback(timeperiod, matype)?;
         Ok(Self {
             period: timeperiod,
@@ -178,7 +157,7 @@ impl MAConfig {
 
     /// Returns the configured moving-average type.
     #[inline]
-    pub const fn ma_type(&self) -> MAType {
+    pub const fn ma_type(&self) -> PeriodMAType {
         self.matype
     }
 }
@@ -286,35 +265,34 @@ enum MAStreamInner {
 impl MAStreamInner {
     fn new(config: MAConfig) -> Result<Self> {
         match config.matype {
-            MAType::SMA => {
+            PeriodMAType::SMA => {
                 let inner = super::sma::SMAConfig::new(config.period)?;
                 Ok(Self::SMA(IndicatorConfig::stream(&inner)?))
             }
-            MAType::EMA => {
+            PeriodMAType::EMA => {
                 let inner = super::ema::EMAConfig::new(config.period)?;
                 Ok(Self::EMA(IndicatorConfig::stream(&inner)?))
             }
-            MAType::WMA => {
+            PeriodMAType::WMA => {
                 let inner = super::wma::WMAConfig::new(config.period)?;
                 Ok(Self::WMA(IndicatorConfig::stream(&inner)?))
             }
-            MAType::DEMA => {
+            PeriodMAType::DEMA => {
                 let inner = super::dema::DEMAConfig::new(config.period)?;
                 Ok(Self::DEMA(IndicatorConfig::stream(&inner)?))
             }
-            MAType::TEMA => {
+            PeriodMAType::TEMA => {
                 let inner = super::tema::TEMAConfig::new(config.period)?;
                 Ok(Self::TEMA(IndicatorConfig::stream(&inner)?))
             }
-            MAType::TRIMA => {
+            PeriodMAType::TRIMA => {
                 let inner = super::trima::TRIMAConfig::new(config.period)?;
                 Ok(Self::TRIMA(IndicatorConfig::stream(&inner)?))
             }
-            MAType::T3 => {
+            PeriodMAType::T3 => {
                 let inner = super::t3::T3Config::with_default_vfactor(config.period)?;
                 Ok(Self::T3(IndicatorConfig::stream(&inner)?))
             }
-            MAType::KAMA | MAType::MAMA => Err(unsupported_ma_type(config.matype)),
         }
     }
 

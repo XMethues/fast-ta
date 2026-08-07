@@ -564,7 +564,7 @@ Allocation gates clear exactly: both caller-owned and prepared paths are allocat
 
 ## Issue #7 recursive overlap qualification
 
-Issue #7 adds parameter-only `EMAConfig`, `DEMAConfig`, `TEMAConfig`, `T3Config`, and `MAConfig` types with owned and caller-owned Compact Output, reusable Prepared Batch Runners, and independent Streaming Computations. Uppercase compatibility indicators retain the existing legacy batch, padded-owned, streaming, reset, and `MAType` dispatch behavior. The qualified `MA` benchmark uses `MAType::EMA`; the other supported dispatch kinds are covered by correctness tests.
+Issue #7 added parameter-only `EMAConfig`, `DEMAConfig`, `TEMAConfig`, `T3Config`, and `MAConfig` types with owned and caller-owned Compact Output, reusable Prepared Batch Runners, and independent Streaming Computations. Issue #18 cleanly replaces the former generic selector with `PeriodMAType`, which contains only implemented, single-output Period-based Moving Average definitions. Uppercase compatibility indicators retain their existing legacy batch, padded-owned, streaming, and reset behavior. The qualified `MA` benchmark uses `PeriodMAType::EMA`; the other supported dispatch kinds are covered by correctness tests.
 
 The benchmark command is `cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/recursive_overlap`. The valid matrix crosses observations 64/4,096/65,536 with periods 14/512. T3 omits 64/14 because its 78-observation lookback exceeds that input. Values below are Criterion median point estimates from the full 100-sample qualification run.
 

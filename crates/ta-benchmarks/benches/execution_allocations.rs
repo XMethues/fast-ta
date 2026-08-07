@@ -32,8 +32,8 @@ use ta_core::{
         TANH,
     },
     overlap::{
-        DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
-        WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
+        DEMAConfig, EMAConfig, MAConfig, PeriodMAType, SMAConfig, T3Config, TEMAConfig,
+        TRIMAConfig, WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
     },
     price_transform::{
         AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
@@ -992,7 +992,7 @@ fn profile_single_output_execution() {
     profile_single_output_indicator!(
         "MA_EMA",
         MAConfig,
-        MAConfig::new(PERIOD, MAType::EMA).expect("valid parameters"),
+        MAConfig::new(PERIOD, PeriodMAType::EMA).expect("valid parameters"),
         0,
         0
     );

@@ -28,8 +28,8 @@ use ta_core::{
         TANH,
     },
     overlap::{
-        DEMAConfig, EMAConfig, MAConfig, MAType, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
-        WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
+        DEMAConfig, EMAConfig, MAConfig, PeriodMAType, SMAConfig, T3Config, TEMAConfig,
+        TRIMAConfig, WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
     },
     price_transform::{
         AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
@@ -63,7 +63,7 @@ const EXECUTION_MATRIX: &[(usize, usize)] = &[
 ];
 
 fn ma_ema_config(period: usize) -> ta_core::Result<MAConfig> {
-    MAConfig::new(period, MAType::EMA)
+    MAConfig::new(period, PeriodMAType::EMA)
 }
 
 fn bench_sma_one_shot(c: &mut Criterion) {
