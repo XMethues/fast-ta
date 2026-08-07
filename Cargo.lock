@@ -971,7 +971,6 @@ version = "0.1.0"
 dependencies = [
  "aligned-vec",
  "criterion",
- "once_cell",
  "proptest",
  "quickcheck",
  "wide",

@@ -3,6 +3,10 @@
 //! This module defines the `TalibError` enum which represents all possible errors
 //! that can occur in the TA library operations. The error type implements the
 //! standard `Error` trait for proper error handling and propagation.
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
+#[cfg(feature = "std")]
+use std::string::String;
 
 /// Error type for TA library operations
 ///

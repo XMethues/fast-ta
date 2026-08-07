@@ -14,6 +14,7 @@ use support::{
     SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
 use ta_core::{
+    cycle::{HT_DCPERIODConfig, HT_DCPERIOD_LOOKBACK},
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
         MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXValuesMut, MINMAXValuesMut,
@@ -3944,9 +3945,170 @@ define_named_input_benchmarks!(
     [real0, real1]
 );
 
+fn bench_ht_dcperiod_execution(c: &mut Criterion) {
+    let config = HT_DCPERIODConfig::new();
+    let mut group = c.benchmark_group("indicator_execution/expanded/cycle/HT_DCPERIOD");
+
+    for &size in SIZES {
+        group.throughput(Throughput::Elements(size as u64));
+
+        group.bench_with_input(
+            BenchmarkId::new("one_shot/caller_compact", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                let mut output = vec![0.0 as Float; size.saturating_sub(HT_DCPERIOD_LOOKBACK)];
+                b.iter(|| {
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
+                        black_box(input.as_slice()),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid HT_DCPERIOD fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("one_shot/owned_compact", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                b.iter_batched(
+                    || (),
+                    |_| {
+                        black_box(
+                            IndicatorConfig::compute(
+                                black_box(&config),
+                                black_box(input.as_slice()),
+                            )
+                            .expect("valid HT_DCPERIOD fixture"),
+                        )
+                    },
+                    BatchSize::LargeInput,
+                );
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("one_shot/prepared_runner", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                let mut runner = IndicatorConfig::prepare_batch(&config, size)
+                    .expect("valid HT_DCPERIOD capacity");
+                let mut output = vec![0.0 as Float; size.saturating_sub(HT_DCPERIOD_LOOKBACK)];
+                b.iter(|| {
+                    let range = PreparedBatchRunner::<HT_DCPERIODConfig>::compute_into(
+                        black_box(&mut runner),
+                        black_box(input.as_slice()),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid prepared HT_DCPERIOD fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+    }
+
+    group.throughput(Throughput::Elements(
+        (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+    ));
+    group.bench_function("universe/config_caller_compact", |b| {
+        let universe = universe_fixtures();
+        let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN - HT_DCPERIOD_LOOKBACK];
+        b.iter(|| {
+            for input in &universe {
+                let range = IndicatorConfig::compute_into(
+                    black_box(&config),
+                    black_box(input.as_slice()),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid HT_DCPERIOD Universe");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+    group.bench_function("universe/prepared_runner", |b| {
+        let universe = universe_fixtures();
+        let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+            .expect("valid HT_DCPERIOD capacity");
+        let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN - HT_DCPERIOD_LOOKBACK];
+        b.iter(|| {
+            for input in &universe {
+                let range = PreparedBatchRunner::<HT_DCPERIODConfig>::compute_into(
+                    black_box(&mut runner),
+                    black_box(input.as_slice()),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid prepared HT_DCPERIOD Universe");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+
+    group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+    group.bench_function("per_worker/prepared_runners", |b| {
+        let inputs = worker_fixtures();
+        let mut runners = (0..WORKERS)
+            .map(|_| {
+                IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                    .expect("valid HT_DCPERIOD capacity")
+            })
+            .collect::<Vec<_>>();
+        let mut outputs = (0..WORKERS)
+            .map(|_| vec![0.0 as Float; REPEATED_SERIES_LEN - HT_DCPERIOD_LOOKBACK])
+            .collect::<Vec<_>>();
+        b.iter(|| {
+            for ((runner, input), output) in runners
+                .iter_mut()
+                .zip(inputs.iter())
+                .zip(outputs.iter_mut())
+            {
+                let range = PreparedBatchRunner::<HT_DCPERIODConfig>::compute_into(
+                    black_box(runner),
+                    black_box(input.as_slice()),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid per-worker HT_DCPERIOD fixture");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+
+    let inputs = stream_inputs();
+    group.throughput(Throughput::Elements(
+        (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+    ));
+    group.bench_function("streaming/config_streams", |b| {
+        b.iter_batched_ref(
+            || {
+                (0..STREAM_INSTRUMENTS)
+                    .map(|_| IndicatorConfig::stream(&config).expect("valid HT_DCPERIOD stream"))
+                    .collect::<Vec<_>>()
+            },
+            |streams| {
+                for_each_stream_sample!(streams, &inputs, |stream, input| {
+                    let output = StreamingComputation::<HT_DCPERIODConfig>::next(
+                        black_box(stream),
+                        black_box(input),
+                    )
+                    .expect("valid HT_DCPERIOD stream tick");
+                    black_box(output);
+                });
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_sma_one_shot,
+    bench_ht_dcperiod_execution,
     bench_avgprice_one_shot,
     bench_minmax_one_shot,
     bench_minmaxindex_one_shot,

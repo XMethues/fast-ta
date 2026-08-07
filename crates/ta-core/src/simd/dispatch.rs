@@ -9,8 +9,6 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(not(feature = "std"))]
-use once_cell::sync::OnceCell as OnceLock;
 #[cfg(feature = "std")]
 use std::sync::OnceLock;
 
@@ -21,11 +19,11 @@ use crate::types::Float;
 #[allow(unused_imports)]
 use super::arch::x86_64;
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(feature = "std", target_arch = "aarch64"))]
 #[allow(unused_imports)]
 use super::arch::aarch64;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(feature = "std", target_arch = "wasm32"))]
 #[allow(unused_imports)]
 use super::arch::wasm32;
 
@@ -74,7 +72,10 @@ impl DispatchTable {
 ///
 /// This `OnceLock` ensures thread-safe one-time initialization of the dispatch table.
 /// After initialization, accessing the dispatch table is as fast as a global variable.
+#[cfg(feature = "std")]
 static DISPATCH: OnceLock<DispatchTable> = OnceLock::new();
+#[cfg(not(feature = "std"))]
+static DISPATCH_SCALAR: DispatchTable = DispatchTable::scalar();
 
 /// Initialize the dispatch table with the best available SIMD implementation.
 ///
@@ -90,6 +91,7 @@ static DISPATCH: OnceLock<DispatchTable> = OnceLock::new();
 /// # Returns
 ///
 /// The initialized dispatch table with function pointers to the best implementation.
+#[cfg(feature = "std")]
 #[cold]
 #[inline(always)]
 fn init_dispatch() -> DispatchTable {
@@ -126,7 +128,7 @@ fn init_dispatch() -> DispatchTable {
     #[cfg(target_arch = "aarch64")]
     {
         // NEON is always available on AArch64
-        return DispatchTable::new(
+        DispatchTable::new(
             |data| unsafe { aarch64::neon::sum(data) },
             |a, b| unsafe {
                 match aarch64::neon::dot_product(a, b) {
@@ -134,13 +136,13 @@ fn init_dispatch() -> DispatchTable {
                     Err(e) => panic!("dot_product error: {}", e),
                 }
             },
-        );
+        )
     }
 
     #[cfg(target_arch = "wasm32")]
     {
         // SIMD128 is enabled at compile-time
-        return DispatchTable::new(
+        DispatchTable::new(
             |data| unsafe { wasm32::simd128::sum(data) },
             |a, b| unsafe {
                 match wasm32::simd128::dot_product(a, b) {
@@ -148,7 +150,7 @@ fn init_dispatch() -> DispatchTable {
                     Err(e) => panic!("dot_product error: {}", e),
                 }
             },
-        );
+        )
     }
 
     // Fall back to scalar implementation
@@ -172,7 +174,14 @@ fn init_dispatch() -> DispatchTable {
 /// A reference to the dispatch table.
 #[inline]
 pub fn get_dispatch() -> &'static DispatchTable {
-    DISPATCH.get_or_init(init_dispatch)
+    #[cfg(feature = "std")]
+    {
+        DISPATCH.get_or_init(init_dispatch)
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        &DISPATCH_SCALAR
+    }
 }
 
 /// Calculate the sum of all elements in a slice.

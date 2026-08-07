@@ -15,7 +15,7 @@ contractual change that every consumer must honour:
 5. **Removal of implicit padding** means Aligned Output is now an explicit
    caller or adapter choice, not a core invariant.
 
-All 54 implemented indicators expose this seam. The inventory test
+All 55 implemented indicators expose this seam. The inventory test
 `every_implemented_indicator_exposes_the_full_execution_seam` in
 `crates/ta-core/tests/inventory.rs` cross-checks the catalogue and the
 execution types at compile time so adding a future indicator cannot ship
@@ -441,7 +441,7 @@ green on the merged commit:
 - `cargo fmt --all -- --check`
 - `cargo check -p ta-benchmarks --benches`
 - `every_implemented_indicator_exposes_the_full_execution_seam` covering
-  all 54 implemented indicators
+  all 55 implemented indicators
 - ADR-0001 performance gates (latency, throughput, allocation count,
   allocated bytes, peak memory) with explicit accepted trade-offs
   documented in `crates/ta-benchmarks/EXECUTION_BASELINES.md`

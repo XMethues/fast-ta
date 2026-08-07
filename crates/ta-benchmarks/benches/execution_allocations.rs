@@ -18,6 +18,7 @@ use support::{
     STREAM_INSTRUMENTS, SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
 use ta_core::{
+    cycle::{HT_DCPERIODConfig, HT_DCPERIOD_LOOKBACK},
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
         MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXValuesMut, MINMAXValuesMut,
@@ -1995,6 +1996,99 @@ fn profile_repeated_workloads() {
     assert_zero_allocations(&scenario, profile);
 }
 
+fn profile_ht_dcperiod_execution() {
+    let input = series_fixture(PROFILE_SIZE, 0);
+    let count = PROFILE_SIZE - HT_DCPERIOD_LOOKBACK;
+    let output_bytes = count * core::mem::size_of::<Float>();
+
+    let scenario = "setup/HT_DCPERIODConfig/parameter_free";
+    let profile = print_profile(scenario, HT_DCPERIODConfig::new);
+    assert_zero_allocations(scenario, profile);
+
+    let config = HT_DCPERIODConfig::new();
+    let mut output = vec![0.0 as Float; count];
+    let scenario = format!("one_shot/HT_DCPERIODConfig/caller_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute_into(&config, input.as_slice(), output.as_mut_slice())
+            .expect("valid HT_DCPERIOD fixture")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let scenario = format!("one_shot/HT_DCPERIODConfig/owned_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute(&config, input.as_slice()).expect("valid HT_DCPERIOD fixture")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        1,
+        output_bytes,
+        output_bytes,
+        output_bytes,
+    );
+
+    let scenario = "one_shot/HT_DCPERIODConfig/owned_compact/count_0";
+    let profile = print_profile(scenario, || {
+        IndicatorConfig::compute(&config, &[]).expect("valid empty HT_DCPERIOD fixture")
+    });
+    assert_zero_allocations(scenario, profile);
+
+    let scenario = format!("setup/HT_DCPERIODBatchRunner/capacity_{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid HT_DCPERIOD capacity")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let mut runner =
+        IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid HT_DCPERIOD capacity");
+    for pass in ["first", "repeated"] {
+        let scenario = format!("repeated/prepared_HT_DCPERIOD/{pass}/{PROFILE_SIZE}");
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<HT_DCPERIODConfig>::compute_into(
+                &mut runner,
+                input.as_slice(),
+                output.as_mut_slice(),
+            )
+            .expect("valid prepared HT_DCPERIOD fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+    }
+
+    let oversized = series_fixture(PROFILE_SIZE + 1, 1);
+    let scenario = format!(
+        "repeated/prepared_HT_DCPERIOD/oversize_rejection/{}",
+        PROFILE_SIZE + 1
+    );
+    let profile = print_profile(&scenario, || {
+        PreparedBatchRunner::<HT_DCPERIODConfig>::compute_into(
+            &mut runner,
+            oversized.as_slice(),
+            output.as_mut_slice(),
+        )
+        .expect_err("oversized HT_DCPERIOD input must be rejected")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let scenario = "setup/HT_DCPERIODConfig/stream";
+    let profile = print_profile(scenario, || {
+        IndicatorConfig::stream(&config).expect("valid HT_DCPERIOD stream")
+    });
+    assert_zero_allocations(scenario, profile);
+
+    let mut stream = IndicatorConfig::stream(&config).expect("valid HT_DCPERIOD stream");
+    let scenario = format!("streaming/HT_DCPERIODConfig/ticks/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        let mut last = None;
+        for &tick in &input {
+            last = StreamingComputation::<HT_DCPERIODConfig>::next(&mut stream, tick)
+                .expect("valid HT_DCPERIOD stream tick");
+            black_box(last);
+        }
+        last
+    });
+    assert_zero_allocations(&scenario, profile);
+}
+
 fn main() {
     println!("scenario\tallocation_operations\tgross_allocated_bytes\tpeak_incremental_bytes\tretained_bytes");
     profile_setup();
@@ -2006,6 +2100,7 @@ fn main() {
     profile_binary_operator_execution();
     profile_named_input_execution();
     profile_statistic_execution();
+    profile_ht_dcperiod_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }

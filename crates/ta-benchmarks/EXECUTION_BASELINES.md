@@ -1,8 +1,8 @@
 ---
-date: 2026-08-03
+date: 2026-08-07
 repository: fast-ta
-branch: issue-4-output-interface
-base_commit: 8c99de0
+branch: main
+base_commit: ee3f4f9aa9f955a7759a3bec77844a0915b0d00d
 comparison_baseline: issue-2-final
 issue_2_criterion_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- --save-baseline issue-2-final"
 issue_3_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines"
@@ -18,8 +18,9 @@ issue_9_streaming_repeat_command: "cargo bench -p ta-benchmarks --bench executio
 issue_10_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- indicator_execution/expanded/volatility"
 issue_14_matrix_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/rolling_statistics/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'"
 issue_14_workloads_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'rolling_statistics_workloads/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'"
+issue_19_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- HT_DCPERIOD"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
-status: issue-16-architecture-verified
+status: issue-19-ht-dcperiod-qualified
 ---
 
 # Indicator Execution Baselines
@@ -1136,4 +1137,69 @@ documented trade-offs above. The throwaway prototype branch
 `prototype/output-interface-benchmark` (commits `06449e7`, `547f1ee`,
 `2ce7be9`) remains out of `main`, and the migrated seam is implemented
 without inheriting any rejected prototype implementation.
+
+## Issue #19 `HT_DCPERIOD` first-delivery qualification
+
+Issue #19 adds the first Cycle Indicator Definition through the Rust-first
+execution seam. `HT_DCPERIOD` has a fixed Stabilization and Lookback of 32
+observations. Its caller-owned, owned Compact Output, Prepared Batch Runner,
+and independent Streaming Computation paths share the same allocation-free
+Hilbert recurrence. The recurrence uses double-precision internal state for
+both supported input precisions, matching TA-Lib's float-input implementation
+and avoiding branch instability on low-information Observation Series.
+
+The timing command is
+`cargo bench -p ta-benchmarks --bench execution_baselines -- HT_DCPERIOD`.
+It records one-shot observations 64/4,096/65,536, Universe
+(128 × 4,096), per-worker prepared execution (4 × 4,096), and
+multi-instrument streaming (16 × 4,096). This is a first delivery: there is
+no retained Rust predecessor with the same Indicator Definition, so the
+measurements establish an absolute baseline rather than claiming a relative
+speedup.
+
+### Allocation and peak-heap evidence
+
+`cargo bench -p ta-benchmarks --bench execution_allocations` reports:
+
+| Operation, 4,096 observations | Allocation operations | Gross allocated bytes | Peak incremental bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| Configuration construction | 0 | 0 | 0 | 0 |
+| Caller-owned Compact Output | 0 | 0 | 0 | 0 |
+| Owned Compact Output | 1 | 32,512 | 32,512 | 32,512 |
+| Prepared setup | 0 | 0 | 0 | 0 |
+| Prepared first / repeated / oversize rejection | 0 | 0 | 0 | 0 |
+| Stream setup / 4,096 ticks | 0 | 0 | 0 | 0 |
+
+The owned byte count is exactly
+`(4,096 - 32) × size_of::<f64>()`. Caller-owned execution, prepared setup
+and reuse, rejected over-capacity calls, stream construction, and streaming
+ticks retain only fixed-size state and request no heap memory.
+
+### One-shot timing evidence
+
+Point estimates are Criterion medians on the reference Apple M2 host.
+
+| Observations | Caller-owned | Owned Compact Output | Prepared Runner |
+|---:|---:|---:|---:|
+| 64 | 2.9201 µs / 21.917 Melem/s | 2.9589 µs / 21.629 Melem/s | 2.8942 µs / 22.113 Melem/s |
+| 4,096 | 230.08 µs / 17.802 Melem/s | 231.64 µs / 17.683 Melem/s | 229.02 µs / 17.885 Melem/s |
+| 65,536 | 3.7176 ms / 17.629 Melem/s | 3.7462 ms / 17.494 Melem/s | 3.7213 ms / 17.611 Melem/s |
+
+### Repeated and streaming evidence
+
+| Workload | Point estimate | Throughput |
+|---|---:|---:|
+| Universe caller-owned, 128 × 4,096 | 29.837 ms | 17.572 Melem/s |
+| Universe prepared, 128 × 4,096 | 29.877 ms | 17.548 Melem/s |
+| Per-worker prepared, 4 × 4,096 | 932.71 µs | 17.566 Melem/s |
+| Streaming, 16 × 4,096 | 1.6460 ms | 39.816 Melem/s |
+
+### Gate conclusion
+
+All ADR-0001 allocation gates clear exactly. ADR-0002 accepts these
+host-local default-`f64` measurements as the first-delivery performance
+baseline. A stable regression greater than approximately five percent on
+the same benchmark IDs blocks later Cycle-family work unless its trade-off
+is explicitly accepted. No TA-Lib or unrelated-indicator timing is presented
+as a speedup comparison.
 

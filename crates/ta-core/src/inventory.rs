@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 54;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 55;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -213,7 +213,7 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("TYPPRICE", PriceTransform, Implemented),
     function!("WCLPRICE", PriceTransform, Implemented),
     // Cycle Indicators — 5 functions.
-    function!("HT_DCPERIOD", CycleIndicators, Planned),
+    function!("HT_DCPERIOD", CycleIndicators, Implemented),
     function!("HT_DCPHASE", CycleIndicators, Planned),
     function!("HT_PHASOR", CycleIndicators, Planned),
     function!("HT_SINE", CycleIndicators, Planned),

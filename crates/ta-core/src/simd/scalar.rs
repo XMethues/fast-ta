@@ -4,6 +4,10 @@
 //! These serve as a portable fallback when no SIMD acceleration is available.
 //!
 use crate::types::Float;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
 
 /// Calculate sum of all elements in a slice using scalar operations.
 ///
