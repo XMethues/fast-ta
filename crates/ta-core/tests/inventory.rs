@@ -7,6 +7,7 @@
 //! type, prepared runner, and stream state at compile time so a future macro
 //! regression cannot drop an indicator from the public catalogue.
 
+use ta_core::cycle::{HT_DCPERIODBatchRunner, HT_DCPERIODConfig, HT_DCPERIODStream};
 use ta_core::inventory::{
     function, FunctionGroup, ImplementationStatus, FUNCTION_COUNT, IMPLEMENTED_FUNCTION_COUNT,
     TALIB_FUNCTIONS,
@@ -127,6 +128,7 @@ fn first_tranche_functions_are_marked_implemented() {
         "MEDPRICE",
         "TYPPRICE",
         "WCLPRICE",
+        "HT_DCPERIOD",
         "AD",
         "ADOSC",
         "OBV",
@@ -251,6 +253,9 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<TYPPRICEConfig, TYPPRICEBatchRunner, TYPPRICEStream>();
     assert_execution_types::<WCLPRICEConfig, WCLPRICEBatchRunner, WCLPRICEStream>();
 
+    // Cycle Indicators (1 implemented indicator).
+    assert_execution_types::<HT_DCPERIODConfig, HT_DCPERIODBatchRunner, HT_DCPERIODStream>();
+
     // Volume Indicators (3 implemented indicators).
     assert_execution_types::<ADConfig, ADBatchRunner, ADStream>();
     assert_execution_types::<ADOSCConfig, ADOSCBatchRunner, ADOSCStream>();
@@ -338,6 +343,7 @@ fn inventory_count_matches_execution_seam_coverage() {
         "MEDPRICE",
         "TYPPRICE",
         "WCLPRICE",
+        "HT_DCPERIOD",
         "AD",
         "ADOSC",
         "OBV",
