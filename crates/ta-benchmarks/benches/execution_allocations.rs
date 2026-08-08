@@ -6,6 +6,9 @@
 //! operation; they exclude stack, allocator metadata, RSS, and fixtures or
 //! caller buffers allocated before measurement.
 
+mod composite_allocations;
+mod hilbert_overlap_allocations;
+mod moving_average_allocations;
 mod support;
 
 use std::{
@@ -18,7 +21,11 @@ use support::{
     STREAM_INSTRUMENTS, SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
 use ta_core::{
-    cycle::{HT_DCPERIODConfig, HT_DCPERIOD_LOOKBACK},
+    cycle::{
+        HT_DCPERIODConfig, HT_DCPHASEConfig, HT_PHASORConfig, HT_PHASORValuesMut, HT_SINEConfig,
+        HT_SINEValuesMut, HT_TRENDMODEConfig, TrendMode, HT_DCPERIOD_LOOKBACK, HT_DCPHASE_LOOKBACK,
+        HT_PHASOR_LOOKBACK, HT_SINE_LOOKBACK, HT_TRENDMODE_LOOKBACK,
+    },
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
         MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXValuesMut, MINMAXValuesMut,
@@ -31,9 +38,17 @@ use ta_core::{
         TANHConfig, ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN,
         TANH,
     },
+    momentum::{
+        ADXConfig, ADXRConfig, CMOConfig, DXConfig, DirectionalInput, DirectionalTick, IMIConfig,
+        IMIInput, IMITick, MINUS_DIConfig, MINUS_DMConfig, MOMConfig, PLUS_DIConfig, PLUS_DMConfig,
+        ROCConfig, ROCPConfig, ROCR100Config, ROCRConfig, RSIConfig,
+    },
     overlap::{
-        DEMAConfig, EMAConfig, MAConfig, PeriodMAType, SMAConfig, T3Config, TEMAConfig,
-        TRIMAConfig, WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
+        ACCBANDSConfig, ACCBANDSInput, ACCBANDSTick, ACCBANDSValuesMut, BBANDSConfig,
+        BBANDSValuesMut, DEMAConfig, EMAConfig, KAMAConfig, MAConfig, MAVPConfig, MAVPInput,
+        MAVPTick, MIDPOINTConfig, MIDPRICEConfig, MIDPRICEInput, MIDPRICETick, PeriodMAType,
+        SARConfig, SAREXTConfig, SARInput, SARTick, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
+        WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
     },
     price_transform::{
         AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
@@ -997,6 +1012,20 @@ fn profile_single_output_execution() {
         0
     );
     profile_single_output_indicator!(
+        "KAMA",
+        KAMAConfig,
+        KAMAConfig::new(PERIOD).expect("valid period"),
+        1,
+        (PERIOD + 1) * core::mem::size_of::<Float>()
+    );
+    profile_single_output_indicator!(
+        "MA_KAMA",
+        MAConfig,
+        MAConfig::new(PERIOD, PeriodMAType::KAMA).expect("valid parameters"),
+        1,
+        (PERIOD + 1) * core::mem::size_of::<Float>()
+    );
+    profile_single_output_indicator!(
         "AVGDEV",
         AVGDEVConfig,
         AVGDEVConfig::new(PERIOD).expect("valid period"),
@@ -1009,6 +1038,20 @@ fn profile_single_output_execution() {
         SUMConfig::new(PERIOD).expect("valid period"),
         1,
         STREAM_BYTES
+    );
+    profile_single_output_indicator!(
+        "RSI",
+        RSIConfig,
+        RSIConfig::new(PERIOD).expect("valid period"),
+        0,
+        0
+    );
+    profile_single_output_indicator!(
+        "CMO",
+        CMOConfig,
+        CMOConfig::new(PERIOD).expect("valid period"),
+        0,
+        0
     );
 }
 
@@ -1771,6 +1814,166 @@ fn profile_named_input_execution() {
         [high, low, close],
         PERIOD
     );
+    profile_named_input_indicator!(
+        "SAR",
+        SARConfig,
+        SARConfig::default(),
+        SARInput,
+        SARTick,
+        [high, low],
+        1
+    );
+    profile_named_input_indicator!(
+        "SAREXT",
+        SAREXTConfig,
+        SAREXTConfig::default(),
+        SARInput,
+        SARTick,
+        [high, low],
+        1
+    );
+}
+
+fn profile_imi_execution() {
+    let ohlc = ohlc_fixture(PROFILE_SIZE);
+    let count = PROFILE_SIZE - (PERIOD - 1);
+    let output_bytes = count * core::mem::size_of::<Float>();
+
+    let scenario = "setup/IMIConfig/parameters";
+    let profile = print_profile(scenario, || {
+        IMIConfig::new(PERIOD).expect("valid IMI period")
+    });
+    assert_zero_allocations(scenario, profile);
+
+    let config = IMIConfig::new(PERIOD).expect("valid IMI period");
+    let mut output = vec![0.0 as Float; count];
+    let scenario = format!("one_shot/IMIConfig/caller_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute_into(
+            &config,
+            IMIInput {
+                open: ohlc.open.as_slice(),
+                close: ohlc.close.as_slice(),
+            },
+            output.as_mut_slice(),
+        )
+        .expect("valid caller-owned IMI fixture")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let scenario = format!("one_shot/IMIConfig/owned_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute(
+            &config,
+            IMIInput {
+                open: ohlc.open.as_slice(),
+                close: ohlc.close.as_slice(),
+            },
+        )
+        .expect("valid owned IMI fixture")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        1,
+        output_bytes,
+        output_bytes,
+        output_bytes,
+    );
+
+    let scenario = "one_shot/IMIConfig/owned_compact/count_0";
+    let profile = print_profile(scenario, || {
+        IndicatorConfig::compute(
+            &config,
+            IMIInput {
+                open: &[],
+                close: &[],
+            },
+        )
+        .expect("valid empty IMI fixture")
+    });
+    assert_zero_allocations(scenario, profile);
+
+    let scenario = "setup/IMIBatchRunner/capacity_4096";
+    let profile = print_profile(scenario, || {
+        IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid IMI capacity")
+    });
+    assert_zero_allocations(scenario, profile);
+
+    let mut runner =
+        IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid IMI capacity");
+    for pass in ["first", "repeated"] {
+        let scenario = format!("repeated/prepared_IMI/{pass}/{PROFILE_SIZE}");
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<IMIConfig>::compute_into(
+                &mut runner,
+                IMIInput {
+                    open: ohlc.open.as_slice(),
+                    close: ohlc.close.as_slice(),
+                },
+                output.as_mut_slice(),
+            )
+            .expect("valid prepared IMI fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+    }
+
+    let oversized = ohlc_fixture(PROFILE_SIZE + 1);
+    let scenario = format!(
+        "repeated/prepared_IMI/oversize_rejection/{}",
+        PROFILE_SIZE + 1
+    );
+    let profile = print_profile(&scenario, || {
+        PreparedBatchRunner::<IMIConfig>::compute_into(
+            &mut runner,
+            IMIInput {
+                open: oversized.open.as_slice(),
+                close: oversized.close.as_slice(),
+            },
+            output.as_mut_slice(),
+        )
+        .expect_err("oversized IMI fixture must be rejected")
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let stream_bytes = PERIOD * core::mem::size_of::<Float>();
+    let scenario = "setup/IMIConfig/stream";
+    let profile = print_profile(scenario, || {
+        IndicatorConfig::stream(&config).expect("valid IMI stream")
+    });
+    assert_profile(
+        scenario,
+        profile,
+        1,
+        stream_bytes,
+        stream_bytes,
+        stream_bytes,
+    );
+
+    let mut stream = IndicatorConfig::stream(&config).expect("valid IMI stream");
+    let scenario = format!("streaming/IMIConfig/ticks/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        let mut last = None;
+        for idx in 0..PROFILE_SIZE {
+            last = StreamingComputation::<IMIConfig>::next(
+                &mut stream,
+                IMITick {
+                    open: ohlc.open[idx],
+                    close: ohlc.close[idx],
+                },
+            )
+            .expect("valid IMI stream tick");
+            black_box(last);
+        }
+        last
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let scenario = "streaming/IMIConfig/reset";
+    let profile = print_profile(scenario, || {
+        StreamingComputation::<IMIConfig>::reset(&mut stream)
+    });
+    assert_zero_allocations(scenario, profile);
 }
 
 fn profile_small_owned_compact_counts() {
@@ -1996,6 +2199,256 @@ fn profile_repeated_workloads() {
     assert_zero_allocations(&scenario, profile);
 }
 
+macro_rules! profile_momentum_change_definition {
+    ($config:ty, $name:literal) => {{
+        let input = series_fixture(PROFILE_SIZE, 0);
+        let count = PROFILE_SIZE - PERIOD;
+        let output_bytes = count * core::mem::size_of::<Float>();
+
+        let scenario = format!("setup/{}Config/period_{PERIOD}", $name);
+        let profile = print_profile(&scenario, || {
+            <$config>::new(PERIOD).expect(concat!("valid ", $name, " Period"))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let config = <$config>::new(PERIOD).expect(concat!("valid ", $name, " Period"));
+        let mut output = vec![0.0 as Float; count];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(&config, input.as_slice(), output.as_mut_slice())
+                .expect(concat!("valid ", $name, " fixture"))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input.as_slice()).expect(concat!(
+                "valid owned ",
+                $name,
+                " fixture"
+            ))
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let scenario = format!("one_shot/{}Config/owned_compact/count_0", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, &[]).expect(concat!(
+                "valid empty ",
+                $name,
+                " fixture"
+            ))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect(concat!(
+                "valid ",
+                $name,
+                " capacity"
+            ))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect(concat!(
+            "valid ",
+            $name,
+            " capacity"
+        ));
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $name);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input.as_slice(),
+                    output.as_mut_slice(),
+                )
+                .expect(concat!("valid prepared ", $name, " fixture"))
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized = series_fixture(PROFILE_SIZE + 1, 1);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $name,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                oversized.as_slice(),
+                output.as_mut_slice(),
+            )
+            .expect_err(concat!("oversized ", $name, " input must be rejected"))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let stream_bytes = PERIOD * core::mem::size_of::<Float>();
+        let scenario = format!("setup/{}Config/stream", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::stream(&config).expect(concat!("valid ", $name, " stream"))
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            stream_bytes,
+            stream_bytes,
+            stream_bytes,
+        );
+
+        let mut stream =
+            IndicatorConfig::stream(&config).expect(concat!("valid ", $name, " stream"));
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $name);
+        let profile =
+            print_profile(&scenario, || {
+                let mut last = None;
+                for &tick in &input {
+                    last = StreamingComputation::<$config>::next(&mut stream, tick)
+                        .expect(concat!("valid ", $name, " stream Tick"));
+                    black_box(last);
+                }
+                last
+            });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
+fn profile_momentum_change_execution() {
+    profile_momentum_change_definition!(MOMConfig, "MOM");
+    profile_momentum_change_definition!(ROCConfig, "ROC");
+    profile_momentum_change_definition!(ROCPConfig, "ROCP");
+    profile_momentum_change_definition!(ROCRConfig, "ROCR");
+    profile_momentum_change_definition!(ROCR100Config, "ROCR100");
+
+    let config = MOMConfig::new(PERIOD).expect("valid MOM Period");
+    let universe = (0..UNIVERSE_INSTRUMENTS)
+        .map(|seed| series_fixture(PROFILE_SIZE, seed))
+        .collect::<Vec<_>>();
+    let mut output = vec![0.0 as Float; PROFILE_SIZE - PERIOD];
+    let scenario = format!(
+        "universe/MOMConfig/caller_compact/{}x{}",
+        UNIVERSE_INSTRUMENTS, PROFILE_SIZE
+    );
+    let profile = print_profile(&scenario, || {
+        for input in &universe {
+            black_box(
+                IndicatorConfig::compute_into(&config, input.as_slice(), output.as_mut_slice())
+                    .expect("valid MOM Universe"),
+            );
+        }
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let mut runner =
+        IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid MOM capacity");
+    let scenario = format!(
+        "universe/MOMConfig/prepared_runner/{}x{}",
+        UNIVERSE_INSTRUMENTS, PROFILE_SIZE
+    );
+    let profile = print_profile(&scenario, || {
+        for input in &universe {
+            black_box(
+                PreparedBatchRunner::<MOMConfig>::compute_into(
+                    &mut runner,
+                    input.as_slice(),
+                    output.as_mut_slice(),
+                )
+                .expect("valid prepared MOM Universe"),
+            );
+        }
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let sweep_input = series_fixture(PROFILE_SIZE, 0);
+    let sweep_configs = SWEEP_PERIODS
+        .iter()
+        .map(|&period| MOMConfig::new(period).expect("valid MOM Period"))
+        .collect::<Vec<_>>();
+    let mut sweep_output = vec![0.0 as Float; PROFILE_SIZE];
+    let scenario = format!(
+        "parameter_sweep/MOMConfig/caller_compact/{}x{}",
+        SWEEP_PERIODS.len(),
+        PROFILE_SIZE
+    );
+    let profile = print_profile(&scenario, || {
+        for config in &sweep_configs {
+            black_box(
+                IndicatorConfig::compute_into(
+                    config,
+                    sweep_input.as_slice(),
+                    sweep_output.as_mut_slice(),
+                )
+                .expect("valid MOM parameter sweep"),
+            );
+        }
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let worker_inputs = (0..WORKERS)
+        .map(|seed| series_fixture(PROFILE_SIZE, seed))
+        .collect::<Vec<_>>();
+    let mut worker_runners = (0..WORKERS)
+        .map(|_| {
+            config
+                .prepare_batch(PROFILE_SIZE)
+                .expect("valid MOM capacity")
+        })
+        .collect::<Vec<_>>();
+    let mut worker_outputs = (0..WORKERS)
+        .map(|_| vec![0.0 as Float; PROFILE_SIZE - PERIOD])
+        .collect::<Vec<_>>();
+    let scenario = format!(
+        "per_worker/MOMConfig/prepared_runners/{}x{}",
+        WORKERS, PROFILE_SIZE
+    );
+    let profile = print_profile(&scenario, || {
+        for ((runner, input), output) in worker_runners
+            .iter_mut()
+            .zip(worker_inputs.iter())
+            .zip(worker_outputs.iter_mut())
+        {
+            black_box(
+                PreparedBatchRunner::<MOMConfig>::compute_into(
+                    runner,
+                    input.as_slice(),
+                    output.as_mut_slice(),
+                )
+                .expect("valid per-worker MOM fixture"),
+            );
+        }
+    });
+    assert_zero_allocations(&scenario, profile);
+
+    let stream_input = series_fixture(PROFILE_SIZE, 0);
+    let mut streams = (0..STREAM_INSTRUMENTS)
+        .map(|_| config.stream().expect("valid MOM stream"))
+        .collect::<Vec<_>>();
+    let scenario = format!(
+        "multi_stream/MOMConfig/ticks/{}x{}",
+        STREAM_INSTRUMENTS, PROFILE_SIZE
+    );
+    let profile = print_profile(&scenario, || {
+        for &tick in &stream_input {
+            for stream in &mut streams {
+                black_box(
+                    StreamingComputation::<MOMConfig>::next(stream, tick)
+                        .expect("valid MOM stream Tick"),
+                );
+            }
+        }
+    });
+    assert_zero_allocations(&scenario, profile);
+}
+
 fn profile_ht_dcperiod_execution() {
     let input = series_fixture(PROFILE_SIZE, 0);
     let count = PROFILE_SIZE - HT_DCPERIOD_LOOKBACK;
@@ -2089,6 +2542,811 @@ fn profile_ht_dcperiod_execution() {
     assert_zero_allocations(&scenario, profile);
 }
 
+macro_rules! profile_cycle_single_output_definition {
+    ($config:ty, $name:literal, $lookback:expr, $initial:expr, $element:ty) => {{
+        let input = series_fixture(PROFILE_SIZE, 0);
+        let count = PROFILE_SIZE - $lookback;
+        let output_bytes = count * core::mem::size_of::<$element>();
+        let setup = concat!("setup/", $name, "Config/parameter_free");
+        let profile = print_profile(setup, <$config>::new);
+        assert_zero_allocations(setup, profile);
+
+        let config = <$config>::new();
+        let mut output = vec![$initial; count];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(&config, input.as_slice(), output.as_mut_slice())
+                .expect(concat!("valid ", $name, " fixture"))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input.as_slice()).expect(concat!(
+                "valid owned ",
+                $name,
+                " fixture"
+            ))
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            1,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let scenario = concat!("one_shot/", $name, "Config/owned_compact/count_0");
+        let profile = print_profile(scenario, || {
+            IndicatorConfig::compute(&config, &[]).expect(concat!(
+                "valid empty ",
+                $name,
+                " fixture"
+            ))
+        });
+        assert_zero_allocations(scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect(concat!(
+                "valid ",
+                $name,
+                " capacity"
+            ))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect(concat!(
+            "valid ",
+            $name,
+            " capacity"
+        ));
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $name);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input.as_slice(),
+                    output.as_mut_slice(),
+                )
+                .expect(concat!("valid prepared ", $name, " fixture"))
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized = series_fixture(PROFILE_SIZE + 1, 1);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $name,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                oversized.as_slice(),
+                output.as_mut_slice(),
+            )
+            .expect_err(concat!("oversized ", $name, " input must be rejected"))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = concat!("setup/", $name, "Config/stream");
+        let profile = print_profile(scenario, || {
+            IndicatorConfig::stream(&config).expect(concat!("valid ", $name, " stream"))
+        });
+        assert_zero_allocations(scenario, profile);
+
+        let mut stream =
+            IndicatorConfig::stream(&config).expect(concat!("valid ", $name, " stream"));
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $name);
+        let profile =
+            print_profile(&scenario, || {
+                let mut last = None;
+                for &tick in &input {
+                    last = StreamingComputation::<$config>::next(&mut stream, tick)
+                        .expect(concat!("valid ", $name, " stream tick"));
+                    black_box(last);
+                }
+                last
+            });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
+macro_rules! profile_cycle_paired_output_definition {
+    ($config:ty, $output_mut:ident, $first:ident, $second:ident, $name:literal, $lookback:expr) => {{
+        let input = series_fixture(PROFILE_SIZE, 0);
+        let count = PROFILE_SIZE - $lookback;
+        let column_bytes = count * core::mem::size_of::<Float>();
+        let output_bytes = 2 * column_bytes;
+        let setup = concat!("setup/", $name, "Config/parameter_free");
+        let profile = print_profile(setup, <$config>::new);
+        assert_zero_allocations(setup, profile);
+
+        let config = <$config>::new();
+        let mut first = vec![0.0 as Float; count];
+        let mut second = vec![0.0 as Float; count];
+        let scenario = format!("one_shot/{}Config/caller_compact/{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute_into(
+                &config,
+                input.as_slice(),
+                $output_mut {
+                    $first: first.as_mut_slice(),
+                    $second: second.as_mut_slice(),
+                },
+            )
+            .expect(concat!("valid ", $name, " fixture"))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = format!("one_shot/{}Config/owned_compact/{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::compute(&config, input.as_slice()).expect(concat!(
+                "valid owned ",
+                $name,
+                " fixture"
+            ))
+        });
+        assert_profile(
+            &scenario,
+            profile,
+            2,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let scenario = concat!("one_shot/", $name, "Config/owned_compact/count_0");
+        let profile = print_profile(scenario, || {
+            IndicatorConfig::compute(&config, &[]).expect(concat!(
+                "valid empty ",
+                $name,
+                " fixture"
+            ))
+        });
+        assert_zero_allocations(scenario, profile);
+
+        let scenario = format!("setup/{}BatchRunner/capacity_{PROFILE_SIZE}", $name);
+        let profile = print_profile(&scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect(concat!(
+                "valid ",
+                $name,
+                " capacity"
+            ))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let mut runner = IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect(concat!(
+            "valid ",
+            $name,
+            " capacity"
+        ));
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}/{PROFILE_SIZE}", $name);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input.as_slice(),
+                    $output_mut {
+                        $first: first.as_mut_slice(),
+                        $second: second.as_mut_slice(),
+                    },
+                )
+                .expect(concat!("valid prepared ", $name, " fixture"))
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized = series_fixture(PROFILE_SIZE + 1, 1);
+        let scenario = format!(
+            "repeated/prepared_{}/oversize_rejection/{}",
+            $name,
+            PROFILE_SIZE + 1
+        );
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                oversized.as_slice(),
+                $output_mut {
+                    $first: first.as_mut_slice(),
+                    $second: second.as_mut_slice(),
+                },
+            )
+            .expect_err(concat!("oversized ", $name, " input must be rejected"))
+        });
+        assert_zero_allocations(&scenario, profile);
+
+        let scenario = concat!("setup/", $name, "Config/stream");
+        let profile = print_profile(scenario, || {
+            IndicatorConfig::stream(&config).expect(concat!("valid ", $name, " stream"))
+        });
+        assert_zero_allocations(scenario, profile);
+
+        let mut stream =
+            IndicatorConfig::stream(&config).expect(concat!("valid ", $name, " stream"));
+        let scenario = format!("streaming/{}Config/ticks/{PROFILE_SIZE}", $name);
+        let profile =
+            print_profile(&scenario, || {
+                let mut last = None;
+                for &tick in &input {
+                    last = StreamingComputation::<$config>::next(&mut stream, tick)
+                        .expect(concat!("valid ", $name, " stream tick"));
+                    black_box(last);
+                }
+                last
+            });
+        assert_zero_allocations(&scenario, profile);
+    }};
+}
+
+fn profile_ht_hilbert_outputs_execution() {
+    profile_cycle_single_output_definition!(
+        HT_DCPHASEConfig,
+        "HT_DCPHASE",
+        HT_DCPHASE_LOOKBACK,
+        0.0 as Float,
+        Float
+    );
+    profile_cycle_paired_output_definition!(
+        HT_PHASORConfig,
+        HT_PHASORValuesMut,
+        in_phase,
+        quadrature,
+        "HT_PHASOR",
+        HT_PHASOR_LOOKBACK
+    );
+    profile_cycle_paired_output_definition!(
+        HT_SINEConfig,
+        HT_SINEValuesMut,
+        sine,
+        lead_sine,
+        "HT_SINE",
+        HT_SINE_LOOKBACK
+    );
+    profile_cycle_single_output_definition!(
+        HT_TRENDMODEConfig,
+        "HT_TRENDMODE",
+        HT_TRENDMODE_LOOKBACK,
+        TrendMode::Cycle,
+        TrendMode
+    );
+}
+
+macro_rules! profile_directional_definition {
+    ($config:ty, $name:literal, $stream_bytes:expr) => {{
+        let config = <$config>::new(PERIOD).expect(concat!("valid ", $name, " Period"));
+        let lookback = IndicatorConfig::lookback(&config);
+        let ohlc = ohlc_fixture(PROFILE_SIZE);
+        let input = DirectionalInput {
+            high: ohlc.high.as_slice(),
+            low: ohlc.low.as_slice(),
+            close: ohlc.close.as_slice(),
+        };
+        let count = PROFILE_SIZE - lookback;
+        let output_bytes = count * core::mem::size_of::<Float>();
+
+        let scenario = concat!("setup/", $name, "Config");
+        let profile = print_profile(scenario, || {
+            <$config>::new(PERIOD).expect(concat!("valid ", $name, " Period"))
+        });
+        assert_zero_allocations(scenario, profile);
+
+        let mut output = vec![0.0 as Float; count];
+        let scenario = concat!("one_shot/", $name, "Config/caller_compact");
+        let profile = print_profile(scenario, || {
+            IndicatorConfig::compute_into(&config, input, output.as_mut_slice())
+                .expect(concat!("valid ", $name, " fixture"))
+        });
+        assert_zero_allocations(scenario, profile);
+
+        let scenario = concat!("one_shot/", $name, "Config/owned_compact");
+        let profile = print_profile(scenario, || {
+            IndicatorConfig::compute(&config, input).expect(concat!(
+                "valid owned ",
+                $name,
+                " fixture"
+            ))
+        });
+        assert_profile(
+            scenario,
+            profile,
+            1,
+            output_bytes,
+            output_bytes,
+            output_bytes,
+        );
+
+        let scenario = concat!("setup/", $name, "BatchRunner");
+        let profile = print_profile(scenario, || {
+            IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect(concat!(
+                "valid ",
+                $name,
+                " prepared capacity"
+            ))
+        });
+        assert_zero_allocations(scenario, profile);
+        let mut runner = IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect(concat!(
+            "valid ",
+            $name,
+            " prepared capacity"
+        ));
+        for pass in ["first", "repeated"] {
+            let scenario = format!("repeated/prepared_{}/{pass}", $name);
+            let profile = print_profile(&scenario, || {
+                PreparedBatchRunner::<$config>::compute_into(
+                    &mut runner,
+                    input,
+                    output.as_mut_slice(),
+                )
+                .expect(concat!("valid prepared ", $name, " fixture"))
+            });
+            assert_zero_allocations(&scenario, profile);
+        }
+
+        let oversized = ohlc_fixture(PROFILE_SIZE + 1);
+        let scenario = concat!("repeated/prepared_", $name, "/oversize_rejection");
+        let profile = print_profile(scenario, || {
+            PreparedBatchRunner::<$config>::compute_into(
+                &mut runner,
+                DirectionalInput {
+                    high: oversized.high.as_slice(),
+                    low: oversized.low.as_slice(),
+                    close: oversized.close.as_slice(),
+                },
+                output.as_mut_slice(),
+            )
+            .expect_err(concat!("oversized ", $name, " input must be rejected"))
+        });
+        assert_zero_allocations(scenario, profile);
+
+        let scenario = concat!("setup/", $name, "Config/stream");
+        let profile = print_profile(scenario, || {
+            IndicatorConfig::stream(&config).expect(concat!("valid ", $name, " stream"))
+        });
+        assert_profile(
+            scenario,
+            profile,
+            if $stream_bytes == 0 { 0 } else { 1 },
+            $stream_bytes,
+            $stream_bytes,
+            $stream_bytes,
+        );
+        let mut stream =
+            IndicatorConfig::stream(&config).expect(concat!("valid ", $name, " stream"));
+
+        let scenario = concat!("streaming/", $name, "Config/ticks");
+        let profile = print_profile(scenario, || {
+            let mut last = None;
+            for index in 0..PROFILE_SIZE {
+                last = StreamingComputation::<$config>::next(
+                    &mut stream,
+                    DirectionalTick {
+                        high: ohlc.high[index],
+                        low: ohlc.low[index],
+                        close: ohlc.close[index],
+                    },
+                )
+                .expect(concat!("valid ", $name, " stream tick"));
+                black_box(last);
+            }
+            last
+        });
+        assert_zero_allocations(scenario, profile);
+    }};
+}
+
+fn profile_directional_movement_execution() {
+    profile_directional_definition!(PLUS_DMConfig, "PLUS_DM", 0);
+    profile_directional_definition!(MINUS_DMConfig, "MINUS_DM", 0);
+    profile_directional_definition!(PLUS_DIConfig, "PLUS_DI", 0);
+    profile_directional_definition!(MINUS_DIConfig, "MINUS_DI", 0);
+    profile_directional_definition!(DXConfig, "DX", 0);
+    profile_directional_definition!(ADXConfig, "ADX", 0);
+    profile_directional_definition!(
+        ADXRConfig,
+        "ADXR",
+        (PERIOD - 1) * core::mem::size_of::<Float>()
+    );
+}
+
+fn profile_mavp_execution() {
+    const MINIMUM_PERIOD: usize = 2;
+    const MAXIMUM_PERIOD: usize = 5;
+    let real = series_fixture(PROFILE_SIZE, 0);
+    let periods = (0..PROFILE_SIZE)
+        .map(|index| MINIMUM_PERIOD + index % (MAXIMUM_PERIOD - MINIMUM_PERIOD + 1))
+        .collect::<Vec<_>>();
+    let input = MAVPInput {
+        real: &real,
+        periods: &periods,
+    };
+    let config =
+        MAVPConfig::new(MINIMUM_PERIOD, MAXIMUM_PERIOD, PeriodMAType::KAMA).expect("valid MAVP");
+    let count = PROFILE_SIZE - IndicatorConfig::lookback(&config);
+    let output_bytes = count * core::mem::size_of::<Float>();
+    let algorithm_bytes = count * (core::mem::size_of::<Float>() + core::mem::size_of::<usize>());
+    let mut output = vec![0.0 as Float; count];
+
+    let scenario = format!("one_shot/MAVPConfig/caller_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute_into(&config, input, output.as_mut_slice())
+            .expect("valid caller-owned MAVP fixture")
+    });
+    assert_profile(&scenario, profile, 2, algorithm_bytes, algorithm_bytes, 0);
+
+    let scenario = format!("one_shot/MAVPConfig/owned_compact/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::compute(&config, input).expect("valid owned MAVP fixture")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        3,
+        algorithm_bytes + output_bytes,
+        algorithm_bytes + output_bytes,
+        output_bytes,
+    );
+
+    let scenario = format!("setup/MAVPBatchRunner/capacity_{PROFILE_SIZE}");
+    let prepared_bytes = count * (core::mem::size_of::<Float>() + core::mem::size_of::<usize>());
+    let profile = print_profile(&scenario, || {
+        IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid MAVP capacity")
+    });
+    assert_profile(
+        &scenario,
+        profile,
+        2,
+        prepared_bytes,
+        prepared_bytes,
+        prepared_bytes,
+    );
+
+    let mut runner =
+        IndicatorConfig::prepare_batch(&config, PROFILE_SIZE).expect("valid MAVP capacity");
+    for pass in ["first", "repeated"] {
+        let scenario = format!("repeated/prepared_MAVP/{pass}/{PROFILE_SIZE}");
+        let profile = print_profile(&scenario, || {
+            PreparedBatchRunner::<MAVPConfig>::compute_into(
+                &mut runner,
+                input,
+                output.as_mut_slice(),
+            )
+            .expect("valid prepared MAVP fixture")
+        });
+        assert_zero_allocations(&scenario, profile);
+    }
+
+    let period_count = MAXIMUM_PERIOD - MINIMUM_PERIOD + 1;
+    let raw_stream_bytes = period_count * core::mem::size_of::<ta_core::overlap::MAStream>()
+        + (MINIMUM_PERIOD..=MAXIMUM_PERIOD)
+            .map(|period| (period + 1) * core::mem::size_of::<Float>())
+            .sum::<usize>();
+    // The Vec<MAStream> backing buffer is requested at 4 * sizeof(MAStream)
+    // bytes, but the test harness counts the global allocator's 8-byte aligned
+    // capacity rather than the requested length. Add the 8-byte rounding here.
+    let stream_bytes = raw_stream_bytes + core::mem::size_of::<usize>();
+    let scenario = "setup/MAVPConfig/stream_KAMA_2_5";
+    let profile = print_profile(scenario, || {
+        IndicatorConfig::stream(&config).expect("valid MAVP stream")
+    });
+    assert_profile(
+        scenario,
+        profile,
+        period_count + 1,
+        stream_bytes,
+        stream_bytes,
+        stream_bytes,
+    );
+    let mut stream = IndicatorConfig::stream(&config).expect("valid MAVP stream");
+    let scenario = format!("streaming/MAVPConfig/ticks/{PROFILE_SIZE}");
+    let profile = print_profile(&scenario, || {
+        let mut last = None;
+        for (&real, &period) in real.iter().zip(&periods) {
+            last = StreamingComputation::<MAVPConfig>::next(&mut stream, MAVPTick { real, period })
+                .expect("valid MAVP stream tick");
+            black_box(last);
+        }
+        last
+    });
+    assert_zero_allocations(&scenario, profile);
+}
+
+fn profile_rolling_overlap_execution() {
+    let ohlc = ohlc_fixture(PROFILE_SIZE);
+    let count = output_len(PROFILE_SIZE, PERIOD);
+    let float_bytes = core::mem::size_of::<Float>();
+    let index_bytes = core::mem::size_of::<usize>();
+
+    let acc = ACCBANDSConfig::new(PERIOD).expect("valid ACCBANDS period");
+    let bb = BBANDSConfig::with_default_deviations(PERIOD, PeriodMAType::SMA)
+        .expect("valid BBANDS configuration");
+    let midpoint = MIDPOINTConfig::new(PERIOD).expect("valid MIDPOINT period");
+    let midprice = MIDPRICEConfig::new(PERIOD).expect("valid MIDPRICE period");
+
+    let (_, profile) = measure_allocations(|| {
+        IndicatorConfig::compute(
+            &acc,
+            ACCBANDSInput {
+                high: ohlc.high.as_slice(),
+                low: ohlc.low.as_slice(),
+                close: ohlc.close.as_slice(),
+            },
+        )
+        .expect("valid owned ACCBANDS")
+    });
+    assert_profile(
+        "owned/ACCBANDSConfig/compact",
+        profile,
+        3,
+        3 * count * float_bytes,
+        3 * count * float_bytes,
+        3 * count * float_bytes,
+    );
+
+    let (_, profile) = measure_allocations(|| {
+        IndicatorConfig::compute(&bb, ohlc.close.as_slice()).expect("valid owned BBANDS")
+    });
+    assert_profile(
+        "owned/BBANDSConfig/compact",
+        profile,
+        3,
+        3 * count * float_bytes,
+        3 * count * float_bytes,
+        3 * count * float_bytes,
+    );
+
+    for (scenario, profile) in [
+        (
+            "owned/MIDPOINTConfig/compact",
+            measure_allocations(|| {
+                IndicatorConfig::compute(&midpoint, ohlc.close.as_slice())
+                    .expect("valid owned MIDPOINT")
+            })
+            .1,
+        ),
+        (
+            "owned/MIDPRICEConfig/compact",
+            measure_allocations(|| {
+                IndicatorConfig::compute(
+                    &midprice,
+                    MIDPRICEInput {
+                        high: ohlc.high.as_slice(),
+                        low: ohlc.low.as_slice(),
+                    },
+                )
+                .expect("valid owned MIDPRICE")
+            })
+            .1,
+        ),
+    ] {
+        assert_profile(
+            scenario,
+            profile,
+            3,
+            count * float_bytes + 2 * PROFILE_SIZE * index_bytes,
+            count * float_bytes + 2 * PROFILE_SIZE * index_bytes,
+            count * float_bytes,
+        );
+    }
+
+    let mut upper = vec![0.0 as Float; count];
+    let mut middle = vec![0.0 as Float; count];
+    let mut lower = vec![0.0 as Float; count];
+    let mut single = vec![0.0 as Float; count];
+    let profile = print_profile("caller_owned/ACCBANDSConfig", || {
+        IndicatorConfig::compute_into(
+            &acc,
+            ACCBANDSInput {
+                high: ohlc.high.as_slice(),
+                low: ohlc.low.as_slice(),
+                close: ohlc.close.as_slice(),
+            },
+            ACCBANDSValuesMut {
+                upper: upper.as_mut_slice(),
+                middle: middle.as_mut_slice(),
+                lower: lower.as_mut_slice(),
+            },
+        )
+        .expect("valid caller-owned ACCBANDS")
+    });
+    assert_zero_allocations("caller_owned/ACCBANDSConfig", profile);
+    let profile = print_profile("caller_owned/BBANDSConfig", || {
+        IndicatorConfig::compute_into(
+            &bb,
+            ohlc.close.as_slice(),
+            BBANDSValuesMut {
+                upper: upper.as_mut_slice(),
+                middle: middle.as_mut_slice(),
+                lower: lower.as_mut_slice(),
+            },
+        )
+        .expect("valid caller-owned BBANDS")
+    });
+    assert_zero_allocations("caller_owned/BBANDSConfig", profile);
+    for (scenario, profile) in [
+        (
+            "caller_owned/MIDPOINTConfig",
+            print_profile("caller_owned/MIDPOINTConfig", || {
+                IndicatorConfig::compute_into(
+                    &midpoint,
+                    ohlc.close.as_slice(),
+                    single.as_mut_slice(),
+                )
+                .expect("valid caller-owned MIDPOINT")
+            }),
+        ),
+        (
+            "caller_owned/MIDPRICEConfig",
+            print_profile("caller_owned/MIDPRICEConfig", || {
+                IndicatorConfig::compute_into(
+                    &midprice,
+                    MIDPRICEInput {
+                        high: ohlc.high.as_slice(),
+                        low: ohlc.low.as_slice(),
+                    },
+                    single.as_mut_slice(),
+                )
+                .expect("valid caller-owned MIDPRICE")
+            }),
+        ),
+    ] {
+        assert_profile(
+            scenario,
+            profile,
+            2,
+            2 * PROFILE_SIZE * index_bytes,
+            2 * PROFILE_SIZE * index_bytes,
+            0,
+        );
+    }
+
+    let (mut acc_runner, profile) =
+        measure_allocations(|| acc.prepare_batch(PROFILE_SIZE).unwrap());
+    assert_zero_allocations("setup/ACCBANDSConfig/prepared", profile);
+    let (mut bb_runner, profile) = measure_allocations(|| bb.prepare_batch(PROFILE_SIZE).unwrap());
+    assert_zero_allocations("setup/BBANDSConfig/prepared", profile);
+    for pass in ["first", "repeated"] {
+        let scenario = format!("prepared/ACCBANDSConfig/{pass}");
+        let profile = print_profile(&scenario, || {
+            acc_runner
+                .compute_into(
+                    ACCBANDSInput {
+                        high: ohlc.high.as_slice(),
+                        low: ohlc.low.as_slice(),
+                        close: ohlc.close.as_slice(),
+                    },
+                    ACCBANDSValuesMut {
+                        upper: upper.as_mut_slice(),
+                        middle: middle.as_mut_slice(),
+                        lower: lower.as_mut_slice(),
+                    },
+                )
+                .unwrap()
+        });
+        assert_zero_allocations(&scenario, profile);
+        let scenario = format!("prepared/BBANDSConfig/{pass}");
+        let profile = print_profile(&scenario, || {
+            bb_runner
+                .compute_into(
+                    ohlc.close.as_slice(),
+                    BBANDSValuesMut {
+                        upper: upper.as_mut_slice(),
+                        middle: middle.as_mut_slice(),
+                        lower: lower.as_mut_slice(),
+                    },
+                )
+                .unwrap()
+        });
+        assert_zero_allocations(&scenario, profile);
+    }
+
+    let (mut midpoint_runner, profile) =
+        measure_allocations(|| midpoint.prepare_batch(PROFILE_SIZE).unwrap());
+    assert_profile(
+        "setup/MIDPOINTConfig/prepared",
+        profile,
+        2,
+        2 * PROFILE_SIZE * index_bytes,
+        2 * PROFILE_SIZE * index_bytes,
+        2 * PROFILE_SIZE * index_bytes,
+    );
+    let (mut midprice_runner, profile) =
+        measure_allocations(|| midprice.prepare_batch(PROFILE_SIZE).unwrap());
+    assert_profile(
+        "setup/MIDPRICEConfig/prepared",
+        profile,
+        2,
+        2 * PROFILE_SIZE * index_bytes,
+        2 * PROFILE_SIZE * index_bytes,
+        2 * PROFILE_SIZE * index_bytes,
+    );
+    let profile = print_profile("prepared/MIDPOINTConfig/repeated", || {
+        midpoint_runner
+            .compute_into(ohlc.close.as_slice(), single.as_mut_slice())
+            .unwrap()
+    });
+    assert_zero_allocations("prepared/MIDPOINTConfig/repeated", profile);
+    let profile = print_profile("prepared/MIDPRICEConfig/repeated", || {
+        midprice_runner
+            .compute_into(
+                MIDPRICEInput {
+                    high: ohlc.high.as_slice(),
+                    low: ohlc.low.as_slice(),
+                },
+                single.as_mut_slice(),
+            )
+            .unwrap()
+    });
+    assert_zero_allocations("prepared/MIDPRICEConfig/repeated", profile);
+
+    let (mut acc_stream, profile) = measure_allocations(|| acc.stream().unwrap());
+    let acc_stream_bytes = (PERIOD - 1) * core::mem::size_of::<ta_core::overlap::ACCBANDSValue>();
+    assert_profile(
+        "setup/ACCBANDSConfig/stream",
+        profile,
+        1,
+        acc_stream_bytes,
+        acc_stream_bytes,
+        acc_stream_bytes,
+    );
+    let (mut bb_stream, profile) = measure_allocations(|| bb.stream().unwrap());
+    let bb_stream_bytes = (2 * PERIOD - 1) * float_bytes;
+    assert_profile(
+        "setup/BBANDSConfig/stream_SMA",
+        profile,
+        2,
+        bb_stream_bytes,
+        bb_stream_bytes,
+        bb_stream_bytes,
+    );
+    let (mut midpoint_stream, profile) = measure_allocations(|| midpoint.stream().unwrap());
+    let midpoint_stream_bytes = PERIOD * float_bytes;
+    assert_profile(
+        "setup/MIDPOINTConfig/stream",
+        profile,
+        1,
+        midpoint_stream_bytes,
+        midpoint_stream_bytes,
+        midpoint_stream_bytes,
+    );
+    let (mut midprice_stream, profile) = measure_allocations(|| midprice.stream().unwrap());
+    let midprice_stream_bytes = 2 * PERIOD * float_bytes;
+    assert_profile(
+        "setup/MIDPRICEConfig/stream",
+        profile,
+        2,
+        midprice_stream_bytes,
+        midprice_stream_bytes,
+        midprice_stream_bytes,
+    );
+    let profile = print_profile("streaming/rolling_overlap/ticks", || {
+        for index in 0..PROFILE_SIZE {
+            black_box(
+                acc_stream
+                    .next(ACCBANDSTick {
+                        high: ohlc.high[index],
+                        low: ohlc.low[index],
+                        close: ohlc.close[index],
+                    })
+                    .unwrap(),
+            );
+            black_box(bb_stream.next(ohlc.close[index]).unwrap());
+            black_box(midpoint_stream.next(ohlc.close[index]).unwrap());
+            black_box(
+                midprice_stream
+                    .next(MIDPRICETick {
+                        high: ohlc.high[index],
+                        low: ohlc.low[index],
+                    })
+                    .unwrap(),
+            );
+        }
+    });
+    assert_zero_allocations("streaming/rolling_overlap/ticks", profile);
+}
+
 fn main() {
     println!("scenario\tallocation_operations\tgross_allocated_bytes\tpeak_incremental_bytes\tretained_bytes");
     profile_setup();
@@ -2099,8 +3357,17 @@ fn main() {
     profile_math_transform_execution();
     profile_binary_operator_execution();
     profile_named_input_execution();
+    profile_imi_execution();
     profile_statistic_execution();
+    profile_momentum_change_execution();
+    composite_allocations::profile_composite_momentum_execution();
+    moving_average_allocations::profile_moving_average_momentum_execution();
     profile_ht_dcperiod_execution();
+    profile_ht_hilbert_outputs_execution();
+    hilbert_overlap_allocations::profile_hilbert_overlap_execution();
+    profile_directional_movement_execution();
+    profile_mavp_execution();
+    profile_rolling_overlap_execution();
     profile_small_owned_compact_counts();
     profile_repeated_workloads();
 }

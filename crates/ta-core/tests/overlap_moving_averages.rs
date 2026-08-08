@@ -1,6 +1,6 @@
 use ta_core::overlap::{
     DEMAConfig, EMAConfig, MAConfig, PeriodMAType, T3Config, T3_with_default_vfactor, TEMAConfig,
-    TRIMAConfig, WMAConfig, DEMA, EMA, MA, T3, T3_DEFAULT_VFACTOR, TEMA, TRIMA, WMA,
+    TRIMAConfig, WMAConfig, DEMA, EMA, KAMA, MA, T3, T3_DEFAULT_VFACTOR, TEMA, TRIMA, WMA,
 };
 use ta_core::{Float, OutputRange};
 
@@ -160,7 +160,8 @@ fn ma_dispatches_to_implemented_moving_averages() {
             PeriodMAType::DEMA => DEMA(&real, 3, &mut direct).unwrap(),
             PeriodMAType::TEMA => TEMA(&real, 3, &mut direct).unwrap(),
             PeriodMAType::TRIMA => TRIMA(&real, 3, &mut direct).unwrap(),
-            _ => unreachable!("cases only contain implemented types"),
+            PeriodMAType::T3 => T3_with_default_vfactor(&real, 3, &mut direct).unwrap(),
+            PeriodMAType::KAMA => KAMA(&real, 3, &mut direct).unwrap(),
         };
         assert_eq!(dispatched_range, direct_range);
         assert_eq!(
@@ -204,6 +205,7 @@ fn every_selectable_moving_average_uses_its_period() {
         PeriodMAType::TEMA,
         PeriodMAType::TRIMA,
         PeriodMAType::T3,
+        PeriodMAType::KAMA,
     ];
 
     for ma_type in cases {

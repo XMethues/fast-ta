@@ -7,7 +7,12 @@
 //! type, prepared runner, and stream state at compile time so a future macro
 //! regression cannot drop an indicator from the public catalogue.
 
-use ta_core::cycle::{HT_DCPERIODBatchRunner, HT_DCPERIODConfig, HT_DCPERIODStream};
+use ta_core::cycle::{
+    HT_DCPERIODBatchRunner, HT_DCPERIODConfig, HT_DCPERIODStream, HT_DCPHASEBatchRunner,
+    HT_DCPHASEConfig, HT_DCPHASEStream, HT_PHASORBatchRunner, HT_PHASORConfig, HT_PHASORStream,
+    HT_SINEBatchRunner, HT_SINEConfig, HT_SINEStream, HT_TRENDMODEBatchRunner, HT_TRENDMODEConfig,
+    HT_TRENDMODEStream,
+};
 use ta_core::inventory::{
     function, FunctionGroup, ImplementationStatus, FUNCTION_COUNT, IMPLEMENTED_FUNCTION_COUNT,
     TALIB_FUNCTIONS,
@@ -29,11 +34,34 @@ use ta_core::math_transform::{
     SINHBatchRunner, SINHConfig, SINHStream, SINStream, SQRTBatchRunner, SQRTConfig, SQRTStream,
     TANBatchRunner, TANConfig, TANHBatchRunner, TANHConfig, TANHStream, TANStream,
 };
+use ta_core::momentum::{
+    ADXBatchRunner, ADXConfig, ADXRBatchRunner, ADXRConfig, ADXRStream, ADXStream, APOBatchRunner,
+    APOConfig, APOStream, AROONBatchRunner, AROONConfig, AROONOSCBatchRunner, AROONOSCConfig,
+    AROONOSCStream, AROONStream, BOPBatchRunner, BOPConfig, BOPStream, CCIBatchRunner, CCIConfig,
+    CCIStream, CMOBatchRunner, CMOConfig, CMOStream, DXBatchRunner, DXConfig, DXStream,
+    IMIBatchRunner, IMIConfig, IMIStream, MACDBatchRunner, MACDConfig, MACDEXTBatchRunner,
+    MACDEXTConfig, MACDEXTStream, MACDFIXBatchRunner, MACDFIXConfig, MACDFIXStream, MACDStream,
+    MFIBatchRunner, MFIConfig, MFIStream, MINUS_DIBatchRunner, MINUS_DIConfig, MINUS_DIStream,
+    MINUS_DMBatchRunner, MINUS_DMConfig, MINUS_DMStream, MOMBatchRunner, MOMConfig, MOMStream,
+    PLUS_DIBatchRunner, PLUS_DIConfig, PLUS_DIStream, PLUS_DMBatchRunner, PLUS_DMConfig,
+    PLUS_DMStream, PPOBatchRunner, PPOConfig, PPOStream, ROCBatchRunner, ROCConfig,
+    ROCPBatchRunner, ROCPConfig, ROCPStream, ROCR100BatchRunner, ROCR100Config, ROCR100Stream,
+    ROCRBatchRunner, ROCRConfig, ROCRStream, ROCStream, RSIBatchRunner, RSIConfig, RSIStream,
+    STOCHBatchRunner, STOCHConfig, STOCHFBatchRunner, STOCHFConfig, STOCHFStream,
+    STOCHRSIBatchRunner, STOCHRSIConfig, STOCHRSIStream, STOCHStream, TRIXBatchRunner, TRIXConfig,
+    TRIXStream, ULTOSCBatchRunner, ULTOSCConfig, ULTOSCStream, WILLRBatchRunner, WILLRConfig,
+    WILLRStream,
+};
 use ta_core::overlap::{
-    DEMABatchRunner, DEMAConfig, DEMAStream, EMABatchRunner, EMAConfig, EMAStream, MABatchRunner,
-    MAConfig, MAStream, SMABatchRunner, SMAConfig, SMAStream, T3BatchRunner, T3Config, T3Stream,
-    TEMABatchRunner, TEMAConfig, TEMAStream, TRIMABatchRunner, TRIMAConfig, TRIMAStream,
-    WMABatchRunner, WMAConfig, WMAStream,
+    ACCBANDSBatchRunner, ACCBANDSConfig, ACCBANDSStream, BBANDSBatchRunner, BBANDSConfig,
+    BBANDSStream, DEMABatchRunner, DEMAConfig, DEMAStream, EMABatchRunner, EMAConfig, EMAStream,
+    HT_TRENDLINEBatchRunner, HT_TRENDLINEConfig, HT_TRENDLINEStream, KAMABatchRunner, KAMAConfig,
+    KAMAStream, MABatchRunner, MAConfig, MAMABatchRunner, MAMAConfig, MAMAStream, MAStream,
+    MAVPBatchRunner, MAVPConfig, MAVPStream, MIDPOINTBatchRunner, MIDPOINTConfig, MIDPOINTStream,
+    MIDPRICEBatchRunner, MIDPRICEConfig, MIDPRICEStream, SARBatchRunner, SARConfig,
+    SAREXTBatchRunner, SAREXTConfig, SAREXTStream, SARStream, SMABatchRunner, SMAConfig, SMAStream,
+    T3BatchRunner, T3Config, T3Stream, TEMABatchRunner, TEMAConfig, TEMAStream, TRIMABatchRunner,
+    TRIMAConfig, TRIMAStream, WMABatchRunner, WMAConfig, WMAStream,
 };
 use ta_core::price_transform::{
     AVGDEVBatchRunner, AVGDEVConfig, AVGDEVStream, AVGPRICEBatchRunner, AVGPRICEConfig,
@@ -58,6 +86,14 @@ use ta_core::volume::{
 };
 
 use ta_core::{IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+
+fn assert_execution_types<C, R, S>()
+where
+    C: IndicatorConfig<BatchRunner = R, Stream = S>,
+    R: PreparedBatchRunner<C>,
+    S: StreamingComputation<C>,
+{
+}
 
 #[test]
 fn inventory_contains_official_161_functions() {
@@ -123,12 +159,26 @@ fn first_tranche_functions_are_marked_implemented() {
         "TEMA",
         "TRIMA",
         "WMA",
+        "SAR",
+        "SAREXT",
+        "ACCBANDS",
+        "BBANDS",
+        "MIDPOINT",
+        "MIDPRICE",
+        "KAMA",
+        "MAVP",
+        "MAMA",
+        "HT_TRENDLINE",
         "AVGDEV",
         "AVGPRICE",
         "MEDPRICE",
         "TYPPRICE",
         "WCLPRICE",
         "HT_DCPERIOD",
+        "HT_DCPHASE",
+        "HT_PHASOR",
+        "HT_SINE",
+        "HT_TRENDMODE",
         "AD",
         "ADOSC",
         "OBV",
@@ -170,6 +220,37 @@ fn first_tranche_functions_are_marked_implemented() {
         "MULT",
         "SUB",
         "SUM",
+        "MOM",
+        "ROC",
+        "ROCP",
+        "ROCR",
+        "ROCR100",
+        "RSI",
+        "CMO",
+        "IMI",
+        "PLUS_DM",
+        "MINUS_DM",
+        "PLUS_DI",
+        "MINUS_DI",
+        "DX",
+        "ADX",
+        "ADXR",
+        "BOP",
+        "CCI",
+        "MFI",
+        "ULTOSC",
+        "APO",
+        "PPO",
+        "MACD",
+        "MACDEXT",
+        "MACDFIX",
+        "TRIX",
+        "AROON",
+        "AROONOSC",
+        "STOCH",
+        "STOCHF",
+        "STOCHRSI",
+        "WILLR",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -189,15 +270,7 @@ fn first_tranche_functions_are_marked_implemented() {
 }
 
 #[test]
-fn migrated_rolling_statistics_are_in_the_public_execution_catalogue() {
-    fn assert_execution_types<C, R, S>()
-    where
-        C: IndicatorConfig<BatchRunner = R, Stream = S>,
-        R: PreparedBatchRunner<C>,
-        S: StreamingComputation<C>,
-    {
-    }
-
+fn migrated_rolling_statistics_are_in_the_public_execution_seam() {
     assert_execution_types::<VARConfig, VARBatchRunner, VARStream>();
     assert_execution_types::<STDDEVConfig, STDDEVBatchRunner, STDDEVStream>();
     assert_execution_types::<CORRELConfig, CORRELBatchRunner, CORRELStream>();
@@ -223,20 +296,7 @@ fn migrated_rolling_statistics_are_in_the_public_execution_catalogue() {
 
 #[test]
 fn every_implemented_indicator_exposes_the_full_execution_seam() {
-    // Compile-time witness that each implemented indicator's configuration
-    // type is wired to its reusable Prepared Batch Runner and independent
-    // Streaming Computation state. The bound names `C`, `R`, and `S` are
-    // never instantiated, so the test body compiles only if every listed
-    // combination satisfies the sealed `IndicatorConfig` contract.
-    fn assert_execution_types<C, R, S>()
-    where
-        C: IndicatorConfig<BatchRunner = R, Stream = S>,
-        R: PreparedBatchRunner<C>,
-        S: StreamingComputation<C>,
-    {
-    }
-
-    // Overlap Studies (8 implemented indicators).
+    // Overlap Studies (18 implemented indicators).
     assert_execution_types::<SMAConfig, SMABatchRunner, SMAStream>();
     assert_execution_types::<DEMAConfig, DEMABatchRunner, DEMAStream>();
     assert_execution_types::<EMAConfig, EMABatchRunner, EMAStream>();
@@ -245,6 +305,16 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<TEMAConfig, TEMABatchRunner, TEMAStream>();
     assert_execution_types::<TRIMAConfig, TRIMABatchRunner, TRIMAStream>();
     assert_execution_types::<WMAConfig, WMABatchRunner, WMAStream>();
+    assert_execution_types::<SARConfig, SARBatchRunner, SARStream>();
+    assert_execution_types::<SAREXTConfig, SAREXTBatchRunner, SAREXTStream>();
+    assert_execution_types::<ACCBANDSConfig, ACCBANDSBatchRunner, ACCBANDSStream>();
+    assert_execution_types::<BBANDSConfig, BBANDSBatchRunner, BBANDSStream>();
+    assert_execution_types::<MIDPOINTConfig, MIDPOINTBatchRunner, MIDPOINTStream>();
+    assert_execution_types::<MIDPRICEConfig, MIDPRICEBatchRunner, MIDPRICEStream>();
+    assert_execution_types::<KAMAConfig, KAMABatchRunner, KAMAStream>();
+    assert_execution_types::<MAVPConfig, MAVPBatchRunner, MAVPStream>();
+    assert_execution_types::<MAMAConfig, MAMABatchRunner, MAMAStream>();
+    assert_execution_types::<HT_TRENDLINEConfig, HT_TRENDLINEBatchRunner, HT_TRENDLINEStream>();
 
     // Price Transform (5 implemented indicators).
     assert_execution_types::<AVGDEVConfig, AVGDEVBatchRunner, AVGDEVStream>();
@@ -253,8 +323,45 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<TYPPRICEConfig, TYPPRICEBatchRunner, TYPPRICEStream>();
     assert_execution_types::<WCLPRICEConfig, WCLPRICEBatchRunner, WCLPRICEStream>();
 
-    // Cycle Indicators (1 implemented indicator).
+    // Cycle Indicators (5 implemented definitions).
     assert_execution_types::<HT_DCPERIODConfig, HT_DCPERIODBatchRunner, HT_DCPERIODStream>();
+    assert_execution_types::<HT_DCPHASEConfig, HT_DCPHASEBatchRunner, HT_DCPHASEStream>();
+    assert_execution_types::<HT_PHASORConfig, HT_PHASORBatchRunner, HT_PHASORStream>();
+    assert_execution_types::<HT_SINEConfig, HT_SINEBatchRunner, HT_SINEStream>();
+    assert_execution_types::<HT_TRENDMODEConfig, HT_TRENDMODEBatchRunner, HT_TRENDMODEStream>();
+
+    // Momentum Indicators (31 implemented indicators).
+    assert_execution_types::<MOMConfig, MOMBatchRunner, MOMStream>();
+    assert_execution_types::<ROCConfig, ROCBatchRunner, ROCStream>();
+    assert_execution_types::<ROCPConfig, ROCPBatchRunner, ROCPStream>();
+    assert_execution_types::<ROCRConfig, ROCRBatchRunner, ROCRStream>();
+    assert_execution_types::<ROCR100Config, ROCR100BatchRunner, ROCR100Stream>();
+    assert_execution_types::<RSIConfig, RSIBatchRunner, RSIStream>();
+    assert_execution_types::<CMOConfig, CMOBatchRunner, CMOStream>();
+    assert_execution_types::<IMIConfig, IMIBatchRunner, IMIStream>();
+    assert_execution_types::<PLUS_DMConfig, PLUS_DMBatchRunner, PLUS_DMStream>();
+    assert_execution_types::<MINUS_DMConfig, MINUS_DMBatchRunner, MINUS_DMStream>();
+    assert_execution_types::<PLUS_DIConfig, PLUS_DIBatchRunner, PLUS_DIStream>();
+    assert_execution_types::<MINUS_DIConfig, MINUS_DIBatchRunner, MINUS_DIStream>();
+    assert_execution_types::<DXConfig, DXBatchRunner, DXStream>();
+    assert_execution_types::<ADXConfig, ADXBatchRunner, ADXStream>();
+    assert_execution_types::<ADXRConfig, ADXRBatchRunner, ADXRStream>();
+    assert_execution_types::<BOPConfig, BOPBatchRunner, BOPStream>();
+    assert_execution_types::<CCIConfig, CCIBatchRunner, CCIStream>();
+    assert_execution_types::<MFIConfig, MFIBatchRunner, MFIStream>();
+    assert_execution_types::<ULTOSCConfig, ULTOSCBatchRunner, ULTOSCStream>();
+    assert_execution_types::<APOConfig, APOBatchRunner, APOStream>();
+    assert_execution_types::<PPOConfig, PPOBatchRunner, PPOStream>();
+    assert_execution_types::<MACDConfig, MACDBatchRunner, MACDStream>();
+    assert_execution_types::<MACDEXTConfig, MACDEXTBatchRunner, MACDEXTStream>();
+    assert_execution_types::<MACDFIXConfig, MACDFIXBatchRunner, MACDFIXStream>();
+    assert_execution_types::<TRIXConfig, TRIXBatchRunner, TRIXStream>();
+    assert_execution_types::<AROONConfig, AROONBatchRunner, AROONStream>();
+    assert_execution_types::<AROONOSCConfig, AROONOSCBatchRunner, AROONOSCStream>();
+    assert_execution_types::<STOCHConfig, STOCHBatchRunner, STOCHStream>();
+    assert_execution_types::<STOCHFConfig, STOCHFBatchRunner, STOCHFStream>();
+    assert_execution_types::<STOCHRSIConfig, STOCHRSIBatchRunner, STOCHRSIStream>();
+    assert_execution_types::<WILLRConfig, WILLRBatchRunner, WILLRStream>();
 
     // Volume Indicators (3 implemented indicators).
     assert_execution_types::<ADConfig, ADBatchRunner, ADStream>();
@@ -266,10 +373,7 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<NATRConfig, NATRBatchRunner, NATRStream>();
     assert_execution_types::<TRANGEConfig, TRANGEBatchRunner, TRANGEStream>();
 
-    // Statistic Functions (9 implemented indicators). The regression family
-    // was promoted to the seam by issue #14 and is also exercised by the
-    // dedicated `migrated_rolling_statistics_are_in_the_public_execution_catalogue`
-    // test above.
+    // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
     assert_execution_types::<CORRELConfig, CORRELBatchRunner, CORRELStream>();
     assert_execution_types::<LINEARREGConfig, LINEARREGBatchRunner, LINEARREGStream>();
@@ -338,12 +442,26 @@ fn inventory_count_matches_execution_seam_coverage() {
         "TEMA",
         "TRIMA",
         "WMA",
+        "SAR",
+        "SAREXT",
+        "ACCBANDS",
+        "BBANDS",
+        "MIDPOINT",
+        "MIDPRICE",
+        "KAMA",
+        "MAVP",
+        "MAMA",
+        "HT_TRENDLINE",
         "AVGDEV",
         "AVGPRICE",
         "MEDPRICE",
         "TYPPRICE",
         "WCLPRICE",
         "HT_DCPERIOD",
+        "HT_DCPHASE",
+        "HT_PHASOR",
+        "HT_SINE",
+        "HT_TRENDMODE",
         "AD",
         "ADOSC",
         "OBV",
@@ -385,6 +503,37 @@ fn inventory_count_matches_execution_seam_coverage() {
         "MULT",
         "SUB",
         "SUM",
+        "MOM",
+        "ROC",
+        "ROCP",
+        "ROCR",
+        "ROCR100",
+        "RSI",
+        "CMO",
+        "IMI",
+        "PLUS_DM",
+        "MINUS_DM",
+        "PLUS_DI",
+        "MINUS_DI",
+        "DX",
+        "ADX",
+        "ADXR",
+        "BOP",
+        "CCI",
+        "MFI",
+        "ULTOSC",
+        "APO",
+        "PPO",
+        "MACD",
+        "MACDEXT",
+        "MACDFIX",
+        "TRIX",
+        "AROON",
+        "AROONOSC",
+        "STOCH",
+        "STOCHF",
+        "STOCHRSI",
+        "WILLR",
     ];
 
     assert_eq!(
@@ -404,7 +553,10 @@ fn inventory_count_matches_execution_seam_coverage() {
 
 #[test]
 fn deferred_functions_remain_planned() {
-    for name in ["KAMA", "MAMA", "MACD", "BBANDS", "CDLDOJI", "HT_SINE"] {
+    // Pattern Recognition functions remain the final 61 unimplemented
+    // entries in the catalogue; their discrete-signal semantics require
+    // a separate domain-modeling and executable spec stage.
+    for name in ["CDLDOJI", "CDLENGULFING", "CDLHAMMER"] {
         let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
         assert_eq!(info.status, ImplementationStatus::Planned, "{name}");
     }
@@ -418,4 +570,132 @@ fn non_talib_local_plan_extras_are_not_in_official_inventory() {
             "{name} should not be in TA-Lib inventory"
         );
     }
+}
+
+#[test]
+fn momentum_change_family_is_implemented_through_the_public_execution_seam() {
+    use ta_core::momentum::{
+        MOMBatchRunner, MOMConfig, MOMStream, ROCBatchRunner, ROCConfig, ROCPBatchRunner,
+        ROCPConfig, ROCPStream, ROCR100BatchRunner, ROCR100Config, ROCR100Stream, ROCRBatchRunner,
+        ROCRConfig, ROCRStream, ROCStream,
+    };
+
+    for name in ["MOM", "ROC", "ROCP", "ROCR", "ROCR100"] {
+        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(info.status, ImplementationStatus::Implemented, "{name}");
+        assert_eq!(info.group, FunctionGroup::MomentumIndicators, "{name}");
+    }
+
+    assert_execution_types::<MOMConfig, MOMBatchRunner, MOMStream>();
+    assert_execution_types::<ROCConfig, ROCBatchRunner, ROCStream>();
+    assert_execution_types::<ROCPConfig, ROCPBatchRunner, ROCPStream>();
+    assert_execution_types::<ROCRConfig, ROCRBatchRunner, ROCRStream>();
+    assert_execution_types::<ROCR100Config, ROCR100BatchRunner, ROCR100Stream>();
+}
+
+#[test]
+fn directional_movement_system_is_implemented_through_the_public_execution_seam() {
+    use ta_core::momentum::{
+        ADXBatchRunner, ADXConfig, ADXRBatchRunner, ADXRConfig, ADXRStream, ADXStream,
+        DXBatchRunner, DXConfig, DXStream, MINUS_DIBatchRunner, MINUS_DIConfig, MINUS_DIStream,
+        MINUS_DMBatchRunner, MINUS_DMConfig, MINUS_DMStream, PLUS_DIBatchRunner, PLUS_DIConfig,
+        PLUS_DIStream, PLUS_DMBatchRunner, PLUS_DMConfig, PLUS_DMStream,
+    };
+
+    for name in [
+        "PLUS_DM", "MINUS_DM", "PLUS_DI", "MINUS_DI", "DX", "ADX", "ADXR",
+    ] {
+        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(info.status, ImplementationStatus::Implemented, "{name}");
+        assert_eq!(info.group, FunctionGroup::MomentumIndicators, "{name}");
+    }
+
+    assert_execution_types::<PLUS_DMConfig, PLUS_DMBatchRunner, PLUS_DMStream>();
+    assert_execution_types::<MINUS_DMConfig, MINUS_DMBatchRunner, MINUS_DMStream>();
+    assert_execution_types::<PLUS_DIConfig, PLUS_DIBatchRunner, PLUS_DIStream>();
+    assert_execution_types::<MINUS_DIConfig, MINUS_DIBatchRunner, MINUS_DIStream>();
+    assert_execution_types::<DXConfig, DXBatchRunner, DXStream>();
+    assert_execution_types::<ADXConfig, ADXBatchRunner, ADXStream>();
+    assert_execution_types::<ADXRConfig, ADXRBatchRunner, ADXRStream>();
+}
+
+#[test]
+fn composite_momentum_family_is_implemented_through_the_public_execution_seam() {
+    use ta_core::momentum::{
+        BOPBatchRunner, BOPConfig, BOPStream, CCIBatchRunner, CCIConfig, CCIStream, MFIBatchRunner,
+        MFIConfig, MFIStream, ULTOSCBatchRunner, ULTOSCConfig, ULTOSCStream,
+    };
+
+    for name in ["BOP", "CCI", "MFI", "ULTOSC"] {
+        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(info.status, ImplementationStatus::Implemented, "{name}");
+        assert_eq!(info.group, FunctionGroup::MomentumIndicators, "{name}");
+    }
+
+    assert_execution_types::<BOPConfig, BOPBatchRunner, BOPStream>();
+    assert_execution_types::<CCIConfig, CCIBatchRunner, CCIStream>();
+    assert_execution_types::<MFIConfig, MFIBatchRunner, MFIStream>();
+    assert_execution_types::<ULTOSCConfig, ULTOSCBatchRunner, ULTOSCStream>();
+}
+
+#[test]
+fn moving_average_momentum_family_uses_the_public_execution_seam() {
+    use ta_core::momentum::{
+        APOBatchRunner, APOConfig, APOStream, MACDBatchRunner, MACDConfig, MACDEXTBatchRunner,
+        MACDEXTConfig, MACDEXTStream, MACDFIXBatchRunner, MACDFIXConfig, MACDFIXStream, MACDStream,
+        PPOBatchRunner, PPOConfig, PPOStream, TRIXBatchRunner, TRIXConfig, TRIXStream,
+    };
+
+    for name in ["APO", "PPO", "MACD", "MACDEXT", "MACDFIX", "TRIX"] {
+        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(info.status, ImplementationStatus::Implemented, "{name}");
+        assert_eq!(info.group, FunctionGroup::MomentumIndicators, "{name}");
+    }
+
+    assert_execution_types::<APOConfig, APOBatchRunner, APOStream>();
+    assert_execution_types::<PPOConfig, PPOBatchRunner, PPOStream>();
+    assert_execution_types::<MACDConfig, MACDBatchRunner, MACDStream>();
+    assert_execution_types::<MACDEXTConfig, MACDEXTBatchRunner, MACDEXTStream>();
+    assert_execution_types::<MACDFIXConfig, MACDFIXBatchRunner, MACDFIXStream>();
+    assert_execution_types::<TRIXConfig, TRIXBatchRunner, TRIXStream>();
+}
+
+#[test]
+fn hilbert_overlap_studies_use_the_public_execution_seam() {
+    use ta_core::overlap::{
+        HT_TRENDLINEBatchRunner, HT_TRENDLINEConfig, HT_TRENDLINEStream, MAMABatchRunner,
+        MAMAConfig, MAMAStream,
+    };
+
+    for name in ["MAMA", "HT_TRENDLINE"] {
+        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(info.status, ImplementationStatus::Implemented, "{name}");
+        assert_eq!(info.group, FunctionGroup::OverlapStudies, "{name}");
+    }
+
+    assert_execution_types::<MAMAConfig, MAMABatchRunner, MAMAStream>();
+    assert_execution_types::<HT_TRENDLINEConfig, HT_TRENDLINEBatchRunner, HT_TRENDLINEStream>();
+}
+
+#[test]
+fn range_position_momentum_family_uses_the_public_execution_seam() {
+    use ta_core::momentum::{
+        AROONBatchRunner, AROONConfig, AROONOSCBatchRunner, AROONOSCConfig, AROONOSCStream,
+        AROONStream, STOCHBatchRunner, STOCHConfig, STOCHFBatchRunner, STOCHFConfig, STOCHFStream,
+        STOCHRSIBatchRunner, STOCHRSIConfig, STOCHRSIStream, STOCHStream, WILLRBatchRunner,
+        WILLRConfig, WILLRStream,
+    };
+
+    for name in ["AROON", "AROONOSC", "STOCH", "STOCHF", "STOCHRSI", "WILLR"] {
+        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(info.status, ImplementationStatus::Implemented, "{name}");
+        assert_eq!(info.group, FunctionGroup::MomentumIndicators, "{name}");
+    }
+
+    assert_execution_types::<AROONConfig, AROONBatchRunner, AROONStream>();
+    assert_execution_types::<AROONOSCConfig, AROONOSCBatchRunner, AROONOSCStream>();
+    assert_execution_types::<STOCHConfig, STOCHBatchRunner, STOCHStream>();
+    assert_execution_types::<STOCHFConfig, STOCHFBatchRunner, STOCHFStream>();
+    assert_execution_types::<STOCHRSIConfig, STOCHRSIBatchRunner, STOCHRSIStream>();
+    assert_execution_types::<WILLRConfig, WILLRBatchRunner, WILLRStream>();
 }

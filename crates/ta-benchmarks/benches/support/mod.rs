@@ -1,3 +1,5 @@
+pub(crate) mod rolling_overlap;
+
 use ta_core::Float;
 
 pub(crate) const PERIOD: usize = 14;

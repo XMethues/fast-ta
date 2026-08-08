@@ -5,6 +5,9 @@
 //! Prepared Batch Runner, repeated-series, and independent Streaming
 //! Computation paths through the public traits.
 
+mod composite_momentum;
+mod hilbert_overlap;
+mod moving_average_momentum;
 mod support;
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
@@ -14,7 +17,11 @@ use support::{
     SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
 use ta_core::{
-    cycle::{HT_DCPERIODConfig, HT_DCPERIOD_LOOKBACK},
+    cycle::{
+        HT_DCPERIODConfig, HT_DCPHASEConfig, HT_PHASORConfig, HT_PHASORValuesMut, HT_SINEConfig,
+        HT_SINEValuesMut, HT_TRENDMODEConfig, TrendMode, HT_DCPERIOD_LOOKBACK, HT_DCPHASE_LOOKBACK,
+        HT_PHASOR_LOOKBACK, HT_SINE_LOOKBACK, HT_TRENDMODE_LOOKBACK,
+    },
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
         MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXValuesMut, MINMAXValuesMut,
@@ -27,9 +34,17 @@ use ta_core::{
         TANHConfig, ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN,
         TANH,
     },
+    momentum::{
+        ADXConfig, ADXRConfig, CMOConfig, DXConfig, DirectionalInput, DirectionalTick, IMIConfig,
+        IMIInput, IMITick, MINUS_DIConfig, MINUS_DMConfig, MOMConfig, PLUS_DIConfig, PLUS_DMConfig,
+        ROCConfig, ROCPConfig, ROCR100Config, ROCRConfig, RSIConfig, CMO, IMI, RSI,
+    },
     overlap::{
-        DEMAConfig, EMAConfig, MAConfig, PeriodMAType, SMAConfig, T3Config, TEMAConfig,
-        TRIMAConfig, WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
+        ACCBANDSConfig, ACCBANDSInput, ACCBANDSTick, ACCBANDSValuesMut, BBANDSConfig,
+        BBANDSValuesMut, DEMAConfig, EMAConfig, KAMAConfig, MAConfig, MAVPConfig, MAVPInput,
+        MAVPTick, MIDPOINTConfig, MIDPRICEConfig, MIDPRICEInput, MIDPRICETick, PeriodMAType,
+        SARConfig, SAREXTConfig, SARInput, SARTick, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
+        WMAConfig, DEMA, EMA, KAMA, MA, MIDPOINT, SAR, SAREXT, SMA, T3, TEMA, TRIMA, WMA,
     },
     price_transform::{
         AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
@@ -3774,6 +3789,162 @@ fn bench_adosc_parameter_sweep(c: &mut Criterion) {
     group.finish();
 }
 
+define_single_output_benchmark!(
+    bench_rsi_qualified_matrix,
+    "indicator_execution/expanded/momentum_relative_strength/RSI",
+    RSI,
+    RSIConfig,
+    RSIConfig::new,
+    RSIConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_rsi_repeated_and_streaming,
+    "indicator_execution/expanded/momentum_relative_strength_workloads/RSI",
+    RSI,
+    RSIConfig,
+    RSIConfig::new,
+    RSIConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_benchmark!(
+    bench_cmo_qualified_matrix,
+    "indicator_execution/expanded/momentum_relative_strength/CMO",
+    CMO,
+    CMOConfig,
+    CMOConfig::new,
+    CMOConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_cmo_repeated_and_streaming,
+    "indicator_execution/expanded/momentum_relative_strength_workloads/CMO",
+    CMO,
+    CMOConfig,
+    CMOConfig::new,
+    CMOConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_named_input_benchmarks!(
+    bench_imi_qualified_matrix,
+    bench_imi_repeated_and_streaming,
+    "indicator_execution/expanded/momentum_relative_strength/IMI",
+    "indicator_execution/expanded/momentum_relative_strength_workloads/IMI",
+    IMI,
+    IMIConfig,
+    || IMIConfig::new(PERIOD).expect("valid IMI period"),
+    || IMIConfig::new(PERIOD).expect("valid IMI period"),
+    ohlc_fixture,
+    IMIInput,
+    IMITick,
+    [open, close]
+);
+
+fn bench_imi_parameter_sweep(c: &mut Criterion) {
+    let mut group = c.benchmark_group(
+        "indicator_execution/expanded/momentum_relative_strength_workloads/IMI/parameter_sweep",
+    );
+    group.throughput(Throughput::Elements(
+        (SWEEP_PERIODS.len() * REPEATED_SERIES_LEN) as u64,
+    ));
+    let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+    let configs = SWEEP_PERIODS
+        .iter()
+        .map(|&period| IMIConfig::new(period).expect("valid IMI sweep Period"))
+        .collect::<Vec<_>>();
+    let mut outputs = SWEEP_PERIODS
+        .iter()
+        .map(|&period| vec![0.0 as Float; REPEATED_SERIES_LEN - (period - 1)])
+        .collect::<Vec<_>>();
+
+    group.bench_function("config_caller_compact", |b| {
+        b.iter(|| {
+            for (config, output) in configs.iter().zip(outputs.iter_mut()) {
+                let range = IndicatorConfig::compute_into(
+                    black_box(config),
+                    black_box(IMIInput {
+                        open: ohlc.open.as_slice(),
+                        close: ohlc.close.as_slice(),
+                    }),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid IMI parameter sweep");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+
+    let mut runners = configs
+        .iter()
+        .map(|config| {
+            IndicatorConfig::prepare_batch(config, REPEATED_SERIES_LEN)
+                .expect("valid IMI sweep capacity")
+        })
+        .collect::<Vec<_>>();
+    group.bench_function("prepared_runners", |b| {
+        b.iter(|| {
+            for (runner, output) in runners.iter_mut().zip(outputs.iter_mut()) {
+                let range = PreparedBatchRunner::<IMIConfig>::compute_into(
+                    black_box(runner),
+                    black_box(IMIInput {
+                        open: ohlc.open.as_slice(),
+                        close: ohlc.close.as_slice(),
+                    }),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid prepared IMI parameter sweep");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+    group.finish();
+}
+
+define_named_input_benchmarks!(
+    bench_sar_qualified_matrix,
+    bench_sar_repeated_and_streaming,
+    "indicator_execution/expanded/stop_and_reverse/SAR",
+    "indicator_execution/expanded/stop_and_reverse_workloads/SAR",
+    SAR,
+    SARConfig,
+    SARConfig::default,
+    SARConfig::default,
+    ohlc_fixture,
+    SARInput,
+    SARTick,
+    [high, low]
+);
+define_named_input_benchmarks!(
+    bench_sarext_qualified_matrix,
+    bench_sarext_repeated_and_streaming,
+    "indicator_execution/expanded/stop_and_reverse/SAREXT",
+    "indicator_execution/expanded/stop_and_reverse_workloads/SAREXT",
+    SAREXT,
+    SAREXTConfig,
+    SAREXTConfig::default,
+    SAREXTConfig::default,
+    ohlc_fixture,
+    SARInput,
+    SARTick,
+    [high, low]
+);
+
 define_named_input_benchmarks!(
     bench_avgprice_qualified_matrix,
     bench_avgprice_repeated_and_streaming,
@@ -3945,6 +4116,216 @@ define_named_input_benchmarks!(
     [real0, real1]
 );
 
+macro_rules! define_momentum_change_benchmark {
+    ($bench:ident, $config:ty, $name:literal) => {
+        fn $bench(c: &mut Criterion) {
+            let config = <$config>::new(PERIOD).expect(concat!("valid ", $name, " Period"));
+            let mut group =
+                c.benchmark_group(concat!("indicator_execution/expanded/momentum/", $name));
+
+            for &size in SIZES {
+                group.throughput(Throughput::Elements(size as u64));
+
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/caller_compact", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        let mut output = vec![0.0 as Float; size.saturating_sub(PERIOD)];
+                        b.iter(|| {
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&config),
+                                black_box(input.as_slice()),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect(concat!("valid ", $name, " fixture"));
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/owned_compact", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        b.iter_batched(
+                            || (),
+                            |_| {
+                                black_box(
+                                    IndicatorConfig::compute(
+                                        black_box(&config),
+                                        black_box(input.as_slice()),
+                                    )
+                                    .expect(concat!(
+                                        "valid owned ",
+                                        $name,
+                                        " fixture"
+                                    )),
+                                )
+                            },
+                            BatchSize::LargeInput,
+                        );
+                    },
+                );
+
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/prepared_runner", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        let mut runner = IndicatorConfig::prepare_batch(&config, size)
+                            .expect(concat!("valid ", $name, " capacity"));
+                        let mut output = vec![0.0 as Float; size.saturating_sub(PERIOD)];
+                        b.iter(|| {
+                            let range = PreparedBatchRunner::<$config>::compute_into(
+                                black_box(&mut runner),
+                                black_box(input.as_slice()),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect(concat!(
+                                "valid prepared ",
+                                $name,
+                                " fixture"
+                            ));
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+            }
+
+            group.throughput(Throughput::Elements(REPEATED_SERIES_LEN as u64));
+            for &period in SWEEP_PERIODS {
+                group.bench_with_input(
+                    BenchmarkId::new("parameter_sweep/caller_compact", period),
+                    &period,
+                    |b, &period| {
+                        let input = series_fixture(REPEATED_SERIES_LEN, period);
+                        let sweep_config =
+                            <$config>::new(period).expect(concat!("valid ", $name, " Period"));
+                        let mut output =
+                            vec![0.0 as Float; REPEATED_SERIES_LEN.saturating_sub(period)];
+                        b.iter(|| {
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&sweep_config),
+                                black_box(input.as_slice()),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect(concat!(
+                                "valid parameter-sweep ",
+                                $name,
+                                " fixture"
+                            ));
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+            }
+
+            group.throughput(Throughput::Elements(
+                (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("universe/config_caller_compact", |b| {
+                let universe = universe_fixtures();
+                let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN - PERIOD];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(&config),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid ", $name, " Universe"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("universe/prepared_runner", |b| {
+                let universe = universe_fixtures();
+                let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                    .expect(concat!("valid ", $name, " capacity"));
+                let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN - PERIOD];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(&mut runner),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid prepared ", $name, " Universe"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+            group.bench_function("per_worker/prepared_runners", |b| {
+                let inputs = worker_fixtures();
+                let mut runners = (0..WORKERS)
+                    .map(|_| {
+                        IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                            .expect(concat!("valid ", $name, " capacity"))
+                    })
+                    .collect::<Vec<_>>();
+                let mut outputs = (0..WORKERS)
+                    .map(|_| vec![0.0 as Float; REPEATED_SERIES_LEN - PERIOD])
+                    .collect::<Vec<_>>();
+                b.iter(|| {
+                    for ((runner, input), output) in runners
+                        .iter_mut()
+                        .zip(inputs.iter())
+                        .zip(outputs.iter_mut())
+                    {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(runner),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid per-worker ", $name, " fixture"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            let inputs = stream_inputs();
+            group.throughput(Throughput::Elements(
+                (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("streaming/config_streams", |b| {
+                b.iter_batched_ref(
+                    || {
+                        (0..STREAM_INSTRUMENTS)
+                            .map(|_| {
+                                IndicatorConfig::stream(&config)
+                                    .expect(concat!("valid ", $name, " stream"))
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                    |streams| {
+                        for_each_stream_sample!(streams, &inputs, |stream, input| {
+                            let output = StreamingComputation::<$config>::next(
+                                black_box(stream),
+                                black_box(input),
+                            )
+                            .expect(concat!("valid ", $name, " stream Tick"));
+                            black_box(output);
+                        });
+                    },
+                    BatchSize::LargeInput,
+                );
+            });
+
+            group.finish();
+        }
+    };
+}
+
+define_momentum_change_benchmark!(bench_mom_execution, MOMConfig, "MOM");
+define_momentum_change_benchmark!(bench_roc_execution, ROCConfig, "ROC");
+define_momentum_change_benchmark!(bench_rocp_execution, ROCPConfig, "ROCP");
+define_momentum_change_benchmark!(bench_rocr_execution, ROCRConfig, "ROCR");
+define_momentum_change_benchmark!(bench_rocr100_execution, ROCR100Config, "ROCR100");
+
 fn bench_ht_dcperiod_execution(c: &mut Criterion) {
     let config = HT_DCPERIODConfig::new();
     let mut group = c.benchmark_group("indicator_execution/expanded/cycle/HT_DCPERIOD");
@@ -4105,10 +4486,1034 @@ fn bench_ht_dcperiod_execution(c: &mut Criterion) {
     group.finish();
 }
 
+macro_rules! define_cycle_single_output_benchmark {
+    ($bench:ident, $config:ty, $name:literal, $lookback:expr, $initial:expr) => {
+        fn $bench(c: &mut Criterion) {
+            let config = <$config>::new();
+            let mut group =
+                c.benchmark_group(concat!("indicator_execution/expanded/cycle/", $name));
+
+            for &size in SIZES {
+                group.throughput(Throughput::Elements(size as u64));
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/caller_compact", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        let mut output = vec![$initial; size.saturating_sub($lookback)];
+                        b.iter(|| {
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&config),
+                                black_box(input.as_slice()),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect(concat!("valid ", $name, " fixture"));
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/owned_compact", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        b.iter_batched(
+                            || (),
+                            |_| {
+                                black_box(
+                                    IndicatorConfig::compute(
+                                        black_box(&config),
+                                        black_box(input.as_slice()),
+                                    )
+                                    .expect(concat!(
+                                        "valid owned ",
+                                        $name,
+                                        " fixture"
+                                    )),
+                                )
+                            },
+                            BatchSize::LargeInput,
+                        );
+                    },
+                );
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/prepared_runner", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        let mut runner = IndicatorConfig::prepare_batch(&config, size)
+                            .expect(concat!("valid ", $name, " capacity"));
+                        let mut output = vec![$initial; size.saturating_sub($lookback)];
+                        b.iter(|| {
+                            let range = PreparedBatchRunner::<$config>::compute_into(
+                                black_box(&mut runner),
+                                black_box(input.as_slice()),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect(concat!(
+                                "valid prepared ",
+                                $name,
+                                " fixture"
+                            ));
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+            }
+
+            group.throughput(Throughput::Elements(
+                (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("universe/config_caller_compact", |b| {
+                let universe = universe_fixtures();
+                let mut output = vec![$initial; REPEATED_SERIES_LEN.saturating_sub($lookback)];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(&config),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid ", $name, " Universe"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("universe/prepared_runner", |b| {
+                let universe = universe_fixtures();
+                let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                    .expect(concat!("valid ", $name, " capacity"));
+                let mut output = vec![$initial; REPEATED_SERIES_LEN.saturating_sub($lookback)];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(&mut runner),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid prepared ", $name, " Universe"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+            group.bench_function("per_worker/prepared_runners", |b| {
+                let inputs = worker_fixtures();
+                let mut runners = (0..WORKERS)
+                    .map(|_| {
+                        IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                            .expect(concat!("valid ", $name, " capacity"))
+                    })
+                    .collect::<Vec<_>>();
+                let mut outputs = (0..WORKERS)
+                    .map(|_| vec![$initial; REPEATED_SERIES_LEN.saturating_sub($lookback)])
+                    .collect::<Vec<_>>();
+                b.iter(|| {
+                    for ((runner, input), output) in runners
+                        .iter_mut()
+                        .zip(inputs.iter())
+                        .zip(outputs.iter_mut())
+                    {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(runner),
+                            black_box(input.as_slice()),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid per-worker ", $name, " fixture"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            let inputs = stream_inputs();
+            group.throughput(Throughput::Elements(
+                (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("streaming/config_streams", |b| {
+                b.iter_batched_ref(
+                    || {
+                        (0..STREAM_INSTRUMENTS)
+                            .map(|_| {
+                                IndicatorConfig::stream(&config)
+                                    .expect(concat!("valid ", $name, " stream"))
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                    |streams| {
+                        for_each_stream_sample!(streams, &inputs, |stream, input| {
+                            let output = StreamingComputation::<$config>::next(
+                                black_box(stream),
+                                black_box(input),
+                            )
+                            .expect(concat!("valid ", $name, " stream tick"));
+                            black_box(output);
+                        });
+                    },
+                    BatchSize::LargeInput,
+                );
+            });
+            group.finish();
+        }
+    };
+}
+
+macro_rules! define_cycle_paired_output_benchmark {
+    ($bench:ident, $config:ty, $output_mut:ident, $first:ident, $second:ident, $name:literal, $lookback:expr) => {
+        fn $bench(c: &mut Criterion) {
+            let config = <$config>::new();
+            let mut group =
+                c.benchmark_group(concat!("indicator_execution/expanded/cycle/", $name));
+
+            for &size in SIZES {
+                group.throughput(Throughput::Elements(size as u64));
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/caller_compact", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        let count = size.saturating_sub($lookback);
+                        let mut first = vec![0.0 as Float; count];
+                        let mut second = vec![0.0 as Float; count];
+                        b.iter(|| {
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&config),
+                                black_box(input.as_slice()),
+                                black_box($output_mut {
+                                    $first: first.as_mut_slice(),
+                                    $second: second.as_mut_slice(),
+                                }),
+                            )
+                            .expect(concat!("valid ", $name, " fixture"));
+                            black_box((range, first.as_slice(), second.as_slice()));
+                        });
+                    },
+                );
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/owned_compact", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        b.iter_batched(
+                            || (),
+                            |_| {
+                                black_box(
+                                    IndicatorConfig::compute(
+                                        black_box(&config),
+                                        black_box(input.as_slice()),
+                                    )
+                                    .expect(concat!(
+                                        "valid owned ",
+                                        $name,
+                                        " fixture"
+                                    )),
+                                )
+                            },
+                            BatchSize::LargeInput,
+                        );
+                    },
+                );
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/prepared_runner", size),
+                    &size,
+                    |b, &size| {
+                        let input = series_fixture(size, 0);
+                        let mut runner = IndicatorConfig::prepare_batch(&config, size)
+                            .expect(concat!("valid ", $name, " capacity"));
+                        let count = size.saturating_sub($lookback);
+                        let mut first = vec![0.0 as Float; count];
+                        let mut second = vec![0.0 as Float; count];
+                        b.iter(|| {
+                            let range = PreparedBatchRunner::<$config>::compute_into(
+                                black_box(&mut runner),
+                                black_box(input.as_slice()),
+                                black_box($output_mut {
+                                    $first: first.as_mut_slice(),
+                                    $second: second.as_mut_slice(),
+                                }),
+                            )
+                            .expect(concat!(
+                                "valid prepared ",
+                                $name,
+                                " fixture"
+                            ));
+                            black_box((range, first.as_slice(), second.as_slice()));
+                        });
+                    },
+                );
+            }
+
+            group.throughput(Throughput::Elements(
+                (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("universe/config_caller_compact", |b| {
+                let universe = universe_fixtures();
+                let count = REPEATED_SERIES_LEN.saturating_sub($lookback);
+                let mut first = vec![0.0 as Float; count];
+                let mut second = vec![0.0 as Float; count];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(&config),
+                            black_box(input.as_slice()),
+                            black_box($output_mut {
+                                $first: first.as_mut_slice(),
+                                $second: second.as_mut_slice(),
+                            }),
+                        )
+                        .expect(concat!("valid ", $name, " Universe"));
+                        black_box((range, first.as_slice(), second.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("universe/prepared_runner", |b| {
+                let universe = universe_fixtures();
+                let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                    .expect(concat!("valid ", $name, " capacity"));
+                let count = REPEATED_SERIES_LEN.saturating_sub($lookback);
+                let mut first = vec![0.0 as Float; count];
+                let mut second = vec![0.0 as Float; count];
+                b.iter(|| {
+                    for input in &universe {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(&mut runner),
+                            black_box(input.as_slice()),
+                            black_box($output_mut {
+                                $first: first.as_mut_slice(),
+                                $second: second.as_mut_slice(),
+                            }),
+                        )
+                        .expect(concat!("valid prepared ", $name, " Universe"));
+                        black_box((range, first.as_slice(), second.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+            group.bench_function("per_worker/prepared_runners", |b| {
+                let inputs = worker_fixtures();
+                let mut runners = (0..WORKERS)
+                    .map(|_| {
+                        IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                            .expect(concat!("valid ", $name, " capacity"))
+                    })
+                    .collect::<Vec<_>>();
+                let count = REPEATED_SERIES_LEN.saturating_sub($lookback);
+                let mut outputs = (0..WORKERS)
+                    .map(|_| (vec![0.0 as Float; count], vec![0.0 as Float; count]))
+                    .collect::<Vec<_>>();
+                b.iter(|| {
+                    for ((runner, input), (first, second)) in runners
+                        .iter_mut()
+                        .zip(inputs.iter())
+                        .zip(outputs.iter_mut())
+                    {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(runner),
+                            black_box(input.as_slice()),
+                            black_box($output_mut {
+                                $first: first.as_mut_slice(),
+                                $second: second.as_mut_slice(),
+                            }),
+                        )
+                        .expect(concat!("valid per-worker ", $name, " fixture"));
+                        black_box((range, first.as_slice(), second.as_slice()));
+                    }
+                });
+            });
+
+            let inputs = stream_inputs();
+            group.throughput(Throughput::Elements(
+                (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("streaming/config_streams", |b| {
+                b.iter_batched_ref(
+                    || {
+                        (0..STREAM_INSTRUMENTS)
+                            .map(|_| {
+                                IndicatorConfig::stream(&config)
+                                    .expect(concat!("valid ", $name, " stream"))
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                    |streams| {
+                        for_each_stream_sample!(streams, &inputs, |stream, input| {
+                            let output = StreamingComputation::<$config>::next(
+                                black_box(stream),
+                                black_box(input),
+                            )
+                            .expect(concat!("valid ", $name, " stream tick"));
+                            black_box(output);
+                        });
+                    },
+                    BatchSize::LargeInput,
+                );
+            });
+            group.finish();
+        }
+    };
+}
+
+define_cycle_single_output_benchmark!(
+    bench_ht_dcphase_execution,
+    HT_DCPHASEConfig,
+    "HT_DCPHASE",
+    HT_DCPHASE_LOOKBACK,
+    0.0 as Float
+);
+define_cycle_paired_output_benchmark!(
+    bench_ht_phasor_execution,
+    HT_PHASORConfig,
+    HT_PHASORValuesMut,
+    in_phase,
+    quadrature,
+    "HT_PHASOR",
+    HT_PHASOR_LOOKBACK
+);
+define_cycle_paired_output_benchmark!(
+    bench_ht_sine_execution,
+    HT_SINEConfig,
+    HT_SINEValuesMut,
+    sine,
+    lead_sine,
+    "HT_SINE",
+    HT_SINE_LOOKBACK
+);
+define_cycle_single_output_benchmark!(
+    bench_ht_trendmode_execution,
+    HT_TRENDMODEConfig,
+    "HT_TRENDMODE",
+    HT_TRENDMODE_LOOKBACK,
+    TrendMode::Cycle
+);
+
+macro_rules! define_directional_movement_benchmark {
+    ($bench:ident, $config:ty, $name:literal) => {
+        fn $bench(c: &mut Criterion) {
+            let config = <$config>::new(PERIOD).expect(concat!("valid ", $name, " Period"));
+            let lookback = IndicatorConfig::lookback(&config);
+            let mut group = c.benchmark_group(concat!(
+                "indicator_execution/expanded/momentum/directional_movement/",
+                $name
+            ));
+
+            for &size in SIZES {
+                group.throughput(Throughput::Elements(size as u64));
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/caller_compact", size),
+                    &size,
+                    |b, &size| {
+                        let ohlc = ohlc_fixture(size);
+                        let mut output = vec![0.0 as Float; size.saturating_sub(lookback)];
+                        b.iter(|| {
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&config),
+                                black_box(DirectionalInput {
+                                    high: ohlc.high.as_slice(),
+                                    low: ohlc.low.as_slice(),
+                                    close: ohlc.close.as_slice(),
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect(concat!("valid ", $name, " fixture"));
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/owned_compact", size),
+                    &size,
+                    |b, &size| {
+                        let ohlc = ohlc_fixture(size);
+                        b.iter_batched(
+                            || (),
+                            |_| {
+                                black_box(
+                                    IndicatorConfig::compute(
+                                        black_box(&config),
+                                        black_box(DirectionalInput {
+                                            high: ohlc.high.as_slice(),
+                                            low: ohlc.low.as_slice(),
+                                            close: ohlc.close.as_slice(),
+                                        }),
+                                    )
+                                    .expect(concat!(
+                                        "valid owned ",
+                                        $name,
+                                        " fixture"
+                                    )),
+                                )
+                            },
+                            BatchSize::LargeInput,
+                        );
+                    },
+                );
+                group.bench_with_input(
+                    BenchmarkId::new("one_shot/prepared_runner", size),
+                    &size,
+                    |b, &size| {
+                        let ohlc = ohlc_fixture(size);
+                        let mut runner = IndicatorConfig::prepare_batch(&config, size)
+                            .expect(concat!("valid ", $name, " prepared capacity"));
+                        let mut output = vec![0.0 as Float; size.saturating_sub(lookback)];
+                        b.iter(|| {
+                            let range = PreparedBatchRunner::<$config>::compute_into(
+                                black_box(&mut runner),
+                                black_box(DirectionalInput {
+                                    high: ohlc.high.as_slice(),
+                                    low: ohlc.low.as_slice(),
+                                    close: ohlc.close.as_slice(),
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect(concat!(
+                                "valid prepared ",
+                                $name,
+                                " fixture"
+                            ));
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+            }
+
+            let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+            group.throughput(Throughput::Elements(
+                (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("universe/caller_compact", |b| {
+                let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN.saturating_sub(lookback)];
+                b.iter(|| {
+                    for _ in 0..UNIVERSE_INSTRUMENTS {
+                        let range = IndicatorConfig::compute_into(
+                            black_box(&config),
+                            black_box(DirectionalInput {
+                                high: ohlc.high.as_slice(),
+                                low: ohlc.low.as_slice(),
+                                close: ohlc.close.as_slice(),
+                            }),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid ", $name, " Universe"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+            group.bench_function("universe/prepared_runner", |b| {
+                let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                    .expect(concat!("valid ", $name, " prepared capacity"));
+                let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN.saturating_sub(lookback)];
+                b.iter(|| {
+                    for _ in 0..UNIVERSE_INSTRUMENTS {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(&mut runner),
+                            black_box(DirectionalInput {
+                                high: ohlc.high.as_slice(),
+                                low: ohlc.low.as_slice(),
+                                close: ohlc.close.as_slice(),
+                            }),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid prepared ", $name, " Universe"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements(REPEATED_SERIES_LEN as u64));
+            for &period in SWEEP_PERIODS {
+                group.bench_with_input(
+                    BenchmarkId::new("parameter_sweep/caller_compact", period),
+                    &period,
+                    |b, &period| {
+                        let sweep_config =
+                            <$config>::new(period).expect(concat!("valid ", $name, " Period"));
+                        let sweep_lookback = IndicatorConfig::lookback(&sweep_config);
+                        let mut output =
+                            vec![0.0 as Float; REPEATED_SERIES_LEN.saturating_sub(sweep_lookback)];
+                        b.iter(|| {
+                            let range = IndicatorConfig::compute_into(
+                                black_box(&sweep_config),
+                                black_box(DirectionalInput {
+                                    high: ohlc.high.as_slice(),
+                                    low: ohlc.low.as_slice(),
+                                    close: ohlc.close.as_slice(),
+                                }),
+                                black_box(output.as_mut_slice()),
+                            )
+                            .expect(concat!(
+                                "valid ",
+                                $name,
+                                " parameter sweep"
+                            ));
+                            black_box((range, output.as_slice()));
+                        });
+                    },
+                );
+            }
+
+            group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+            group.bench_function("per_worker/prepared_runners", |b| {
+                let mut runners = (0..WORKERS)
+                    .map(|_| {
+                        IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                            .expect(concat!("valid ", $name, " worker capacity"))
+                    })
+                    .collect::<Vec<_>>();
+                let mut outputs = (0..WORKERS)
+                    .map(|_| vec![0.0 as Float; REPEATED_SERIES_LEN.saturating_sub(lookback)])
+                    .collect::<Vec<_>>();
+                b.iter(|| {
+                    for (runner, output) in runners.iter_mut().zip(outputs.iter_mut()) {
+                        let range = PreparedBatchRunner::<$config>::compute_into(
+                            black_box(runner),
+                            black_box(DirectionalInput {
+                                high: ohlc.high.as_slice(),
+                                low: ohlc.low.as_slice(),
+                                close: ohlc.close.as_slice(),
+                            }),
+                            black_box(output.as_mut_slice()),
+                        )
+                        .expect(concat!("valid ", $name, " worker fixture"));
+                        black_box((range, output.as_slice()));
+                    }
+                });
+            });
+
+            group.throughput(Throughput::Elements(
+                (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+            ));
+            group.bench_function("streaming/independent_streams", |b| {
+                b.iter_batched(
+                    || {
+                        (0..STREAM_INSTRUMENTS)
+                            .map(|_| IndicatorConfig::stream(&config).expect("valid stream"))
+                            .collect::<Vec<_>>()
+                    },
+                    |mut streams| {
+                        for index in 0..REPEATED_SERIES_LEN {
+                            let tick = DirectionalTick {
+                                high: ohlc.high[index],
+                                low: ohlc.low[index],
+                                close: ohlc.close[index],
+                            };
+                            for stream in &mut streams {
+                                let value = StreamingComputation::<$config>::next(
+                                    black_box(stream),
+                                    black_box(tick),
+                                )
+                                .expect(concat!(
+                                    "valid ",
+                                    $name,
+                                    " stream tick"
+                                ));
+                                black_box(value);
+                            }
+                        }
+                    },
+                    BatchSize::LargeInput,
+                );
+            });
+            group.finish();
+        }
+    };
+}
+
+define_directional_movement_benchmark!(bench_plus_dm_execution, PLUS_DMConfig, "PLUS_DM");
+define_directional_movement_benchmark!(bench_minus_dm_execution, MINUS_DMConfig, "MINUS_DM");
+define_directional_movement_benchmark!(bench_plus_di_execution, PLUS_DIConfig, "PLUS_DI");
+define_directional_movement_benchmark!(bench_minus_di_execution, MINUS_DIConfig, "MINUS_DI");
+define_directional_movement_benchmark!(bench_dx_execution, DXConfig, "DX");
+define_directional_movement_benchmark!(bench_adx_execution, ADXConfig, "ADX");
+define_directional_movement_benchmark!(bench_adxr_execution, ADXRConfig, "ADXR");
+
+define_single_output_benchmark!(
+    bench_midpoint_qualified_matrix,
+    "indicator_execution/expanded/rolling_overlap/MIDPOINT",
+    MIDPOINT,
+    MIDPOINTConfig,
+    MIDPOINTConfig::new,
+    MIDPOINTConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+define_single_output_workloads!(
+    bench_midpoint_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_overlap_workloads/MIDPOINT",
+    MIDPOINT,
+    MIDPOINTConfig,
+    MIDPOINTConfig::new,
+    MIDPOINTConfig::new,
+    1,
+    Float,
+    0.0 as Float,
+    Float,
+    0.0 as Float
+);
+
+define_named_input_benchmarks!(
+    bench_midprice_qualified_matrix,
+    bench_midprice_repeated_and_streaming,
+    "indicator_execution/expanded/rolling_overlap/MIDPRICE",
+    "indicator_execution/expanded/rolling_overlap_workloads/MIDPRICE",
+    MIDPRICE,
+    MIDPRICEConfig,
+    || MIDPRICEConfig::new(PERIOD).expect("valid MIDPRICE Period"),
+    || MIDPRICEConfig::new(PERIOD).expect("valid MIDPRICE Period"),
+    ohlc_fixture,
+    MIDPRICEInput,
+    MIDPRICETick,
+    [high, low]
+);
+
+fn bench_midprice_parameter_sweep(c: &mut Criterion) {
+    let mut group = c.benchmark_group(
+        "indicator_execution/expanded/rolling_overlap_workloads/MIDPRICE/parameter_sweep",
+    );
+    let ohlc = ohlc_fixture(REPEATED_SERIES_LEN);
+    let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN];
+    for &period in SWEEP_PERIODS {
+        let config = MIDPRICEConfig::new(period).expect("valid MIDPRICE sweep Period");
+        let mut runner = config.prepare_batch(REPEATED_SERIES_LEN).unwrap();
+        group.throughput(Throughput::Elements(REPEATED_SERIES_LEN as u64));
+        group.bench_with_input(
+            BenchmarkId::new("prepared_runner", period),
+            &period,
+            |b, _| {
+                b.iter(|| {
+                    black_box(
+                        runner
+                            .compute_into(
+                                MIDPRICEInput {
+                                    high: black_box(ohlc.high.as_slice()),
+                                    low: black_box(ohlc.low.as_slice()),
+                                },
+                                black_box(output.as_mut_slice()),
+                            )
+                            .unwrap(),
+                    )
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
+fn bench_kama_mavp_execution(c: &mut Criterion) {
+    const MINIMUM_PERIOD: usize = 2;
+    const MAXIMUM_PERIOD: usize = PERIOD;
+
+    let mut kama_group =
+        c.benchmark_group("indicator_execution/expanded/variable_period_overlap/KAMA");
+    for &size in SIZES {
+        if size <= PERIOD {
+            continue;
+        }
+        kama_group.throughput(Throughput::Elements(size as u64));
+        kama_group.bench_with_input(
+            BenchmarkId::new("one_shot/caller_compact", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                let mut output = vec![0.0 as Float; size - PERIOD];
+                b.iter(|| {
+                    let range = KAMA(
+                        black_box(input.as_slice()),
+                        black_box(PERIOD),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid KAMA fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+        kama_group.bench_with_input(
+            BenchmarkId::new("one_shot/selector_caller_compact", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                let mut output = vec![0.0 as Float; size - PERIOD];
+                b.iter(|| {
+                    let range = MA(
+                        black_box(input.as_slice()),
+                        black_box(PERIOD),
+                        black_box(PeriodMAType::KAMA),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid selector KAMA fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+        kama_group.bench_with_input(
+            BenchmarkId::new("one_shot/owned_compact", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                let config = KAMAConfig::new(PERIOD).expect("valid KAMA Period");
+                b.iter_batched(
+                    || (),
+                    |_| {
+                        black_box(
+                            IndicatorConfig::compute(
+                                black_box(&config),
+                                black_box(input.as_slice()),
+                            )
+                            .expect("valid owned KAMA fixture"),
+                        )
+                    },
+                    BatchSize::LargeInput,
+                );
+            },
+        );
+        kama_group.bench_with_input(
+            BenchmarkId::new("one_shot/prepared_runner", size),
+            &size,
+            |b, &size| {
+                let input = series_fixture(size, 0);
+                let config = KAMAConfig::new(PERIOD).expect("valid KAMA Period");
+                let mut runner =
+                    IndicatorConfig::prepare_batch(&config, size).expect("valid KAMA capacity");
+                let mut output = vec![0.0 as Float; size - PERIOD];
+                b.iter(|| {
+                    let range = PreparedBatchRunner::<KAMAConfig>::compute_into(
+                        black_box(&mut runner),
+                        black_box(input.as_slice()),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid prepared KAMA fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+    }
+    let kama_stream_inputs = stream_inputs();
+    let kama_stream_config = KAMAConfig::new(PERIOD).expect("valid KAMA Period");
+    kama_group.throughput(Throughput::Elements(
+        (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+    ));
+    kama_group.bench_function("streaming/independent_streams", |b| {
+        b.iter_batched(
+            || {
+                (0..STREAM_INSTRUMENTS)
+                    .map(|_| {
+                        IndicatorConfig::stream(&kama_stream_config).expect("valid KAMA stream")
+                    })
+                    .collect::<Vec<_>>()
+            },
+            |mut streams| {
+                for instrument_values in &kama_stream_inputs {
+                    for (stream, &input) in streams.iter_mut().zip(instrument_values) {
+                        let value = StreamingComputation::<KAMAConfig>::next(
+                            black_box(stream),
+                            black_box(input),
+                        )
+                        .expect("valid KAMA stream tick");
+                        black_box(value);
+                    }
+                }
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    kama_group.finish();
+
+    let mut group = c.benchmark_group("indicator_execution/expanded/variable_period_overlap/MAVP");
+    let config = MAVPConfig::new(MINIMUM_PERIOD, MAXIMUM_PERIOD, PeriodMAType::KAMA)
+        .expect("valid MAVP configuration");
+    for &size in SIZES {
+        if size <= config.lookback() {
+            continue;
+        }
+        group.throughput(Throughput::Elements(size as u64));
+        group.bench_with_input(
+            BenchmarkId::new("period_selection/caller_compact", size),
+            &size,
+            |b, &size| {
+                let real = series_fixture(size, 0);
+                let periods = (0..size)
+                    .map(
+                        |index| match index % (MAXIMUM_PERIOD - MINIMUM_PERIOD + 3) {
+                            0 => 0,
+                            1 => usize::MAX,
+                            offset => MINIMUM_PERIOD + offset - 2,
+                        },
+                    )
+                    .collect::<Vec<_>>();
+                let mut output = vec![0.0 as Float; size - config.lookback()];
+                b.iter(|| {
+                    let range = IndicatorConfig::compute_into(
+                        black_box(&config),
+                        black_box(MAVPInput {
+                            real: real.as_slice(),
+                            periods: periods.as_slice(),
+                        }),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid MAVP period-selection fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("period_selection/prepared_runner", size),
+            &size,
+            |b, &size| {
+                let real = series_fixture(size, 0);
+                let periods = (0..size)
+                    .map(|index| MINIMUM_PERIOD + index % (MAXIMUM_PERIOD - MINIMUM_PERIOD + 1))
+                    .collect::<Vec<_>>();
+                let mut runner =
+                    IndicatorConfig::prepare_batch(&config, size).expect("valid MAVP capacity");
+                let mut output = vec![0.0 as Float; size - config.lookback()];
+                b.iter(|| {
+                    let range = PreparedBatchRunner::<MAVPConfig>::compute_into(
+                        black_box(&mut runner),
+                        black_box(MAVPInput {
+                            real: real.as_slice(),
+                            periods: periods.as_slice(),
+                        }),
+                        black_box(output.as_mut_slice()),
+                    )
+                    .expect("valid prepared MAVP fixture");
+                    black_box((range, output.as_slice()));
+                });
+            },
+        );
+    }
+
+    group.throughput(Throughput::Elements(
+        (UNIVERSE_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+    ));
+    group.bench_function("universe/prepared_runner", |b| {
+        let universe = universe_fixtures();
+        let periods = (0..REPEATED_SERIES_LEN)
+            .map(|index| MINIMUM_PERIOD + index % (MAXIMUM_PERIOD - MINIMUM_PERIOD + 1))
+            .collect::<Vec<_>>();
+        let mut runner = IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+            .expect("valid MAVP capacity");
+        let mut output = vec![0.0 as Float; REPEATED_SERIES_LEN - config.lookback()];
+        b.iter(|| {
+            for real in &universe {
+                let range = PreparedBatchRunner::<MAVPConfig>::compute_into(
+                    black_box(&mut runner),
+                    black_box(MAVPInput {
+                        real: real.as_slice(),
+                        periods: periods.as_slice(),
+                    }),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid prepared MAVP Universe");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+
+    group.throughput(Throughput::Elements((WORKERS * REPEATED_SERIES_LEN) as u64));
+    group.bench_function("per_worker/prepared_runners", |b| {
+        let inputs = worker_fixtures();
+        let periods = (0..REPEATED_SERIES_LEN)
+            .map(|index| MINIMUM_PERIOD + index % (MAXIMUM_PERIOD - MINIMUM_PERIOD + 1))
+            .collect::<Vec<_>>();
+        let mut runners = (0..WORKERS)
+            .map(|_| {
+                IndicatorConfig::prepare_batch(&config, REPEATED_SERIES_LEN)
+                    .expect("valid MAVP capacity")
+            })
+            .collect::<Vec<_>>();
+        let mut outputs = (0..WORKERS)
+            .map(|_| vec![0.0 as Float; REPEATED_SERIES_LEN - config.lookback()])
+            .collect::<Vec<_>>();
+        b.iter(|| {
+            for ((runner, real), output) in runners
+                .iter_mut()
+                .zip(inputs.iter())
+                .zip(outputs.iter_mut())
+            {
+                let range = PreparedBatchRunner::<MAVPConfig>::compute_into(
+                    black_box(runner),
+                    black_box(MAVPInput {
+                        real: real.as_slice(),
+                        periods: periods.as_slice(),
+                    }),
+                    black_box(output.as_mut_slice()),
+                )
+                .expect("valid per-worker MAVP fixture");
+                black_box((range, output.as_slice()));
+            }
+        });
+    });
+
+    let inputs = stream_inputs();
+    group.throughput(Throughput::Elements(
+        (STREAM_INSTRUMENTS * REPEATED_SERIES_LEN) as u64,
+    ));
+    group.bench_function("streaming/independent_streams", |b| {
+        b.iter_batched(
+            || {
+                (0..STREAM_INSTRUMENTS)
+                    .map(|_| IndicatorConfig::stream(&config).expect("valid MAVP stream"))
+                    .collect::<Vec<_>>()
+            },
+            |mut streams| {
+                for (tick_index, instrument_values) in inputs.iter().enumerate() {
+                    for (instrument_index, (stream, &real)) in
+                        streams.iter_mut().zip(instrument_values).enumerate()
+                    {
+                        let period = MINIMUM_PERIOD
+                            + (tick_index + instrument_index)
+                                % (MAXIMUM_PERIOD - MINIMUM_PERIOD + 1);
+                        let value = StreamingComputation::<MAVPConfig>::next(
+                            black_box(stream),
+                            black_box(MAVPTick { real, period }),
+                        )
+                        .expect("valid MAVP stream tick");
+                        black_box(value);
+                    }
+                }
+            },
+            BatchSize::LargeInput,
+        );
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_sma_one_shot,
     bench_ht_dcperiod_execution,
+    bench_ht_dcphase_execution,
+    bench_ht_phasor_execution,
+    bench_ht_sine_execution,
+    bench_ht_trendmode_execution,
+    composite_momentum::bench_composite_momentum_execution,
+    moving_average_momentum::bench_moving_average_momentum_execution,
+    bench_mom_execution,
+    bench_roc_execution,
+    bench_rocp_execution,
+    bench_rocr_execution,
+    bench_rocr100_execution,
+    bench_plus_dm_execution,
+    bench_minus_dm_execution,
+    bench_plus_di_execution,
+    bench_minus_di_execution,
+    bench_dx_execution,
+    bench_adx_execution,
+    bench_adxr_execution,
+    bench_rsi_qualified_matrix,
+    bench_cmo_qualified_matrix,
+    bench_imi_qualified_matrix,
+    bench_rsi_repeated_and_streaming,
+    bench_cmo_repeated_and_streaming,
+    bench_imi_repeated_and_streaming,
+    bench_imi_parameter_sweep,
+    bench_sar_qualified_matrix,
+    bench_sarext_qualified_matrix,
+    bench_sar_repeated_and_streaming,
+    bench_sarext_repeated_and_streaming,
     bench_avgprice_one_shot,
     bench_minmax_one_shot,
     bench_minmaxindex_one_shot,
@@ -4136,6 +5541,14 @@ criterion_group!(
     bench_tema_repeated_and_streaming,
     bench_t3_repeated_and_streaming,
     bench_ma_ema_repeated_and_streaming,
+    bench_midpoint_qualified_matrix,
+    bench_midpoint_repeated_and_streaming,
+    bench_midprice_qualified_matrix,
+    bench_midprice_repeated_and_streaming,
+    bench_midprice_parameter_sweep,
+    support::rolling_overlap::bench_bands,
+    bench_kama_mavp_execution,
+    hilbert_overlap::bench_hilbert_overlap_execution,
     bench_minmax_repeated_and_streaming,
     bench_minmaxindex_repeated_and_streaming,
     bench_universe,

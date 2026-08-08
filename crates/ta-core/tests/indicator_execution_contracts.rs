@@ -571,7 +571,7 @@ fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
         .collect::<Vec<_>>();
     assert_float_slice_close(&replayed_recursive, recursive_batch.values());
 
-    const SUPPORTED: [PeriodMAType; 7] = [
+    const SUPPORTED: [PeriodMAType; 8] = [
         PeriodMAType::SMA,
         PeriodMAType::EMA,
         PeriodMAType::WMA,
@@ -579,6 +579,7 @@ fn t3_and_ma_configs_preserve_parameters_dispatch_and_execution_modes() {
         PeriodMAType::TEMA,
         PeriodMAType::TRIMA,
         PeriodMAType::T3,
+        PeriodMAType::KAMA,
     ];
     for ma_type in SUPPORTED {
         let config = MAConfig::new(1, ma_type).unwrap();

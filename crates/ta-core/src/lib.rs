@@ -39,6 +39,8 @@ pub mod inventory;
 pub mod math_operators;
 /// Math Transform functions.
 pub mod math_transform;
+/// Momentum Indicators.
+pub mod momentum;
 /// Overlap studies: Moving averages and other price overlay indicators.
 pub mod overlap;
 /// Price Transform functions.

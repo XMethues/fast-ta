@@ -7,6 +7,8 @@ mod arithmetic;
 mod extrema;
 mod rolling;
 
+pub(crate) use extrema::{rolling_range_extrema, RangeExtremaScratch};
+
 pub use arithmetic::{
     ADDBatchRunner, ADDConfig, ADDStream, BinaryInput, BinaryTick, DIVBatchRunner, DIVConfig,
     DIVStream, MULTBatchRunner, MULTConfig, MULTStream, SUBBatchRunner, SUBConfig, SUBStream, ADD,

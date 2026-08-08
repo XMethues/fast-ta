@@ -315,6 +315,115 @@ unsafe fn push_reserved_index(queue: &mut Vec<usize>, index: usize) {
     }
 }
 
+/// Private rolling-extrema scratch shared with range-position indicators.
+///
+/// The qualified public extrema definitions keep their concrete kernels. This
+/// seam shares their monotonic-queue mechanics while allowing definitions such
+/// as AROON to select their independently pinned equal-value tie policy.
+#[derive(Debug)]
+pub(crate) struct RangeExtremaScratch {
+    min: Vec<usize>,
+    max: Vec<usize>,
+}
+
+impl RangeExtremaScratch {
+    pub(crate) fn with_capacity(max_input_len: usize) -> Self {
+        Self {
+            min: Vec::with_capacity(max_input_len),
+            max: Vec::with_capacity(max_input_len),
+        }
+    }
+}
+
+/// One paired rolling-extrema result, including absolute source indexes.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RangeExtrema {
+    pub(crate) min: Float,
+    pub(crate) max: Float,
+    pub(crate) min_idx: usize,
+    pub(crate) max_idx: usize,
+}
+
+/// Applies the qualified monotonic-queue transition to aligned low/high series.
+///
+/// `NEWEST_TIES` is false for the public extrema operators' oldest-tie
+/// contract and true for TA-Lib range-position definitions that refresh an
+/// extreme when the newest observation equals it. `RESERVED_PUSH` is true
+/// only for Prepared Batch Runner scratch whose capacity was reserved at
+/// preparation time.
+pub(crate) fn rolling_range_extrema<const NEWEST_TIES: bool, const RESERVED_PUSH: bool, F>(
+    low: &[Float],
+    high: &[Float],
+    period: usize,
+    scratch: &mut RangeExtremaScratch,
+    mut write: F,
+) where
+    F: FnMut(usize, RangeExtrema),
+{
+    scratch.min.clear();
+    scratch.max.clear();
+    if low.is_empty() {
+        return;
+    }
+
+    let mut min_head = 0usize;
+    let mut max_head = 0usize;
+    for idx in 0..low.len() {
+        if idx >= period {
+            let expired_through = idx - period;
+            while min_head < scratch.min.len() && scratch.min[min_head] <= expired_through {
+                min_head += 1;
+            }
+            while max_head < scratch.max.len() && scratch.max[max_head] <= expired_through {
+                max_head += 1;
+            }
+        }
+
+        while scratch.min.len() > min_head {
+            let last_idx = scratch.min[scratch.min.len() - 1];
+            if low[idx] < low[last_idx] || (NEWEST_TIES && low[idx] == low[last_idx]) {
+                scratch.min.pop();
+            } else {
+                break;
+            }
+        }
+        while scratch.max.len() > max_head {
+            let last_idx = scratch.max[scratch.max.len() - 1];
+            if high[idx] > high[last_idx] || (NEWEST_TIES && high[idx] == high[last_idx]) {
+                scratch.max.pop();
+            } else {
+                break;
+            }
+        }
+
+        if RESERVED_PUSH {
+            // SAFETY: prepared scratch reserves at least the validated source
+            // capacity and each queue receives one push per observation.
+            unsafe {
+                push_reserved_index(&mut scratch.min, idx);
+                push_reserved_index(&mut scratch.max, idx);
+            }
+        } else {
+            scratch.min.push(idx);
+            scratch.max.push(idx);
+        }
+
+        if idx + 1 >= period {
+            let min_idx = scratch.min[min_head];
+            let max_idx = scratch.max[max_head];
+            write(
+                idx + 1 - period,
+                RangeExtrema {
+                    min: low[min_idx],
+                    max: high[max_idx],
+                    min_idx,
+                    max_idx,
+                },
+            );
+        }
+    }
+}
+
 // Performance seam: the uppercase-kernel `rolling_min_max` loop and these
 // value/index loops intentionally remain duplicated. Benchmark candidates that
 // routed writes through a generic writer or queue state through a generic runner
