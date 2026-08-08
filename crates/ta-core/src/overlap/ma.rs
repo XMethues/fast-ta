@@ -16,13 +16,7 @@ use std::vec::Vec;
 /// Definitions with different configuration or output shapes use their own
 /// Indicator Configurations instead.
 ///
-/// `KAMA` is not selectable before its dedicated implementation exists:
-///
-/// ```compile_fail,E0599
-/// use ta_core::overlap::PeriodMAType;
-///
-/// let _ = PeriodMAType::KAMA;
-/// ```
+/// `KAMA` is selectable because its full Period-based definition is implemented.
 ///
 /// `MAMA` is not Period-based and is never selectable here:
 ///
@@ -47,9 +41,11 @@ pub enum PeriodMAType {
     TRIMA,
     /// T3 Moving Average.
     T3,
+    /// Kaufman Adaptive Moving Average.
+    KAMA,
 }
 
-fn ma_lookback(timeperiod: usize, matype: PeriodMAType) -> Result<usize> {
+pub(super) fn ma_lookback(timeperiod: usize, matype: PeriodMAType) -> Result<usize> {
     let lookback = period_lookback("timeperiod", timeperiod)?;
     match matype {
         PeriodMAType::SMA | PeriodMAType::EMA | PeriodMAType::WMA | PeriodMAType::TRIMA => {
@@ -64,6 +60,7 @@ fn ma_lookback(timeperiod: usize, matype: PeriodMAType) -> Result<usize> {
         PeriodMAType::T3 => lookback
             .checked_mul(6)
             .ok_or_else(|| TalibError::invalid_period(timeperiod, "T3 lookback would overflow")),
+        PeriodMAType::KAMA => super::kama::kama_lookback(timeperiod),
     }
 }
 
@@ -83,11 +80,12 @@ pub fn MA(
         PeriodMAType::TEMA => super::tema::TEMA(real, timeperiod, out_real),
         PeriodMAType::TRIMA => super::trima::TRIMA(real, timeperiod, out_real),
         PeriodMAType::T3 => super::t3::T3_with_default_vfactor(real, timeperiod, out_real),
+        PeriodMAType::KAMA => super::kama::KAMA(real, timeperiod, out_real),
     }
 }
 
 #[inline]
-fn ma_kernel(
+pub(super) fn ma_kernel(
     real: &[Float],
     timeperiod: usize,
     matype: PeriodMAType,
@@ -129,6 +127,9 @@ fn ma_kernel(
             count,
             out_real,
         ),
+        PeriodMAType::KAMA => Ok(super::kama::kama_kernel(
+            real, timeperiod, lookback, count, out_real,
+        )),
     }
 }
 
@@ -251,6 +252,23 @@ impl PreparedBatchRunner<MAConfig> for MABatchRunner {
     }
 }
 
+impl MABatchRunner {
+    /// Runs a kernel that already has a prepared scratch without re-checking
+    /// capacity. Used by indicators that compose MA into their own prepared
+    /// runner and have already validated the input length.
+    #[inline]
+    pub(crate) fn compute_into_bounded<'a>(
+        &mut self,
+        input: <MAConfig as IndicatorConfig>::Input<'a>,
+        output: <MAConfig as IndicatorConfig>::OutputMut<'a>,
+    ) -> Result<OutputRange>
+    where
+        MAConfig: 'a,
+    {
+        IndicatorConfig::compute_into(&self.config, input, output)
+    }
+}
+
 #[derive(Debug, Clone)]
 enum MAStreamInner {
     SMA(super::sma::SMAStream),
@@ -260,6 +278,7 @@ enum MAStreamInner {
     TEMA(super::tema::TEMAStream),
     TRIMA(super::trima::TRIMAStream),
     T3(super::t3::T3Stream),
+    KAMA(super::kama::KAMAStream),
 }
 
 impl MAStreamInner {
@@ -293,6 +312,10 @@ impl MAStreamInner {
                 let inner = super::t3::T3Config::with_default_vfactor(config.period)?;
                 Ok(Self::T3(IndicatorConfig::stream(&inner)?))
             }
+            PeriodMAType::KAMA => {
+                let inner = super::kama::KAMAConfig::new(config.period)?;
+                Ok(Self::KAMA(IndicatorConfig::stream(&inner)?))
+            }
         }
     }
 
@@ -311,6 +334,9 @@ impl MAStreamInner {
                 StreamingComputation::<super::trima::TRIMAConfig>::next(inner, input)
             }
             Self::T3(inner) => StreamingComputation::<super::t3::T3Config>::next(inner, input),
+            Self::KAMA(inner) => {
+                StreamingComputation::<super::kama::KAMAConfig>::next(inner, input)
+            }
         }
     }
 
@@ -323,6 +349,7 @@ impl MAStreamInner {
             Self::TEMA(inner) => StreamingComputation::<super::tema::TEMAConfig>::reset(inner),
             Self::TRIMA(inner) => StreamingComputation::<super::trima::TRIMAConfig>::reset(inner),
             Self::T3(inner) => StreamingComputation::<super::t3::T3Config>::reset(inner),
+            Self::KAMA(inner) => StreamingComputation::<super::kama::KAMAConfig>::reset(inner),
         }
     }
 }

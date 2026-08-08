@@ -14,8 +14,7 @@ Accepted.
 
 ## Consequences
 
-- `SMA`, `EMA`, `WMA`, `DEMA`, `TEMA`, `TRIMA`, and default-vfactor `T3` retain owned, caller-owned, prepared, and streaming execution through `MAConfig`.
-- `KAMA` remains outside the selector until its Period-based Indicator Definition is implemented; it may join afterward without weakening the Interface.
+- `SMA`, `EMA`, `WMA`, `DEMA`, `TEMA`, `TRIMA`, default-vfactor `T3`, and the now-qualified `KAMA` provide owned, caller-owned, prepared, and streaming execution through `MAConfig`.
 - `MAMA` never joins `PeriodMAType`; it requires its own configuration and paired MAMA/FAMA Compact Output.
 - `MAVP` and later moving-average consumers can accept `PeriodMAType` knowing every selected definition is implemented, single-output, and governed by each supplied per-observation Period.
 - Existing `MAType` callers must migrate to `PeriodMAType`; no compatibility alias or deprecated path is retained.
