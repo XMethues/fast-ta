@@ -67,7 +67,7 @@ fn trange_kernel(input: TRANGEInput<'_>, count: usize, output: &mut [Float]) -> 
 
 /// Computes one TA-Lib true range value from current high/low and previous close.
 #[inline]
-pub(super) fn true_range(high: Float, low: Float, previous_close: Float) -> Float {
+pub(crate) fn true_range(high: Float, low: Float, previous_close: Float) -> Float {
     let high_low = high - low;
     let high_close = (high - previous_close).abs();
     let low_close = (low - previous_close).abs();

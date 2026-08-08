@@ -6,6 +6,7 @@
 mod atr;
 mod natr;
 mod trange;
+pub(crate) use trange::true_range as directional_true_range;
 
 pub use atr::{ATRBatchRunner, ATRConfig, ATRInput, ATRStream, ATRTick, ATR};
 pub use natr::{NATRBatchRunner, NATRConfig, NATRInput, NATRStream, NATRTick, NATR};
