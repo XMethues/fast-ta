@@ -8,6 +8,10 @@ This context covers mathematical technical-analysis indicators evaluated over de
 The complete set of TA-Lib-named indicators that defines this project's implementation scope; it does not define a compatible public interface.
 _Avoid_: TA-Lib API surface, compatibility checklist
 
+**Catalogue Coverage**:
+The subset of the Indicator Catalogue currently available for evaluation. Increasing coverage does not add functions to the fixed catalogue.
+_Avoid_: Catalogue expansion
+
 **Indicator Definition**:
 The mathematical meaning, parameters, edge behavior, and expected numerical result of an indicator. TA-Lib is the default reference, while a numerically more accurate implementation is preferred when it preserves that meaning.
 _Avoid_: TA-Lib call semantics
@@ -20,6 +24,10 @@ _Avoid_: Indicator state, calculator state
 The configured observation count used by a rolling or recursive indicator.
 _Avoid_: Window size when the indicator is recursive rather than windowed
 
+**Period-based Moving Average**:
+A single-output moving-average definition whose configured Period controls its averaging horizon. MESA Adaptive Moving Average is not period-based because its configuration and paired outputs have different meaning.
+_Avoid_: Generic moving-average type that includes MAMA
+
 ## Series language
 
 **Observation**:
@@ -29,6 +37,10 @@ _Avoid_: Row, record
 **Observation Series**:
 A dense, oldest-to-newest sequence of finite observations. Time gaps, resampling, missing-value repair, sign constraints, and OHLC consistency are responsibilities of the caller.
 _Avoid_: Sparse series, timestamp-aware series
+
+**Period Selection Series**:
+A dense sequence of `usize` observation counts aligned with an Observation Series and consumed by a variable-period Indicator Definition. Each selection is constrained by the minimum and maximum Periods in the Indicator Configuration.
+_Avoid_: Floating-point period series, variable Indicator Configuration
 
 **Universe**:
 A collection of instrument observation series processed under a common indicator definition or configuration.
@@ -60,6 +72,10 @@ _Avoid_: Padding length
 The streaming phase before enough ticks have arrived to produce the first valid result.
 _Avoid_: Error, missing result
 
+**Stabilization**:
+A fixed initial observation span required by an Indicator Definition before its results are valid, beyond merely having enough inputs to evaluate its formula. It contributes to Lookback and Warm-up and is identical for every execution of that definition.
+_Avoid_: Unstable period, global compatibility setting
+
 ## Result language
 
 **Compact Output**:
@@ -73,3 +89,11 @@ _Avoid_: Output offset, padding count
 **Aligned Output**:
 A derived, source-length representation that places valid values at their source positions and explicitly represents unavailable positions.
 _Avoid_: Implicitly padded output, sentinel-filled output
+
+**Dominant Cycle Phase**:
+The angular position of the dominant cycle at a valid source position, expressed as a `Float` number of degrees using the canonical wrap of its Indicator Definition.
+_Avoid_: Radians, unitless phase
+
+**Trend Mode**:
+A discrete Cycle Indicator result that classifies a valid source position as either Cycle or Trend. It does not express trend direction, strength, or probability.
+_Avoid_: Boolean trend flag, integer 0/1 code, market regime

@@ -407,6 +407,34 @@ The seam contract is the same for new indicators. Follow these steps:
    streaming workload coverage. The shared support helpers live under
    `crates/ta-benchmarks/benches/support/`.
 
+## Moving-average Momentum configurations
+
+APO, PPO, and MACDEXT accept `PeriodMAType`, not a generic TA-Lib selector
+number. The enum contains only implemented, single-output Period-based Moving
+Averages (`SMA`, `EMA`, `WMA`, `DEMA`, `TEMA`, `TRIMA`, `T3`, and `KAMA`);
+MAMA has its own paired-output definition and cannot be selected here.
+
+```rust
+let config = MACDEXTConfig::new(
+    12,
+    PeriodMAType::EMA,
+    26,
+    PeriodMAType::KAMA,
+    9,
+    PeriodMAType::EMA,
+)?;
+let result = config.compute(prices)?;
+let values: &MACDValues = result.values();
+// values.macd, values.signal, and values.histogram have equal compact lengths.
+```
+
+Caller-owned MACD-family execution uses `MACDValuesMut`; supply all three
+columns at `prices.len().saturating_sub(config.lookback())`. Capacity is
+validated for every column before any is mutated. Standard `MACDConfig`
+selects EMA for all three Periods, while `MACDFIXConfig` fixes the fast and
+slow Periods to 12 and 26. `TRIXConfig` returns one compact percentage-change
+column and does not expose or discard its internal EMA stages.
+
 ## Adding a new adapter
 
 Adapters live outside the core seam. Each adapter is free to choose its own
