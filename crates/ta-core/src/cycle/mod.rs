@@ -1,9 +1,22 @@
 //! Cycle Indicator Definitions.
 //!
-//! [`HT_DCPERIOD`] estimates the dominant cycle period with the Hilbert
-//! transition used by TA-Lib's Cycle family.
+//! Cycle definitions and Hilbert-based Overlap Studies share one crate-private
+//! Hilbert transition without exposing its recurrence state publicly.
 
-mod hilbert;
+pub(crate) mod hilbert;
+mod outputs;
+mod trend_mode;
+pub use outputs::{
+    HT_DCPHASEBatchRunner, HT_DCPHASEConfig, HT_DCPHASEStream, HT_PHASORBatchRunner,
+    HT_PHASORConfig, HT_PHASORStream, HT_PHASORValue, HT_PHASORValues, HT_PHASORValuesMut,
+    HT_SINEBatchRunner, HT_SINEConfig, HT_SINEStream, HT_SINEValue, HT_SINEValues,
+    HT_SINEValuesMut, HT_DCPHASE, HT_DCPHASE_LOOKBACK, HT_PHASOR, HT_PHASOR_LOOKBACK, HT_SINE,
+    HT_SINE_LOOKBACK,
+};
+pub use trend_mode::{
+    HT_TRENDMODEBatchRunner, HT_TRENDMODEConfig, HT_TRENDMODEStream, TrendMode, HT_TRENDMODE,
+    HT_TRENDMODE_LOOKBACK,
+};
 
 use crate::{
     common::validate_finite_value, validate_finite_slice, validate_input_len, validate_output_len,

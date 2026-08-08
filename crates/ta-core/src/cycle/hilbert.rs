@@ -5,6 +5,25 @@ type Float = f64;
 const HILBERT_A: Float = 0.0962 as Float;
 const HILBERT_B: Float = 0.5769 as Float;
 const RAD_TO_DEG: Float = 45.0 as Float / core::f64::consts::FRAC_PI_4 as Float;
+const PHASE_RECURRENCE_START: usize = 37;
+const PERIOD_RECURRENCE_START: usize = 12;
+const SMOOTH_PRICE_SIZE: usize = 50;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct HilbertTransition {
+    pub(crate) in_phase: Float,
+    pub(crate) quadrature: Float,
+    pub(crate) smooth_period: Float,
+    smoothed_value: Float,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct HilbertPhaseTransition {
+    pub(super) today: usize,
+    pub(super) phase: Float,
+    pub(super) smooth_period: Float,
+    pub(super) smoothed_value: Float,
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct HilbertTransform {
@@ -52,7 +71,7 @@ impl HilbertTransform {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub(super) struct HilbertState {
+pub(crate) struct HilbertState {
     observations: usize,
     price_history: [Float; 3],
     period_wma_sum: Float,
@@ -77,17 +96,45 @@ pub(super) struct HilbertState {
 
 impl HilbertState {
     #[inline]
-    pub(super) const fn observations(&self) -> usize {
+    pub(crate) const fn observations(&self) -> usize {
         self.observations
     }
 
     #[inline]
-    pub(super) fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         *self = Self::default();
     }
 
     #[inline]
     pub(super) fn next_dc_period(&mut self, input: Float) -> Option<Float> {
+        let today = self.observations;
+        self.next_transition(input, PERIOD_RECURRENCE_START)
+            .and_then(|transition| (today >= 32).then_some(transition.smooth_period))
+    }
+
+    #[inline]
+    pub(super) fn next_phasor(&mut self, input: Float) -> Option<HilbertTransition> {
+        let today = self.observations;
+        self.next_transition(input, PERIOD_RECURRENCE_START)
+            .filter(|_| today >= 32)
+    }
+
+    #[inline]
+    pub(crate) fn next_mama_transition(&mut self, input: Float) -> Option<HilbertTransition> {
+        self.next_transition(input, PERIOD_RECURRENCE_START)
+    }
+
+    #[inline]
+    pub(crate) fn next_trendline_transition(&mut self, input: Float) -> Option<HilbertTransition> {
+        self.next_transition(input, PHASE_RECURRENCE_START)
+    }
+
+    #[inline]
+    fn next_transition(
+        &mut self,
+        input: Float,
+        recurrence_start: usize,
+    ) -> Option<HilbertTransition> {
         let today = self.observations;
         self.observations += 1;
 
@@ -114,7 +161,7 @@ impl HilbertState {
         }
 
         let smoothed_value = self.next_price_wma(today, input);
-        if today < 12 {
+        if today < recurrence_start {
             return None;
         }
 
@@ -123,28 +170,28 @@ impl HilbertState {
         let detrender =
             self.detrender
                 .next(smoothed_value, even, self.hilbert_index, adjusted_period);
-        let q1 = self
-            .q1_transform
-            .next(detrender, even, self.hilbert_index, adjusted_period);
+        let quadrature =
+            self.q1_transform
+                .next(detrender, even, self.hilbert_index, adjusted_period);
 
-        let delayed_i1 = if even {
+        let in_phase = if even {
             self.i1_even_previous_3
         } else {
             self.i1_odd_previous_3
         };
         let ji = self
             .ji_transform
-            .next(delayed_i1, even, self.hilbert_index, adjusted_period);
+            .next(in_phase, even, self.hilbert_index, adjusted_period);
         let jq = self
             .jq_transform
-            .next(q1, even, self.hilbert_index, adjusted_period);
+            .next(quadrature, even, self.hilbert_index, adjusted_period);
 
         if even {
             self.hilbert_index = (self.hilbert_index + 1) % 3;
         }
 
-        let q2 = 0.2 as Float * (q1 + ji) + 0.8 as Float * self.previous_q2;
-        let i2 = 0.2 as Float * (delayed_i1 - jq) + 0.8 as Float * self.previous_i2;
+        let q2 = 0.2 as Float * (quadrature + ji) + 0.8 as Float * self.previous_q2;
+        let i2 = 0.2 as Float * (in_phase - jq) + 0.8 as Float * self.previous_i2;
 
         if even {
             self.i1_odd_previous_3 = self.i1_odd_previous_2;
@@ -172,7 +219,12 @@ impl HilbertState {
         self.period = 0.2 as Float * self.period + 0.8 as Float * previous_period;
         self.smooth_period = 0.33 as Float * self.period + 0.67 as Float * self.smooth_period;
 
-        (today >= 32).then_some(self.smooth_period)
+        Some(HilbertTransition {
+            in_phase,
+            quadrature,
+            smooth_period: self.smooth_period,
+            smoothed_value,
+        })
     }
 
     #[inline(always)]
@@ -185,5 +237,93 @@ impl HilbertState {
         self.trailing_wma_value = self.price_history[today % self.price_history.len()];
         self.price_history[today % self.price_history.len()] = input;
         smoothed_value
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct HilbertPhaseState {
+    hilbert: HilbertState,
+    smooth_price: [Float; SMOOTH_PRICE_SIZE],
+    smooth_price_index: usize,
+    dominant_cycle_phase: Float,
+}
+
+impl Default for HilbertPhaseState {
+    fn default() -> Self {
+        Self {
+            hilbert: HilbertState::default(),
+            smooth_price: [0.0 as Float; SMOOTH_PRICE_SIZE],
+            smooth_price_index: 0,
+            dominant_cycle_phase: 0.0 as Float,
+        }
+    }
+}
+
+impl HilbertPhaseState {
+    #[inline]
+    pub(super) const fn observations(&self) -> usize {
+        self.hilbert.observations()
+    }
+
+    #[inline]
+    pub(super) fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    #[inline]
+    pub(super) fn next_phase_transition(&mut self, input: Float) -> Option<HilbertPhaseTransition> {
+        let today = self.hilbert.observations();
+        let transition = self
+            .hilbert
+            .next_transition(input, PHASE_RECURRENCE_START)?;
+        self.smooth_price[self.smooth_price_index] = transition.smoothed_value;
+        self.smooth_price_index = (self.smooth_price_index + 1) % SMOOTH_PRICE_SIZE;
+        let phase = self.calculate_dominant_cycle_phase(transition.smooth_period);
+        Some(HilbertPhaseTransition {
+            today,
+            phase,
+            smooth_period: transition.smooth_period,
+            smoothed_value: transition.smoothed_value,
+        })
+    }
+
+    #[inline]
+    pub(super) fn next_dc_phase(&mut self, input: Float) -> Option<Float> {
+        self.next_phase_transition(input)
+            .and_then(|transition| (transition.today >= 63).then_some(transition.phase))
+    }
+
+    #[inline]
+    fn calculate_dominant_cycle_phase(&mut self, smooth_period: Float) -> Float {
+        let period = (smooth_period + 0.5 as Float) as usize;
+        let mut real_part = 0.0 as Float;
+        let mut imaginary_part = 0.0 as Float;
+        let mut index = (self.smooth_price_index + SMOOTH_PRICE_SIZE - 1) % SMOOTH_PRICE_SIZE;
+
+        for offset in 0..period {
+            let angle =
+                offset as Float * 2.0 as Float * core::f64::consts::PI as Float / period as Float;
+            let value = self.smooth_price[index];
+            real_part += angle.sin() * value;
+            imaginary_part += angle.cos() * value;
+            index = (index + SMOOTH_PRICE_SIZE - 1) % SMOOTH_PRICE_SIZE;
+        }
+
+        if imaginary_part.abs() > 0.0 as Float {
+            self.dominant_cycle_phase = (real_part / imaginary_part).atan() * RAD_TO_DEG;
+        } else if real_part < 0.0 as Float {
+            self.dominant_cycle_phase -= 90.0 as Float;
+        } else if real_part > 0.0 as Float {
+            self.dominant_cycle_phase += 90.0 as Float;
+        }
+        self.dominant_cycle_phase += 90.0 as Float;
+        self.dominant_cycle_phase += 360.0 as Float / smooth_period;
+        if imaginary_part < 0.0 as Float {
+            self.dominant_cycle_phase += 180.0 as Float;
+        }
+        if self.dominant_cycle_phase > 315.0 as Float {
+            self.dominant_cycle_phase -= 360.0 as Float;
+        }
+        self.dominant_cycle_phase
     }
 }
