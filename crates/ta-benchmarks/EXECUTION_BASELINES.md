@@ -19,6 +19,15 @@ issue_10_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines
 issue_14_matrix_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/rolling_statistics/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'"
 issue_14_workloads_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'rolling_statistics_workloads/(LINEARREG|LINEARREG_SLOPE|LINEARREG_INTERCEPT|LINEARREG_ANGLE|TSF)/'"
 issue_19_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- HT_DCPERIOD"
+issue_20_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- stop_and_reverse"
+issue_21_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/momentum/(MOM|ROC|ROCP|ROCR|ROCR100)'"
+issue_25_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/cycle/(HT_DCPHASE|HT_PHASOR|HT_SINE)'"
+issue_28_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- HT_TRENDMODE"
+issue_24_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- composite_momentum"
+issue_26_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- rolling_overlap"
+issue_27_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- variable_period_overlap"
+issue_29_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- hilbert_overlap"
+issue_31_full_command: "cargo bench -p ta-benchmarks --bench execution_baselines -- moving_average_momentum"
 allocation_command: "cargo bench -p ta-benchmarks --bench execution_allocations"
 status: issue-19-ht-dcperiod-qualified
 ---
@@ -1203,3 +1212,570 @@ the same benchmark IDs blocks later Cycle-family work unless its trade-off
 is explicitly accepted. No TA-Lib or unrelated-indicator timing is presented
 as a speedup comparison.
 
+## Issue #21 Momentum change family qualification
+
+Issue #21 adds `MOM`, `ROC`, `ROCP`, `ROCR`, and `ROCR100` through the
+Rust-first execution seam. Every result at source position `i` compares the
+observation at `i` with the observation at `i - Period`, giving all five
+definitions the same Period Lookback, Warm-up, and Compact Output range. The
+normalized definitions map an exactly zero trailing observation to zero and
+divide every nonzero trailing observation normally, including near-zero values.
+
+The timing command is
+`cargo bench -p ta-benchmarks --bench execution_baselines -- 'indicator_execution/expanded/momentum/(MOM|ROC|ROCP|ROCR|ROCR100)'`.
+Each definition retains its own group and benchmark identity while using the
+same workload dimensions:
+
+| Workload | Benchmark ID suffix | Observations |
+|---|---|---:|
+| Caller-owned one-shot | `one_shot/caller_compact` | 64 / 4,096 / 65,536 |
+| Owned Compact Output | `one_shot/owned_compact` | 64 / 4,096 / 65,536 |
+| Prepared one-shot | `one_shot/prepared_runner` | 64 / 4,096 / 65,536 |
+| Period sweep | `parameter_sweep/caller_compact` | 4,096 at Period 5 / 14 / 50 / 200 |
+| Universe caller-owned | `universe/config_caller_compact` | 128 × 4,096 |
+| Universe prepared | `universe/prepared_runner` | 128 × 4,096 |
+| Per-worker prepared | `per_worker/prepared_runners` | 4 × 4,096 |
+| Independent streams | `streaming/config_streams` | 16 × 4,096 |
+
+These are absolute first-delivery IDs: there is no retained Rust implementation
+with the same five Indicator Definitions, so unrelated Indicator timings are not
+used as a claimed speedup baseline. ADR-0005 fixes these IDs for later
+approximately-five-percent regression comparisons.
+
+### Allocation and peak-heap baseline
+
+The allocation harness contains exact assertions for every definition. At the
+default Period 14 and 4,096 source observations its default-`f64` baseline is:
+
+| Operation | Allocation operations | Gross allocated bytes | Peak incremental bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| Configuration construction | 0 | 0 | 0 | 0 |
+| Caller-owned Compact Output | 0 | 0 | 0 | 0 |
+| Owned Compact Output | 1 | 32,656 | 32,656 | 32,656 |
+| Empty owned Compact Output | 0 | 0 | 0 | 0 |
+| Prepared setup | 0 | 0 | 0 | 0 |
+| Prepared first / repeated / oversize rejection | 0 | 0 | 0 | 0 |
+| One stream setup | 1 | 112 | 112 | 112 |
+| Streaming ticks after setup | 0 | 0 | 0 | 0 |
+
+The owned count is exactly `4,096 - 14 = 4,082` values and the byte count is
+`4,082 × size_of::<f64>() = 32,656`. Stream setup retains exactly its
+14-observation ring, or `14 × size_of::<f64>() = 112` bytes. The harness also
+asserts zero allocation after caller storage and state setup for Universe
+caller-owned and prepared execution, the Period sweep, per-worker Prepared Batch
+Runners, and 16-stream tick processing. Peak incremental requested heap equals
+retained bytes on the two allocating paths and is zero on every execution path
+that does not retain owned storage.
+
+### Numerical qualification
+
+The pinned reference is TA-Lib revision
+`e64d2ac896c595f38d65e44c812efbfdac8a64cf`. Independent fixture literals cover
+ordinary changes, an exactly zero denominator, a near-zero nonzero denominator,
+and a negative denominator for both supported precisions. Public-seam tests fix
+the family scaling relationships, output alignment, validation order, capacity
+rejection, reset, and failure-before-mutation contracts.
+
+
+## Issue #20 `SAR` and `SAREXT` first-delivery qualification
+
+Issue #20 adds distinct fixed-Lookback stop-and-reverse recurrences through
+the Rust-first execution seam. `SAR` retains its symmetric acceleration
+increment and limit. `SAREXT` independently benchmarks its signed-position,
+explicit-start, reversal-offset, and asymmetric long/short acceleration
+semantics; it does not route through SAR.
+
+The representative Criterion command is
+`cargo bench -p ta-benchmarks --bench execution_baselines -- stop_and_reverse`.
+For each definition it records caller-owned, owned Compact Output, and
+Prepared Batch Runner paths at 64, 4,096, and 65,536 observations, Universe
+execution at 128 × 4,096, per-worker execution at 4 × 4,096, and independent
+streaming at 16 × 4,096. These stable IDs are the absolute first-delivery
+performance baseline governed by ADR-0004; there is no retained Rust
+predecessor with the same Indicator Definition.
+
+### Allocation and incremental peak heap
+
+The `execution_allocations` profile fixes the following exact contract for
+each definition at 4,096 observations:
+
+| Operation | Allocation operations | Gross allocated bytes (`f64`) | Peak incremental bytes (`f64`) | Retained bytes (`f64`) |
+|---|---:|---:|---:|---:|
+| Configuration construction | 0 | 0 | 0 | 0 |
+| Caller-owned Compact Output | 0 | 0 | 0 | 0 |
+| Owned Compact Output | 1 | 32,760 | 32,760 | 32,760 |
+| Prepared setup | 0 | 0 | 0 | 0 |
+| Prepared first / repeated / oversize rejection | 0 | 0 | 0 | 0 |
+| Stream setup / 4,096 ticks | 0 | 0 | 0 | 0 |
+
+The owned result stores exactly `4,096 - 1 = 4,095` compact values, so its
+single allocation and incremental peak are
+`4,095 × size_of::<f64>() = 32,760` bytes. Under `f32` the same one-allocation
+profile retains 16,380 bytes. Every other qualified operation retains only
+fixed-size state and requests no heap memory.
+
+
+## Issue #22 relative-strength momentum qualification
+
+Issue #22 delivers RSI, CMO, and IMI under ADR-0006. RSI and CMO share
+Wilder-smoothed gain/loss state with Lookback `Period`; IMI keeps a rolling
+intraday `close - open` Period with Lookback `Period - 1`. Their stable
+first-delivery Criterion roots are:
+
+```text
+indicator_execution/expanded/momentum_relative_strength/{RSI,CMO,IMI}
+indicator_execution/expanded/momentum_relative_strength_workloads/{RSI,CMO,IMI}
+```
+
+The matrix covers 64, 4,096, and 65,536 observations. RSI and CMO exercise
+representative Periods 14 and 512 in the one-shot matrix; IMI uses Period 14
+there. All three definitions also cover Periods 5/14/50/200 in their sweeps.
+Workload groups cover a 128-instrument Universe, four independent Prepared
+Batch Runners, and 16 independent Streaming Computations. Caller-owned, owned
+Compact Output, and prepared paths remain separately identified.
+
+The durable commands are:
+
+```text
+cargo bench -p ta-benchmarks --bench execution_baselines -- momentum_relative_strength
+cargo bench -p ta-benchmarks --bench execution_allocations
+cargo check -p ta-core --no-default-features
+cargo check -p ta-core --no-default-features --features f32
+```
+
+### Exact allocation and incremental peak-heap profiles
+
+The allocation executable asserts this default-`f64`, Period-14 profile at
+4,096 observations:
+
+| Operation | Allocation operations | Gross allocated bytes | Peak incremental bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| construct any configuration | 0 | 0 | 0 | 0 |
+| caller-owned computation, any definition | 0 | 0 | 0 | 0 |
+| RSI/CMO owned Compact Output | 1 | 32,656 | 32,656 | 32,656 |
+| IMI owned Compact Output | 1 | 32,664 | 32,664 | 32,664 |
+| empty owned Compact Output, any definition | 0 | 0 | 0 | 0 |
+| prepare any runner | 0 | 0 | 0 | 0 |
+| prepared first / repeated / oversize rejection | 0 | 0 | 0 | 0 |
+| create RSI or CMO stream | 0 | 0 | 0 | 0 |
+| create IMI stream | 1 | 112 | 112 | 112 |
+| process streaming ticks or reset after setup | 0 | 0 | 0 | 0 |
+
+RSI and CMO own exactly `4,096 - 14 = 4,082` values. IMI owns exactly
+`4,096 - 13 = 4,083` values. IMI's only execution-state allocation is its
+`14 × size_of::<f64>() = 112` byte movement ring; reset retains that ring.
+Under `f32`, the corresponding exact retained/peak bytes are 16,328 for
+RSI/CMO output, 16,332 for IMI output, and 56 for the IMI ring.
+The allocation and Criterion workloads form the absolute first-delivery
+baseline because no retained Rust implementation has the same qualified
+Indicator Definitions. Future comparisons use the same IDs and ADR-0001's
+stable approximately-five-percent regression gate.
+
+## Issue #23 Directional Movement system qualification
+
+Issue #23 delivers `PLUS_DM`, `MINUS_DM`, `PLUS_DI`, `MINUS_DI`, `DX`, `ADX`,
+and `ADXR` as the shared system recorded by ADR-0007. Its stable first-delivery
+Criterion roots are:
+
+```text
+indicator_execution/expanded/momentum/directional_movement/{PLUS_DM,MINUS_DM,PLUS_DI,MINUS_DI,DX,ADX,ADXR}
+```
+
+Each definition separately covers caller-owned, owned Compact Output, and
+Prepared Batch Runner execution at 64, 4,096, and 65,536 observations. The
+repeated workloads cover Periods 5/14/50/200, a 128-instrument Universe through
+caller-owned and prepared paths, four independent Prepared Batch Runners, and
+16 independent Streaming Computations. These are absolute
+first-delivery workloads rather than comparisons with an unrelated formula.
+Future runs retain the IDs and apply ADR-0001's stable approximately-five-
+percent regression gate.
+
+### Exact allocation and incremental peak-heap profiles
+
+The allocation executable asserts the following default-`f64`, Period-14
+profiles at 4,096 observations:
+
+| Operation | Allocation operations | Gross allocated bytes | Peak incremental bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| construct any configuration | 0 | 0 | 0 | 0 |
+| caller-owned computation, any definition | 0 | 0 | 0 | 0 |
+| `PLUS_DM` / `MINUS_DM` owned Compact Output | 1 | 32,664 | 32,664 | 32,664 |
+| `PLUS_DI` / `MINUS_DI` / `DX` owned Compact Output | 1 | 32,656 | 32,656 | 32,656 |
+| `ADX` owned Compact Output | 1 | 32,552 | 32,552 | 32,552 |
+| `ADXR` owned Compact Output | 1 | 32,448 | 32,448 | 32,448 |
+| prepare any runner | 0 | 0 | 0 | 0 |
+| prepared first / repeated / oversize rejection | 0 | 0 | 0 | 0 |
+| create any stream except `ADXR` | 0 | 0 | 0 | 0 |
+| create `ADXR` stream | 1 | 104 | 104 | 104 |
+| process streaming ticks after setup | 0 | 0 | 0 | 0 |
+
+The owned byte counts are exactly one compact value column:
+`(4,096 - Lookback) × size_of::<f64>()`. `ADXR` streaming alone retains
+`(Period - 1) × size_of::<f64>() = 104` bytes so an incremental computation
+can pair current ADX with ADX lagged by 13 source positions. Batch ADXR uses
+two source-position accumulators and requires no scratch allocation. Reset
+retains the stream history allocation.
+
+## Issue #25 Hilbert phase, phasor, and sine qualification
+
+Issue #25 extends the ADR-0002 Cycle transition with `HT_DCPHASE`,
+`HT_PHASOR`, and `HT_SINE`. The retained Criterion roots are:
+
+```text
+indicator_execution/expanded/cycle/{HT_DCPHASE,HT_PHASOR,HT_SINE}
+```
+
+Each root covers caller-owned, owned Compact Output, and Prepared Batch Runner
+execution at 64, 4,096, and 65,536 observations. Repeated workloads cover a
+128-instrument Universe through caller-owned and prepared paths, four
+independent prepared runners, and sixteen independent Streaming Computations.
+These are absolute first-delivery baselines for each Indicator Definition;
+future runs retain the IDs and apply ADR-0001's stable approximately-five-
+percent regression gate. Timing ratios between the three definitions are not
+speedup claims because phase and sine perform the canonical dominant-cycle
+projection and trigonometric work while phasor exposes recurrence components.
+
+### Exact allocation and incremental peak-heap profiles
+
+The allocation executable asserts these default-`f64` profiles at 4,096
+observations:
+
+| Operation | Allocation operations | Gross allocated bytes | Peak incremental bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| Construct any configuration | 0 | 0 | 0 | 0 |
+| Caller-owned computation, any definition | 0 | 0 | 0 | 0 |
+| Owned `HT_DCPHASE` Compact Output | 1 | 32,264 | 32,264 | 32,264 |
+| Owned `HT_PHASOR` Compact Output | 2 | 65,024 | 65,024 | 65,024 |
+| Owned `HT_SINE` Compact Output | 2 | 64,528 | 64,528 | 64,528 |
+| Owned empty Compact Output, any definition | 0 | 0 | 0 | 0 |
+| Prepare any runner | 0 | 0 | 0 | 0 |
+| Prepared first / repeated / oversize rejection | 0 | 0 | 0 | 0 |
+| Stream construction / 4,096 ticks | 0 | 0 | 0 | 0 |
+
+The exact owned byte counts are `(4,096 - Lookback) × size_of::<f64>()`
+per output column: one phase column after Lookback 63, two phasor columns after
+Lookback 32, and two sine columns after Lookback 63. The private Hilbert state
+and its 50-observation smooth-price history are fixed-size stack state, so
+caller-owned, prepared, rejected, and streaming paths request no heap memory.
+
+## Issue #28 typed HT_TRENDMODE and complete Cycle-family qualification
+
+Issue #28 completes the five-definition Cycle family with `HT_TRENDMODE`.
+Its retained Criterion root is:
+
+```text
+indicator_execution/expanded/cycle/HT_TRENDMODE
+```
+
+The root preserves the Cycle-family one-shot IDs for caller-owned, owned Compact
+Output, and Prepared Batch Runner execution at 64, 4,096, and 65,536
+observations. Representative repeated workloads cover a 128-instrument Universe
+through both caller-owned and prepared paths, four independent per-worker
+Prepared Batch Runners, and sixteen independent Streaming Computations. The
+configuration, all execution paths, and typed `TrendMode::{Cycle, Trend}`
+results reuse the same private Hilbert and dominant-phase transitions qualified
+for the other four Cycle Indicator Definitions.
+
+### Exact allocation and incremental peak-heap profiles
+
+At 4,096 default-`f64` observations, the Compact Output contains 4,033
+`TrendMode` values after fixed Lookback 63. `TrendMode` occupies one byte, so
+owned computation performs exactly one 4,033-byte allocation whose incremental
+peak and retained requested heap are both 4,033 bytes. Configuration,
+caller-owned computation, Prepared Batch Runner construction, prepared first
+and repeated execution, over-capacity rejection, stream construction, and
+4,096 streaming ticks perform zero allocations. The classification's raw-price
+and smoothed-price histories are fixed-size state and do not create hidden
+scratch allocations.
+
+Together with the issue #19 and #25 profiles above, this represents all five
+Cycle Indicator Definitions under one-shot, Universe, per-worker,
+multi-stream, exact-allocation, and peak-memory gates. Future measurements
+retain these IDs and apply ADR-0001's stable approximately-five-percent
+regression gate.
+
+## Issue #27 KAMA and integer-selected MAVP qualification
+
+Issue #27 qualifies KAMA as a Period-based Moving Average and introduces MAVP
+with an aligned `usize` Period Selection Series. The durable Criterion roots are:
+
+```text
+indicator_execution/expanded/variable_period_overlap/KAMA
+indicator_execution/expanded/variable_period_overlap/MAVP
+```
+
+KAMA records direct and selector caller-owned, owned Compact Output, and Prepared
+Batch Runner one-shot workloads at 64, 4,096, and 65,536 observations plus
+sixteen independent Streaming Computations over 4,096 ticks.
+MAVP records bounded Period-selection caller-owned and prepared execution at
+the same sizes, a
+128-instrument Universe through one Prepared Batch Runner, four independent
+per-worker runners, and sixteen independent Streaming Computations over 4,096
+ticks each. MAVP uses KAMA for the qualification workloads so the selector's
+newest and most stateful definition participates in every representative path.
+These are absolute first-delivery benchmark IDs; later measurements retain them
+and apply ADR-0001's stable approximately-five-percent regression gate.
+
+### Exact allocation and incremental peak-heap profiles
+
+The allocation executable locks these default-`f64` profiles at 4,096
+observations. KAMA uses Period 14. MAVP uses inclusive Period bounds 2 through
+5 with KAMA, so its Lookback is 5 and its Compact Output contains 4,091 values.
+
+| Operation | Allocation operations | Gross allocated bytes | Peak incremental bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| Construct KAMA or MAVP configuration | 0 | 0 | 0 | 0 |
+| Direct or `MAConfig`-selected KAMA caller-owned / prepared reuse | 0 | 0 | 0 | 0 |
+| Direct or `MAConfig`-selected KAMA owned Compact Output | 1 | 32,656 | 32,656 | 32,656 |
+| Construct direct or `MAConfig`-selected KAMA stream | 1 | 120 | 120 | 120 |
+| Process direct or selected KAMA streaming ticks | 0 | 0 | 0 | 0 |
+| MAVP caller-owned Compact Output | 2 | 65,456 | 65,456 | 0 |
+| MAVP owned Compact Output | 3 | 98,184 | 98,184 | 32,728 |
+| Prepare MAVP runner at capacity 4,096 | 2 | 65,456 | 65,456 | 65,456 |
+| MAVP prepared first / prepared repeated | 0 | 0 | 0 | 0 |
+| Process MAVP streaming ticks after setup | 0 | 0 | 0 | 0 |
+
+The KAMA stream allocation is exactly `(Period + 1) × size_of::<f64>()`.
+MAVP caller-owned scratch is two exact compact-capacity vectors:
+`4,091 × (size_of::<f64>() + size_of::<usize>()) = 65,456` bytes.
+Owned MAVP adds one exact 32,728-byte Compact Output column. Prepared MAVP
+reserves the same two compact-capacity scratch vectors for its maximum source
+capacity. MAVP stream construction is asserted as exactly one
+`Vec<MAStream>` allocation plus one definition-specific KAMA ring for each
+Period 2 through 5; the harness expresses the exact byte total with
+`size_of::<MAStream>()` so representation changes cannot silently invalidate
+the profile. Tick processing and reset retain that storage and allocate
+nothing.
+
+## Issue #26 rolling bands and midpoint qualification
+
+Issue #26 qualifies ACCBANDS, BBANDS, MIDPOINT, and MIDPRICE through the
+Rust-first execution seam. The durable Criterion roots are:
+
+```text
+indicator_execution/expanded/rolling_overlap/ACCBANDS
+indicator_execution/expanded/rolling_overlap/BBANDS
+indicator_execution/expanded/rolling_overlap/MIDPOINT
+indicator_execution/expanded/rolling_overlap/MIDPRICE
+```
+
+Each definition records caller-owned, owned Compact Output, and Prepared Batch
+Runner one-shot paths. Repeated workloads retain the standard topology: a
+128-instrument Universe, Periods 5/14/50/200, four independent per-worker
+runners, and sixteen independent Streaming Computations over 4,096 ticks each.
+ACCBANDS and MIDPRICE benchmark their typed aligned source columns directly.
+BBANDS records the selected Period-based MA in its benchmark identity and uses
+SMA for the allocation baseline plus EMA for a representative recursive stream.
+MIDPOINT uses the existing single-output rolling matrix. These are absolute
+first-delivery IDs; future runs retain them and apply ADR-0001's stable
+approximately-five-percent regression gate.
+
+### Exact allocation and incremental peak-heap profiles
+
+The allocation executable locks these default-`f64`, 4,096-observation,
+Period-14 profiles. The compact count is 4,083 and both `Float` and `usize` are
+eight bytes on the reference host.
+
+| Operation | Allocation operations | Gross allocated bytes | Peak incremental bytes | Retained bytes |
+|---|---:|---:|---:|---:|
+| Construct any configuration | 0 | 0 | 0 | 0 |
+| ACCBANDS caller-owned / prepared steady state | 0 | 0 | 0 | 0 |
+| ACCBANDS owned Compact Output | 3 | 97,992 | 97,992 | 97,992 |
+| BBANDS caller-owned / prepared steady state | 0 | 0 | 0 | 0 |
+| BBANDS owned Compact Output | 3 | 97,992 | 97,992 | 97,992 |
+| MIDPOINT caller-owned one-shot | 2 | 65,536 | 65,536 | 0 |
+| MIDPRICE caller-owned one-shot | 2 | 65,536 | 65,536 | 0 |
+| MIDPOINT owned Compact Output | 3 | 98,200 | 98,200 | 32,664 |
+| MIDPRICE owned Compact Output | 3 | 98,200 | 98,200 | 32,664 |
+| Prepare MIDPOINT or MIDPRICE at capacity 4,096 | 2 | 65,536 | 65,536 | 65,536 |
+| MIDPOINT or MIDPRICE prepared first / repeated | 0 | 0 | 0 | 0 |
+| Construct ACCBANDS stream | 1 | 312 | 312 | 312 |
+| Construct BBANDS SMA stream | 2 | 216 | 216 | 216 |
+| Construct MIDPOINT stream | 1 | 112 | 112 | 112 |
+| Construct MIDPRICE stream | 2 | 224 | 224 | 224 |
+| Any of the four streaming tick paths after setup | 0 | 0 | 0 | 0 |
+
+ACCBANDS and BBANDS own exactly three `4,083 × 8 = 32,664`-byte output
+columns and no algorithm scratch. MIDPOINT and MIDPRICE own one exact compact
+column and allocate two `4,096 × 8`-byte monotonic index queues for one-shot
+scratch. Caller-owned midpoint execution retains no allocation; preparation
+retains the same two queues and reuses them without growth for every
+in-capacity call. Streaming rings are constructed outside tick measurement and
+reset in place.
+
+## Issue #24 composite-input Momentum qualification
+
+Issue #24 delivers BOP, CCI, MFI, and ULTOSC as distinct composite-input
+Indicator Definitions under ADR-0008. The stable one-shot Criterion root is
+`indicator_execution/expanded/composite_momentum`; every definition records
+caller-owned, owned Compact Output, and Prepared Batch Runner execution at
+64, 4,096, and 65,536 observations. The stable repeated-work root is
+`indicator_execution/expanded/composite_momentum_workloads`.
+
+| Workload | Definitions | Observations |
+|---|---|---:|
+| Universe caller-owned and prepared | BOP / CCI / MFI / ULTOSC | 128 × 4,096 |
+| Parameter sweep caller-owned | CCI / MFI / ULTOSC | 4,096 per configuration |
+| Per-worker Prepared Batch Runners | BOP / CCI / MFI / ULTOSC | 4 × 4,096 |
+| Independent Streaming Computations | BOP / CCI / MFI / ULTOSC | 16 × 4,096 |
+
+These are absolute first-delivery IDs. There is no retained Rust predecessor
+with the same definitions, so no TA-Lib or unrelated-indicator timing is
+presented as a relative speedup. Later work retains these IDs and applies the
+ADR-0001 approximately-five-percent stable-regression gate.
+
+### Exact allocation and incremental peak heap
+
+The allocation executable fixes this default-`f64` contract at 4,096 source
+observations:
+
+| Path | BOP | CCI(14) | MFI(14) | ULTOSC(7,14,28) |
+|---|---:|---:|---:|---:|
+| Configuration operations / bytes / peak / retained | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Caller-owned operations / bytes / peak / retained | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Owned operations / bytes / peak / retained | 1 / 32,768 / 32,768 / 32,768 | 1 / 32,664 / 32,664 / 32,664 | 1 / 32,656 / 32,656 / 32,656 | 1 / 32,544 / 32,544 / 32,544 |
+| Prepared setup / first / repeated / rejection | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Stream setup operations / bytes / peak / retained | 0 / 0 / 0 / 0 | 1 / 112 / 112 / 112 | 1 / 224 / 224 / 224 | 1 / 448 / 448 / 448 |
+| Streaming ticks operations / bytes / peak / retained | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+
+Owned execution allocates exactly one compact column:
+`4,096 × 8 = 32,768` bytes for BOP,
+`(4,096 - 13) × 8 = 32,664` for CCI,
+`(4,096 - 14) × 8 = 32,656` for MFI, and
+`(4,096 - 28) × 8 = 32,544` for ULTOSC. Empty owned results allocate
+nothing. CCI retains one 14-Float streaming ring. MFI retains one 14-entry
+two-Float flow ring, and ULTOSC retains one 28-entry two-Float term ring.
+All state setup happens outside streaming tick measurement; every steady-state
+tick and Prepared Batch Runner path is allocation-free.
+
+### Numerical and portability evidence
+
+Checked-in vectors come from TA-Lib v0.6.4 commit
+`43f9d5042ecc4bd367941846494ad907bf20ea50`, verified against source archive
+SHA-256
+`aa04066d17d69c73b1baaef0883414d3d56ab3775872d82916d1cdb376a3ae86`.
+The generator builds that pinned source and calls BOP, CCI, MFI, and ULTOSC
+through `ctypes`. Public-seam tests additionally cover flat prices, trend and
+reversal, zero volume, boundedness and scaling where valid, Period order,
+compact alignment, every validation class, reset, independent state, and
+failure-before-mutation. The source uses only `core` plus the crate's selected
+`alloc` vector path, preserving the existing default-`f64`, supported-`f32`,
+and `no_std` qualification matrix.
+
+## Issue #31 moving-average Momentum qualification
+
+Issue #31 qualifies APO, PPO, MACD, MACDEXT, MACDFIX, and TRIX under
+ADR-0015. Stable Criterion roots are
+`indicator_execution/expanded/moving_average_momentum` for 64, 4,096, and
+65,536-observation one-shot execution, and
+`indicator_execution/expanded/moving_average_momentum_workloads` for repeated
+work. The retained workload identities are:
+
+| Workload | Configuration | Observations |
+|---|---|---:|
+| Kind/Period sweep | APO across all eight `PeriodMAType` kinds and Periods 5, 14, 50, 200 | 32 × 4,096 |
+| Universe | MACD, one Prepared Batch Runner | 128 × 4,096 |
+| Per-worker | MACDEXT, four independent Prepared Batch Runners | 4 × 4,096 |
+| Multi-stream | TRIX, sixteen independent streams | 16 × 4,096 |
+
+These are absolute first-delivery IDs. No unrelated indicator or TA-Lib runtime
+call is presented as a relative speedup. Later work retains these IDs and uses
+ADR-0001's stable approximately-five-percent regression gate.
+
+### Exact allocation and incremental peak heap
+
+The allocation executable fixes the following default-`f64` contract at 4,096
+source observations. Every row is
+allocation operations / gross requested bytes / peak incremental bytes /
+retained requested bytes:
+
+| Path | APO / PPO | MACD / MACDEXT / MACDFIX | TRIX |
+|---|---:|---:|---:|
+| Configuration construction | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Caller-owned Compact Output | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Owned Compact Output | 1 / 32,568 / 32,568 / 32,568 | 3 / 97,512 / 97,512 / 97,512 | 1 / 32,064 / 32,064 / 32,064 |
+| Default-EMA Prepared setup / first / repeated / rejection | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Default-EMA stream setup / ticks | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+
+APO and PPO have Lookback 25 and own exactly one
+`(4,096 - 25) × 8 = 32,568`-byte column. The three MACD-family definitions
+have Lookback 33 and own exactly three named
+`(4,096 - 33) × 8 = 32,504`-byte columns; no column is padded or discarded.
+Default TRIX has Lookback 88 and owns one
+`(4,096 - 88) × 8 = 32,064`-byte column. Thus peak requested heap is exactly
+the sum of live result columns. Non-EMA `PeriodMAType` selections retain only
+the selected moving-average streams' definition-specific rings during
+construction; Prepared Batch Runners allocate those rings once and reuse them,
+while steady-state in-capacity execution and ticks allocate nothing.
+
+### Numerical and portability evidence
+
+Checked-in reference prefixes are generated through TA-Lib v0.6.4 commit
+`43f9d5042ecc4bd367941846494ad907bf20ea50` from an archive verified as SHA-256
+`aa04066d17d69c73b1baaef0883414d3d56ab3775872d82916d1cdb376a3ae86`.
+The generator executes all six definitions and verifies the all-EMA MACDEXT
+equivalent configuration. Contract tests cover default/fixed equivalence,
+histogram identity, APO scaling, PPO scale invariance, flat and linear trends,
+TRIX's exact one-observation percentage-change zero-denominator rule, every
+qualified Period-based Moving Average kind including KAMA, caller-owned and
+prepared capacity failures before mutation, stream error preservation, reset,
+replay, and batch/stream parity. The implementation uses `core` plus the
+crate-selected `alloc` path, preserving the existing default-`f64`, supported
+`f32`, and `no_std` matrix without a TA-Lib runtime dependency.
+
+## Issue #29 Hilbert-based Overlap Study qualification
+
+Issue #29 qualifies independent MAMA and HT_TRENDLINE definitions under
+ADR-0013. Stable one-shot Criterion IDs below
+`indicator_execution/expanded/hilbert_overlap` record caller-owned, owned
+Compact Output, and Prepared Batch Runner execution at 64, 4,096, and 65,536
+observations. Stable repeated-work IDs below
+`indicator_execution/expanded/hilbert_overlap_workloads` retain:
+
+| Workload | Definitions | Observations |
+|---|---|---:|
+| Universe caller-owned and prepared | MAMA / HT_TRENDLINE | 128 × 4,096 |
+| Limit sweep caller-owned and prepared | MAMA at four fast/slow configurations | 4 × 4,096 |
+| Per-worker Prepared Batch Runners | MAMA / HT_TRENDLINE | 4 × 4,096 |
+| Independent Streaming Computations | MAMA / HT_TRENDLINE | 16 × 4,096 |
+
+These are absolute first-delivery benchmark IDs because no retained Rust
+predecessor has either complete definition. Cross-definition timing is not a
+speedup claim. Later work retains these IDs and applies ADR-0001's stable
+approximately-five-percent regression gate.
+
+### Exact allocation and incremental peak heap
+
+The allocation executable locks the default-`f64` contract at 4,096
+observations:
+
+| Path | MAMA | HT_TRENDLINE |
+|---|---:|---:|
+| Configuration construction operations / bytes / peak / retained | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Caller-owned Compact Output operations / bytes / peak / retained | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Owned Compact Output operations / bytes / peak / retained | 2 / 65,024 / 65,024 / 65,024 | 1 / 32,264 / 32,264 / 32,264 |
+| Prepared setup / first / repeated / rejection | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Stream setup / 4,096 ticks | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+
+MAMA's fixed Lookback 32 leaves 4,064 valid source positions. It owns two
+named `4,064 × 8 = 32,512`-byte columns, MAMA and FAMA, with no padding or
+discarded result. HT_TRENDLINE's fixed Lookback 63 leaves 4,033 values and
+owns one exact `4,033 × 8 = 32,264`-byte column. The shared Hilbert recurrence
+and both definition-specific projections are fixed-size state, so caller-owned
+and prepared execution have no scratch allocation. Empty owned results,
+capacity rejection, stream construction, and streaming ticks also allocate
+nothing.
+
+### Numerical and portability evidence
+
+The checked-in fixture generator verifies TA-Lib v0.6.4 commit
+`43f9d5042ecc4bd367941846494ad907bf20ea50` against source archive SHA-256
+`aa04066d17d69c73b1baaef0883414d3d56ab3775872d82916d1cdb376a3ae86`
+before calling MAMA and HT_TRENDLINE through `ctypes`. Constant, trend,
+20-observation sine, chirp, and seeded-noise vectors exercise all four public
+execution modes. Independent tests lock limit validation and sensitivity,
+paired FAMA preservation, fixed stabilization, compact source alignment,
+failure-before-mutation and state preservation, reset/replay, and independent
+streams under explicit default-`f64` and supported-`f32` tolerances. The
+production source uses `core` and the crate-selected `alloc` output path,
+preserving `no_std` without a TA-Lib runtime dependency.
