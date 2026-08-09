@@ -223,10 +223,16 @@ impl PreparedBatchRunner<BOPConfig> for BOPBatchRunner {
     where
         BOPConfig: 'a,
     {
-        if input.open.len() > self.max_input_len {
+        let actual_input_len = input
+            .open
+            .len()
+            .max(input.high.len())
+            .max(input.low.len())
+            .max(input.close.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.open.len(),
+                actual_input_len,
             ));
         }
         IndicatorConfig::compute_into(&self.config, input, output)
@@ -480,10 +486,16 @@ impl PreparedBatchRunner<CCIConfig> for CCIBatchRunner {
     where
         CCIConfig: 'a,
     {
-        if input.open.len() > self.max_input_len {
+        let actual_input_len = input
+            .open
+            .len()
+            .max(input.high.len())
+            .max(input.low.len())
+            .max(input.close.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.open.len(),
+                actual_input_len,
             ));
         }
         IndicatorConfig::compute_into(&self.config, input, output)
@@ -799,10 +811,17 @@ impl PreparedBatchRunner<MFIConfig> for MFIBatchRunner {
     where
         MFIConfig: 'a,
     {
-        if input.open.len() > self.max_input_len {
+        let actual_input_len = input
+            .open
+            .len()
+            .max(input.high.len())
+            .max(input.low.len())
+            .max(input.close.len())
+            .max(input.volume.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.open.len(),
+                actual_input_len,
             ));
         }
         IndicatorConfig::compute_into(&self.config, input, output)
@@ -1154,10 +1173,11 @@ impl PreparedBatchRunner<ULTOSCConfig> for ULTOSCBatchRunner {
     where
         ULTOSCConfig: 'a,
     {
-        if input.high.len() > self.max_input_len {
+        let actual_input_len = input.high.len().max(input.low.len()).max(input.close.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.high.len(),
+                actual_input_len,
             ));
         }
         IndicatorConfig::compute_into(&self.config, input, output)

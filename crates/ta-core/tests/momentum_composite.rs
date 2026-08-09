@@ -528,6 +528,87 @@ fn prepared_capacity_rejections_preserve_output_and_runner_reuse() {
 }
 
 #[test]
+fn prepared_capacity_precedes_alignment_for_every_composite_input_column() {
+    let within = [1.0 as Float; 2];
+    let oversized = [1.0 as Float; 3];
+    let mut output = [];
+    let capacity_error = TalibError::PreparedCapacityExceeded {
+        max_input_len: within.len(),
+        actual_input_len: oversized.len(),
+    };
+
+    let mut bop = BOPConfig::new().prepare_batch(within.len()).unwrap();
+    assert_eq!(
+        bop.compute_into(
+            BOPInput {
+                open: &within,
+                high: &oversized,
+                low: &within,
+                close: &within,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        capacity_error
+    );
+
+    let mut cci = CCIConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        cci.compute_into(
+            CCIInput {
+                open: &within,
+                high: &oversized,
+                low: &within,
+                close: &within,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        capacity_error
+    );
+
+    let mut mfi = MFIConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        mfi.compute_into(
+            MFIInput {
+                open: &within,
+                high: &within,
+                low: &within,
+                close: &within,
+                volume: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        capacity_error
+    );
+
+    let mut ultosc = ULTOSCConfig::new(2, 3, 4)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        ultosc
+            .compute_into(
+                ULTOSCInput {
+                    high: &within,
+                    low: &within,
+                    close: &oversized,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+}
+
+#[test]
 fn rejected_stream_ticks_preserve_independent_state() {
     let (open, high, low, close, volume) = ordinary();
     let mut bop_stream = BOPConfig::new().stream().unwrap();

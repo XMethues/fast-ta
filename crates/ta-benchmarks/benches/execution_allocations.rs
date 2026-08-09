@@ -6,11 +6,11 @@
 //! operation; they exclude stack, allocator metadata, RSS, and fixtures or
 //! caller buffers allocated before measurement.
 
- mod composite_allocations;
- mod hilbert_overlap_allocations;
- mod moving_average_allocations;
- mod range_position_allocations;
- mod support;
+mod composite_allocations;
+mod hilbert_overlap_allocations;
+mod moving_average_allocations;
+mod range_position_allocations;
+mod support;
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     hint::black_box,

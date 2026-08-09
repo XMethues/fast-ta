@@ -327,13 +327,14 @@ impl PreparedBatchRunner<MAVPConfig> for MAVPBatchRunner {
     where
         MAVPConfig: 'a,
     {
-        let count = validate_mavp_input(input, self.config.lookback)?;
-        if input.real.len() > self.max_input_len {
+        let actual_input_len = input.real.len().max(input.periods.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.real.len(),
+                actual_input_len,
             ));
         }
+        let count = validate_mavp_input(input, self.config.lookback)?;
         validate_output_len("MAVP", output.len(), count)?;
         mavp_kernel(
             input,

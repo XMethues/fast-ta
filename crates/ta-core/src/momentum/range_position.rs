@@ -448,10 +448,11 @@ impl PreparedBatchRunner<AROONConfig> for AROONBatchRunner {
     where
         AROONConfig: 'a,
     {
-        if input.high.len() > self.max_input_len {
+        let actual_input_len = input.high.len().max(input.low.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.high.len(),
+                actual_input_len,
             ));
         }
         let (_, count) = validate_aroon_input(input, self.config.period)?;
@@ -616,10 +617,11 @@ impl PreparedBatchRunner<AROONOSCConfig> for AROONOSCBatchRunner {
     where
         AROONOSCConfig: 'a,
     {
-        if input.high.len() > self.max_input_len {
+        let actual_input_len = input.high.len().max(input.low.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.high.len(),
+                actual_input_len,
             ));
         }
         let (_, count) = validate_aroon_input(input, self.config.period)?;
@@ -962,10 +964,11 @@ impl PreparedBatchRunner<STOCHFConfig> for STOCHFBatchRunner {
     where
         STOCHFConfig: 'a,
     {
-        if input.high.len() > self.max_input_len {
+        let actual_input_len = input.high.len().max(input.low.len()).max(input.close.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.high.len(),
+                actual_input_len,
             ));
         }
         let (_, count) = validate_stochf(input, &self.config)?;
@@ -1305,10 +1308,11 @@ impl PreparedBatchRunner<STOCHConfig> for STOCHBatchRunner {
     where
         STOCHConfig: 'a,
     {
-        if input.high.len() > self.max_input_len {
+        let actual_input_len = input.high.len().max(input.low.len()).max(input.close.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.high.len(),
+                actual_input_len,
             ));
         }
         let (_, count) = validate_stoch(input, &self.config)?;
@@ -1881,10 +1885,11 @@ impl PreparedBatchRunner<WILLRConfig> for WILLRBatchRunner {
     where
         WILLRConfig: 'a,
     {
-        if input.high.len() > self.max_input_len {
+        let actual_input_len = input.high.len().max(input.low.len()).max(input.close.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.high.len(),
+                actual_input_len,
             ));
         }
         let (_, count) = validate_willr(input, self.config.period)?;

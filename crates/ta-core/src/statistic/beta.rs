@@ -231,10 +231,11 @@ impl PreparedBatchRunner<BETAConfig> for BETABatchRunner {
     where
         BETAConfig: 'a,
     {
-        if input.real0.len() > self.max_input_len {
+        let actual_input_len = input.real0.len().max(input.real1.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.real0.len(),
+                actual_input_len,
             ));
         }
         let (lookback, count) = validate_beta_input(input, self.config.period)?;

@@ -360,6 +360,32 @@ fn prepared_capacity_failure_does_not_touch_output() {
 }
 
 #[test]
+fn prepared_capacity_precedes_directional_input_alignment() {
+    let within = [1.0 as Float; 2];
+    let oversized = [1.0 as Float; 3];
+    let mut output = [];
+    let config = ADXRConfig::new(2).unwrap();
+    let mut runner = config.prepare_batch(within.len()).unwrap();
+
+    assert_eq!(
+        runner
+            .compute_into(
+                DirectionalInput {
+                    high: &within,
+                    low: &oversized,
+                    close: &within,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: within.len(),
+            actual_input_len: oversized.len(),
+        }
+    );
+}
+
+#[test]
 fn invalid_periods_and_overflow_are_rejected() {
     assert!(PLUS_DMConfig::new(0).is_err());
     assert!(PLUS_DIConfig::new(usize::MAX).is_err());

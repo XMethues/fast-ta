@@ -1,5 +1,8 @@
-use ta_core::price_transform::{AVGDEVConfig, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE};
-use ta_core::{Float, OutputRange};
+use ta_core::price_transform::{
+    AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, MEDPRICEConfig, MEDPRICEInput, TYPPRICEConfig,
+    TYPPRICEInput, WCLPRICEConfig, WCLPRICEInput, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
+};
+use ta_core::{Float, IndicatorConfig, OutputRange, PreparedBatchRunner, TalibError};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(
@@ -54,4 +57,75 @@ fn price_transform_rejects_bad_lengths_and_non_finite_inputs() {
     assert!(TYPPRICE(&[1.0, Float::NAN], &[1.0, 2.0], &[1.0, 2.0], &mut output).is_err());
     assert!(AVGDEV(&[1.0, 2.0], 3, &mut output).is_err());
     assert!(AVGDEVConfig::new(0).is_err());
+}
+
+#[test]
+fn prepared_capacity_precedes_price_transform_input_alignment() {
+    let within = [1.0 as Float; 2];
+    let oversized = [1.0 as Float; 3];
+    let mut output = [];
+    let capacity_error = TalibError::PreparedCapacityExceeded {
+        max_input_len: within.len(),
+        actual_input_len: oversized.len(),
+    };
+
+    let mut avgprice = AVGPRICEConfig::new().prepare_batch(within.len()).unwrap();
+    assert_eq!(
+        avgprice
+            .compute_into(
+                AVGPRICEInput {
+                    open: &within,
+                    high: &oversized,
+                    low: &within,
+                    close: &within,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut medprice = MEDPRICEConfig::new().prepare_batch(within.len()).unwrap();
+    assert_eq!(
+        medprice
+            .compute_into(
+                MEDPRICEInput {
+                    high: &within,
+                    low: &oversized,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut typprice = TYPPRICEConfig::new().prepare_batch(within.len()).unwrap();
+    assert_eq!(
+        typprice
+            .compute_into(
+                TYPPRICEInput {
+                    high: &within,
+                    low: &within,
+                    close: &oversized,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut wclprice = WCLPRICEConfig::new().prepare_batch(within.len()).unwrap();
+    assert_eq!(
+        wclprice
+            .compute_into(
+                WCLPRICEInput {
+                    high: &within,
+                    low: &oversized,
+                    close: &within,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
 }

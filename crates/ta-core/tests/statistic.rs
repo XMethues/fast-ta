@@ -4,7 +4,9 @@ use ta_core::statistic::{
     VAR_with_default_nbdev, BETA, CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT,
     LINEARREG_SLOPE, STDDEV, TSF, VAR,
 };
-use ta_core::{Float, IndicatorConfig, OutputRange, StreamingComputation, TalibError};
+use ta_core::{
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
+};
 
 #[cfg(feature = "f32")]
 const ABS_TOLERANCE: Float = 1e-4;
@@ -438,6 +440,39 @@ fn correl_streaming_matches_batch_across_wrap_reset_and_invalid_tick() {
             .unwrap()
             .unwrap()
             .to_bits()
+    );
+}
+
+#[test]
+fn prepared_capacity_precedes_paired_statistic_input_alignment() {
+    let within = [1.0 as Float; 2];
+    let oversized = [1.0 as Float; 3];
+    let mut output = [];
+    let capacity_error = TalibError::PreparedCapacityExceeded {
+        max_input_len: within.len(),
+        actual_input_len: oversized.len(),
+    };
+    let input = PairInput {
+        real0: &within,
+        real1: &oversized,
+    };
+
+    let mut beta = BETAConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        beta.compute_into(input, &mut output).unwrap_err(),
+        capacity_error
+    );
+
+    let mut correl = CORRELConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        correl.compute_into(input, &mut output).unwrap_err(),
+        capacity_error
     );
 }
 

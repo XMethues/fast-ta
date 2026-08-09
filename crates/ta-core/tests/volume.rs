@@ -2,7 +2,9 @@ use ta_core::volume::{
     ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
     AD, ADOSC, OBV,
 };
-use ta_core::{Float, IndicatorConfig, OutputRange, StreamingComputation};
+use ta_core::{
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
+};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(
@@ -374,4 +376,62 @@ fn adosc_rejects_invalid_periods_and_inputs() {
         }
     )
     .is_err());
+}
+
+#[test]
+fn prepared_capacity_precedes_volume_input_alignment() {
+    let within = [1.0 as Float; 2];
+    let oversized = [1.0 as Float; 3];
+    let mut output = [];
+    let capacity_error = TalibError::PreparedCapacityExceeded {
+        max_input_len: within.len(),
+        actual_input_len: oversized.len(),
+    };
+
+    let mut ad = ADConfig::new().prepare_batch(within.len()).unwrap();
+    assert_eq!(
+        ad.compute_into(
+            ADInput {
+                high: &within,
+                low: &within,
+                close: &within,
+                volume: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        capacity_error
+    );
+
+    let mut adosc = ADOSCConfig::new(1, 2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        adosc
+            .compute_into(
+                ADOSCInput {
+                    high: &within,
+                    low: &oversized,
+                    close: &within,
+                    volume: &within,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut obv = OBVConfig::new().prepare_batch(within.len()).unwrap();
+    assert_eq!(
+        obv.compute_into(
+            OBVInput {
+                close: &within,
+                volume: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        capacity_error
+    );
 }

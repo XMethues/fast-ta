@@ -647,6 +647,59 @@ fn validation_and_prepared_capacity_failures_preserve_all_caller_state() {
 }
 
 #[test]
+fn prepared_capacity_precedes_overlap_input_alignment() {
+    let within = [1.0 as Float; 2];
+    let oversized = [1.0 as Float; 3];
+    let capacity_error = TalibError::PreparedCapacityExceeded {
+        max_input_len: within.len(),
+        actual_input_len: oversized.len(),
+    };
+    let mut upper = [];
+    let mut middle = [];
+    let mut lower = [];
+
+    let mut accbands = ACCBANDSConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        accbands
+            .compute_into(
+                ACCBANDSInput {
+                    high: &within,
+                    low: &oversized,
+                    close: &within,
+                },
+                ACCBANDSValuesMut {
+                    upper: &mut upper,
+                    middle: &mut middle,
+                    lower: &mut lower,
+                },
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut output = [];
+    let mut midprice = MIDPRICEConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        midprice
+            .compute_into(
+                MIDPRICEInput {
+                    high: &within,
+                    low: &oversized,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+}
+
+#[test]
 fn flat_series_band_order_and_positive_scaling_invariants_hold() {
     let flat = vec![7.5 as Float; 32];
     let bb = BBANDSConfig::with_default_deviations(5, PeriodMAType::SMA)

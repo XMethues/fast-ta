@@ -423,6 +423,26 @@ fn kama_and_mavp_errors_do_not_mutate_outputs_or_stream_state() {
     ));
     assert_eq!(untouched, [-13.0 as Float; 4]);
 
+    let within_capacity = [1.0 as Float; 2];
+    let oversized_periods = [2usize; 3];
+    let mut no_output = [];
+    let mut runner = config.prepare_batch(within_capacity.len()).unwrap();
+    assert_eq!(
+        runner
+            .compute_into(
+                MAVPInput {
+                    real: &within_capacity,
+                    periods: &oversized_periods,
+                },
+                &mut no_output,
+            )
+            .unwrap_err(),
+        TalibError::PreparedCapacityExceeded {
+            max_input_len: within_capacity.len(),
+            actual_input_len: oversized_periods.len(),
+        }
+    );
+
     let mut kama_stream = KAMAConfig::new(3).unwrap().stream().unwrap();
     let mut kama_control = KAMAConfig::new(3).unwrap().stream().unwrap();
     for tick in [1.0 as Float, 2.0, 3.0] {

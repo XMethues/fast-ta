@@ -325,10 +325,11 @@ impl PreparedBatchRunner<ACCBANDSConfig> for ACCBANDSBatchRunner {
     where
         ACCBANDSConfig: 'a,
     {
-        if input.high.len() > self.max_input_len {
+        let actual_input_len = input.high.len().max(input.low.len()).max(input.close.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.high.len(),
+                actual_input_len,
             ));
         }
         IndicatorConfig::compute_into(&self.config, input, output)

@@ -456,10 +456,11 @@ impl PreparedBatchRunner<MIDPRICEConfig> for MIDPRICEBatchRunner {
     where
         MIDPRICEConfig: 'a,
     {
-        if input.high.len() > self.max_input_len {
+        let actual_input_len = input.high.len().max(input.low.len());
+        if actual_input_len > self.max_input_len {
             return Err(TalibError::prepared_capacity_exceeded(
                 self.max_input_len,
-                input.high.len(),
+                actual_input_len,
             ));
         }
         let (lookback, count) = validate_midprice(input, self.config.period)?;

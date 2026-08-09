@@ -328,6 +328,115 @@ fn prepared_runners_reuse_capacity_and_match_owned_for_all_definitions() {
 }
 
 #[test]
+fn prepared_capacity_precedes_alignment_for_every_range_position_input_column() {
+    let within = [1.0 as Float; 2];
+    let oversized = [1.0 as Float; 3];
+    let mut first = [];
+    let mut second = [];
+    let capacity_error = TalibError::PreparedCapacityExceeded {
+        max_input_len: within.len(),
+        actual_input_len: oversized.len(),
+    };
+
+    let mut aroon = AROONConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        aroon
+            .compute_into(
+                AroonInput {
+                    high: &within,
+                    low: &oversized,
+                },
+                AROONValuesMut {
+                    down: &mut first,
+                    up: &mut second,
+                },
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut aroonosc = AROONOSCConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        aroonosc
+            .compute_into(
+                AroonInput {
+                    high: &within,
+                    low: &oversized,
+                },
+                &mut first,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut stochf = STOCHFConfig::new(2, 1, PeriodMAType::SMA)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        stochf
+            .compute_into(
+                StochasticInput {
+                    high: &within,
+                    low: &oversized,
+                    close: &within,
+                },
+                STOCHFValuesMut {
+                    fast_k: &mut first,
+                    fast_d: &mut second,
+                },
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut stoch = STOCHConfig::new(2, 1, PeriodMAType::SMA, 1, PeriodMAType::SMA)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        stoch
+            .compute_into(
+                StochasticInput {
+                    high: &within,
+                    low: &within,
+                    close: &oversized,
+                },
+                STOCHValuesMut {
+                    slow_k: &mut first,
+                    slow_d: &mut second,
+                },
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut willr = WILLRConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        willr
+            .compute_into(
+                StochasticInput {
+                    high: &within,
+                    low: &oversized,
+                    close: &within,
+                },
+                &mut first,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+}
+
+#[test]
 fn streaming_matches_batch_then_reset_replays_for_every_definition() {
     let high = floats(reference::HIGH);
     let low = floats(reference::LOW);

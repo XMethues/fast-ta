@@ -5,11 +5,11 @@
 //! Prepared Batch Runner, repeated-series, and independent Streaming
 //! Computation paths through the public traits.
 
- mod composite_momentum;
- mod hilbert_overlap;
- mod moving_average_momentum;
- mod range_position;
- mod support;
+mod composite_momentum;
+mod hilbert_overlap;
+mod moving_average_momentum;
+mod range_position;
+mod support;
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
@@ -5482,16 +5482,16 @@ fn bench_kama_mavp_execution(c: &mut Criterion) {
     group.finish();
 }
 
- criterion_group!(
-     benches,
-     bench_sma_one_shot,
-     bench_ht_dcperiod_execution,
-     bench_ht_dcphase_execution,
-     bench_ht_phasor_execution,
-     bench_ht_sine_execution,
-     bench_ht_trendmode_execution,
-     composite_momentum::bench_composite_momentum_execution,
-     moving_average_momentum::bench_moving_average_momentum_execution,
+criterion_group!(
+    benches,
+    bench_sma_one_shot,
+    bench_ht_dcperiod_execution,
+    bench_ht_dcphase_execution,
+    bench_ht_phasor_execution,
+    bench_ht_sine_execution,
+    bench_ht_trendmode_execution,
+    composite_momentum::bench_composite_momentum_execution,
+    moving_average_momentum::bench_moving_average_momentum_execution,
     range_position::bench_range_position_execution,
     bench_roc_execution,
     bench_rocp_execution,

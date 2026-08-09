@@ -5,8 +5,8 @@ use super::support::{
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use ta_core::momentum::{
-    AROONConfig, AROONOSCConfig, AROONValuesMut, AROONStream, AroonInput, AroonTick, STOCHConfig,
-    STOCHRSIConfig, STOCHRSIValuesMut, STOCHValuesMut, STOCHFConfig, STOCHFValuesMut,
+    AROONConfig, AROONOSCConfig, AROONStream, AROONValuesMut, AroonInput, AroonTick, STOCHConfig,
+    STOCHFConfig, STOCHFValuesMut, STOCHRSIConfig, STOCHRSIValuesMut, STOCHValuesMut,
     StochasticInput, WILLRConfig,
 };
 use ta_core::overlap::PeriodMAType;
@@ -38,24 +38,28 @@ pub(crate) fn bench_range_position_execution(c: &mut Criterion) {
         let mut down = vec![0.0 as Float; aroon_count];
         let mut up = vec![0.0 as Float; aroon_count];
         one_shot.throughput(Throughput::Elements(aroon_count as u64));
-        one_shot.bench_with_input(BenchmarkId::new("AROON/caller_compact", size), &size, |b, _| {
-            b.iter(|| {
-                black_box(
-                    aroon
-                        .compute_into(
-                            AroonInput {
-                                high: black_box(high),
-                                low: black_box(low),
-                            },
-                            AROONValuesMut {
-                                down: black_box(&mut down),
-                                up: black_box(&mut up),
-                            },
-                        )
-                        .unwrap(),
-                );
-            });
-        });
+        one_shot.bench_with_input(
+            BenchmarkId::new("AROON/caller_compact", size),
+            &size,
+            |b, _| {
+                b.iter(|| {
+                    black_box(
+                        aroon
+                            .compute_into(
+                                AroonInput {
+                                    high: black_box(high),
+                                    low: black_box(low),
+                                },
+                                AROONValuesMut {
+                                    down: black_box(&mut down),
+                                    up: black_box(&mut up),
+                                },
+                            )
+                            .unwrap(),
+                    );
+                });
+            },
+        );
 
         let aroon_osc = AROONOSCConfig::new(14).unwrap();
         let osc_count = size - aroon_osc.lookback();
@@ -92,18 +96,19 @@ pub(crate) fn bench_range_position_execution(c: &mut Criterion) {
             |b, _| {
                 b.iter(|| {
                     black_box(
-                        stoch.compute_into(
-                            StochasticInput {
-                                high: black_box(high),
-                                low: black_box(low),
-                                close: black_box(close),
-                            },
-                            STOCHValuesMut {
-                                slow_k: black_box(&mut slow_k),
-                                slow_d: black_box(&mut slow_d),
-                            },
-                        )
-                        .unwrap(),
+                        stoch
+                            .compute_into(
+                                StochasticInput {
+                                    high: black_box(high),
+                                    low: black_box(low),
+                                    close: black_box(close),
+                                },
+                                STOCHValuesMut {
+                                    slow_k: black_box(&mut slow_k),
+                                    slow_d: black_box(&mut slow_d),
+                                },
+                            )
+                            .unwrap(),
                     );
                 });
             },
@@ -120,18 +125,19 @@ pub(crate) fn bench_range_position_execution(c: &mut Criterion) {
             |b, _| {
                 b.iter(|| {
                     black_box(
-                        stochf.compute_into(
-                            StochasticInput {
-                                high: black_box(high),
-                                low: black_box(low),
-                                close: black_box(close),
-                            },
-                            STOCHFValuesMut {
-                                fast_k: black_box(&mut fast_k),
-                                fast_d: black_box(&mut fast_d),
-                            },
-                        )
-                        .unwrap(),
+                        stochf
+                            .compute_into(
+                                StochasticInput {
+                                    high: black_box(high),
+                                    low: black_box(low),
+                                    close: black_box(close),
+                                },
+                                STOCHFValuesMut {
+                                    fast_k: black_box(&mut fast_k),
+                                    fast_d: black_box(&mut fast_d),
+                                },
+                            )
+                            .unwrap(),
                     );
                 });
             },
@@ -166,22 +172,26 @@ pub(crate) fn bench_range_position_execution(c: &mut Criterion) {
         let willr_count = size - willr.lookback();
         let mut willr_out = vec![0.0 as Float; willr_count];
         one_shot.throughput(Throughput::Elements(willr_count as u64));
-        one_shot.bench_with_input(BenchmarkId::new("WILLR/caller_compact", size), &size, |b, _| {
-            b.iter(|| {
-                black_box(
-                    willr
-                        .compute_into(
-                            StochasticInput {
-                                high: black_box(high),
-                                low: black_box(low),
-                                close: black_box(close),
-                            },
-                            black_box(&mut willr_out),
-                        )
-                        .unwrap(),
-                );
-            });
-        });
+        one_shot.bench_with_input(
+            BenchmarkId::new("WILLR/caller_compact", size),
+            &size,
+            |b, _| {
+                b.iter(|| {
+                    black_box(
+                        willr
+                            .compute_into(
+                                StochasticInput {
+                                    high: black_box(high),
+                                    low: black_box(low),
+                                    close: black_box(close),
+                                },
+                                black_box(&mut willr_out),
+                            )
+                            .unwrap(),
+                    );
+                });
+            },
+        );
     }
     one_shot.finish();
 
@@ -224,8 +234,7 @@ pub(crate) fn bench_range_position_execution(c: &mut Criterion) {
         .map(|_| ohlc_fixture(REPEATED_SERIES_LEN).close)
         .collect();
 
-    let mut workloads =
-        c.benchmark_group("indicator_execution/expanded/range_position_workloads");
+    let mut workloads = c.benchmark_group("indicator_execution/expanded/range_position_workloads");
 
     // Kind/Period sweep across all eight PeriodMAType kinds × four Periods,
     // exercising the qualified MA dispatcher for STOCH (slow_k + slow_d).

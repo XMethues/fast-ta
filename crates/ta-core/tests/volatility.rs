@@ -2,7 +2,9 @@ use ta_core::volatility::{
     ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
     TRANGETick, ATR, NATR, TRANGE,
 };
-use ta_core::{Float, IndicatorConfig, OutputRange, StreamingComputation};
+use ta_core::{
+    Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
+};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(
@@ -262,6 +264,66 @@ fn atr_period_one_matches_trange() {
     for idx in 0..atr_range.nb_element {
         assert_close(atr_output[idx], trange_output[idx]);
     }
+}
+
+#[test]
+fn prepared_capacity_precedes_volatility_input_alignment() {
+    let within = [1.0 as Float; 2];
+    let oversized = [1.0 as Float; 3];
+    let mut output = [];
+    let capacity_error = TalibError::PreparedCapacityExceeded {
+        max_input_len: within.len(),
+        actual_input_len: oversized.len(),
+    };
+
+    let mut trange = TRANGEConfig::new().prepare_batch(within.len()).unwrap();
+    assert_eq!(
+        trange
+            .compute_into(
+                TRANGEInput {
+                    high: &within,
+                    low: &oversized,
+                    close: &within,
+                },
+                &mut output,
+            )
+            .unwrap_err(),
+        capacity_error
+    );
+
+    let mut atr = ATRConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        atr.compute_into(
+            ATRInput {
+                high: &within,
+                low: &within,
+                close: &oversized,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        capacity_error
+    );
+
+    let mut natr = NATRConfig::new(2)
+        .unwrap()
+        .prepare_batch(within.len())
+        .unwrap();
+    assert_eq!(
+        natr.compute_into(
+            NATRInput {
+                high: &within,
+                low: &oversized,
+                close: &within,
+            },
+            &mut output,
+        )
+        .unwrap_err(),
+        capacity_error
+    );
 }
 
 #[test]

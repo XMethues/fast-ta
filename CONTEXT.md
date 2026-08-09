@@ -39,7 +39,7 @@ A dense, oldest-to-newest sequence of finite observations. Time gaps, resampling
 _Avoid_: Sparse series, timestamp-aware series
 
 **Period Selection Series**:
-A dense sequence of `usize` observation counts aligned with an Observation Series and consumed by a variable-period Indicator Definition. Each selection is constrained by the minimum and maximum Periods in the Indicator Configuration.
+A dense sequence of whole-number observation counts aligned with an Observation Series and consumed by a variable-period Indicator Definition. Each selection is constrained by the minimum and maximum Periods in the Indicator Configuration.
 _Avoid_: Floating-point period series, variable Indicator Configuration
 
 **Universe**:
@@ -91,7 +91,7 @@ A derived, source-length representation that places valid values at their source
 _Avoid_: Implicitly padded output, sentinel-filled output
 
 **Dominant Cycle Phase**:
-The angular position of the dominant cycle at a valid source position, expressed as a `Float` number of degrees using the canonical wrap of its Indicator Definition.
+The angular position of the dominant cycle at a valid source position, expressed in degrees using the canonical wrap of its Indicator Definition.
 _Avoid_: Radians, unitless phase
 
 **Trend Mode**:

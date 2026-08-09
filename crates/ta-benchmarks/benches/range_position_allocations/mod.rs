@@ -2,8 +2,9 @@ use super::support::{ohlc_fixture, REPEATED_SERIES_LEN as PROFILE_SIZE};
 use super::{assert_profile, assert_zero_allocations, print_profile};
 use std::hint::black_box;
 use ta_core::momentum::{
-    AROONConfig, AROONOSCConfig, AROONValuesMut, AroonInput, STOCHConfig, STOCHRSIConfig,
-    STOCHRSIValuesMut, STOCHValuesMut, STOCHFConfig, STOCHFValuesMut, StochasticInput, WILLRConfig,
+    AROONConfig, AROONOSCConfig, AROONValuesMut, AroonInput, STOCHConfig, STOCHFConfig,
+    STOCHFValuesMut, STOCHRSIConfig, STOCHRSIValuesMut, STOCHValuesMut, StochasticInput,
+    WILLRConfig,
 };
 use ta_core::overlap::PeriodMAType;
 use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
@@ -194,13 +195,8 @@ pub(super) fn profile_range_position_execution() {
         2 * stochf_bytes + stochf_scratch_bytes,
         2 * stochf_bytes,
     );
-    let stochrsi = STOCHRSIConfig::new(
-        RSI_PERIOD,
-        FAST_K_PERIOD,
-        SLOW_PERIOD,
-        PeriodMAType::SMA,
-    )
-    .unwrap();
+    let stochrsi =
+        STOCHRSIConfig::new(RSI_PERIOD, FAST_K_PERIOD, SLOW_PERIOD, PeriodMAType::SMA).unwrap();
     let rsi_count = PROFILE_SIZE - stochrsi.lookback();
     let rsi_bytes = rsi_count * float_bytes;
     // STOCHRSIScratch owns 1 rsi Vec<Float> + StochasticScratch
@@ -274,8 +270,8 @@ pub(super) fn profile_range_position_execution() {
     // STOCHBatchRunner reserves StochasticScratch (RangeExtremaScratch +
     // raw_k + smoothed_k) at preparation; the MABatchRunner sub-states are
     // zero-allocation storage.
-    let stoch_setup_bytes = 2 * PROFILE_SIZE * core::mem::size_of::<usize>()
-        + 2 * PROFILE_SIZE * float_bytes;
+    let stoch_setup_bytes =
+        2 * PROFILE_SIZE * core::mem::size_of::<usize>() + 2 * PROFILE_SIZE * float_bytes;
     let profile = print_profile("setup/STOCHBatchRunner", || {
         stoch.prepare_batch(PROFILE_SIZE).unwrap()
     });
