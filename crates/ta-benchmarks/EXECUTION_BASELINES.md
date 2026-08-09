@@ -1723,12 +1723,81 @@ replay, and batch/stream parity. The implementation uses `core` plus the
 crate-selected `alloc` path, preserving the existing default-`f64`, supported
 `f32`, and `no_std` matrix without a TA-Lib runtime dependency.
 
+## Issue #30 range-position Momentum qualification
+
+Issue #30 qualifies AROON, AROONOSC, STOCH, STOCHF, STOCHRSI, and WILLR
+under ADR-0014. Stable one-shot Criterion IDs below
+`indicator_execution/expanded/range_position` record caller-owned Compact
+Output execution at 64, 4,096, and 65,536 observations for every definition.
+Stable repeated-work IDs below
+`indicator_execution/expanded/range_position_workloads` retain:
+
+| Workload | Definition | Observations |
+|---|---|---:|
+| Kind/Period sweep caller-owned | STOCH across all eight `PeriodMAType` kinds and Periods 5, 14, 50, 200 | 8 × 4 × 4,096 |
+| Universe Prepared Batch Runner | STOCHRSI, one Prepared Batch Runner | 128 × 4,096 |
+| Per-worker Prepared Batch Runners | STOCHF, four independent Prepared Batch Runners | 4 × 4,096 |
+| Multi-stream independent streams | AROON, sixteen independent Streaming Computations | 16 × 4,096 |
+
+These are absolute first-delivery IDs. No unrelated indicator or TA-Lib
+runtime call is presented as a relative speedup. Later work retains these IDs
+and uses ADR-0001's stable approximately-five-percent regression gate.
+
+### Exact allocation and incremental peak heap
+
+The allocation executable fixes the following default-`f64` contract at 4,096
+observations, locked Period 14 fast kernel, and smoothing Period 3 with
+`PeriodMAType::SMA`. Every row is allocation operations / gross requested
+bytes / peak incremental bytes / retained requested bytes:
+
+| Path | AROON | AROONOSC / WILLR | STOCH / STOCHF | STOCHRSI |
+|---|---:|---:|---:|---:|
+| Configuration construction | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Caller-owned Compact Output | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Owned Compact Output | 1 / 65,328 / 65,328 / 65,328 | 1 / 32,664 / 32,664 / 32,664 | 1 / 65,216 / 65,216 / 65,216 | 1 / 64,976 / 64,976 / 64,976 |
+| Prepared setup / first / repeated / rejection | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Stream setup / 4,096 ticks | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+
+AROON's `period + 1 = 15`-observation rolling window at Period 14 leaves
+4,081 valid source positions for each named column. AROON owns exactly two
+`4,081 × 8 = 32,648`-byte columns, summing to `65,328` bytes. AROONOSC and
+WILLR each own one `4,081 × 8 = 32,648`-byte column, with AROONOSC's window
+matching AROON and WILLR's Period-14 window holding `period = 14`
+observations. STOCH and STOCHF own two equal-length columns whose exact byte
+count depends on the smoothing Period's lookback; at smoothing Period 3 with
+`PeriodMAType::SMA` each column is `4,076 × 8 = 32,608` bytes, summing to
+`65,216` bytes. STOCHRSI composes the qualified RSI Lookback plus the
+stochastic Lookback; the locked Period 14 RSI plus Period 14 fast `%K` plus
+smoothing Period 3 leaves `4,061 × 8 = 32,488` bytes per column, summing to
+`64,976` bytes. No column is padded or discarded. Empty owned results,
+capacity rejection, stream construction, and streaming ticks allocate
+nothing; AROON's stream allocates one `15`-element observation ring during
+stream creation and nothing per tick.
+
+### Numerical and portability evidence
+
+Checked-in reference prefixes are generated through TA-Lib 0.8.1 commit
+`e64d2ac896c595f38d65e44c812efbfdac8a64cf` for all six definitions. The
+generator in `crates/ta-core/tests/fixtures/generate_momentum_range_position.py`
+uses 50-digit Python `Decimal` arithmetic and verifies the AROON/OSC/stochastic
+recurrences independently without adding a TA-Lib runtime dependency. Contract
+tests cover pinned default-`f64` vectors and supported-`f32` tolerances, AROON
+and STOCH tie behavior, flat-range zero outputs, every qualified
+`PeriodMAType` kind including KAMA, STOCHRSI reuse of the qualified RSI seam,
+source scaling invariance, WILLR `= fast %K − 100`, caller-owned and prepared
+capacity failures before mutation, stream error preservation, reset/replay,
+and batch/stream parity. The implementation uses `core` plus the
+crate-selected `alloc` path, preserving the existing default-`f64`, supported
+`f32`, and `no_std` matrix without a TA-Lib runtime dependency. The AROON and
+STOCH new-tie selection rule is documented in ADR-0014 so future consumers
+do not silently treat it as identical to the older Math Operators oldest-tie
+contract.
+
 ## Issue #29 Hilbert-based Overlap Study qualification
 
 Issue #29 qualifies independent MAMA and HT_TRENDLINE definitions under
 ADR-0013. Stable one-shot Criterion IDs below
 `indicator_execution/expanded/hilbert_overlap` record caller-owned, owned
-Compact Output, and Prepared Batch Runner execution at 64, 4,096, and 65,536
 observations. Stable repeated-work IDs below
 `indicator_execution/expanded/hilbert_overlap_workloads` retain:
 
