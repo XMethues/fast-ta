@@ -6,11 +6,11 @@
 //! operation; they exclude stack, allocator metadata, RSS, and fixtures or
 //! caller buffers allocated before measurement.
 
-mod composite_allocations;
-mod hilbert_overlap_allocations;
-mod moving_average_allocations;
-mod support;
-
+ mod composite_allocations;
+ mod hilbert_overlap_allocations;
+ mod moving_average_allocations;
+ mod range_position_allocations;
+ mod support;
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     hint::black_box,
@@ -3362,6 +3362,7 @@ fn main() {
     profile_momentum_change_execution();
     composite_allocations::profile_composite_momentum_execution();
     moving_average_allocations::profile_moving_average_momentum_execution();
+    range_position_allocations::profile_range_position_execution();
     profile_ht_dcperiod_execution();
     profile_ht_hilbert_outputs_execution();
     hilbert_overlap_allocations::profile_hilbert_overlap_execution();
