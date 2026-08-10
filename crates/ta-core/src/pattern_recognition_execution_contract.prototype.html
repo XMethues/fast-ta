@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE — Pattern Recognition execution contract</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#17202a;background:#f4f6f8;--accent:#176b5b;--line:#d8dee4}*{box-sizing:border-box}body{margin:0}.shell{max-width:1180px;margin:auto;padding:32px 20px 60px}h1{margin:0 0 8px;font-size:30px}.lede{max-width:900px;color:#4d5966;line-height:1.5}.badge{display:inline-block;padding:4px 8px;border-radius:5px;background:#ffe8a3;color:#684f00;font-size:12px;font-weight:700}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}.card{background:white;border:1px solid var(--line);border-radius:10px;padding:18px;box-shadow:0 2px 8px #16212b0a}.card h2{font-size:18px;margin:0 0 14px}.state{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.datum{background:#f7f9fa;border-radius:7px;padding:10px}.datum b{display:block;font-size:12px;color:#65717e;margin-bottom:4px}.signal{font-weight:700;color:var(--accent)}button{border:1px solid #aeb8c2;background:white;border-radius:7px;padding:9px 12px;cursor:pointer;font-weight:600}button:hover{border-color:var(--accent);color:var(--accent)}button.primary{background:var(--accent);color:white;border-color:var(--accent)}.actions{display:flex;flex-wrap:wrap;gap:8px}.tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin-bottom:14px}.tab{border:0;border-radius:0;padding:9px 3px;margin-right:14px}.tab.active{color:var(--accent);border-bottom:3px solid var(--accent)}.steps{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.steps button.done{background:#e5f3ef;color:#38675d}.steps button.next{background:var(--accent);color:white}.note{min-height:46px;margin-top:12px;padding:10px;background:#eef5f3;border-left:3px solid var(--accent);font-size:14px;line-height:1.4}pre{overflow:auto;background:#17202a;color:#e7edf2;border-radius:8px;padding:15px;font-size:12px;line-height:1.5}.full{grid-column:1/-1}.contract{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.contract section{border:1px solid var(--line);border-radius:8px;padding:12px}.contract h3{font-size:14px;margin:0 0 7px}.contract p{font-size:13px;line-height:1.45;margin:0;color:#4d5966}@media(max-width:800px){.grid,.contract{grid-template-columns:1fr}.full{grid-column:auto}}
+</style>
+</head>
+<body><main class="shell">
+<span class="badge">THROWAWAY PROTOTYPE</span>
+<h1>Pattern Recognition execution contract</h1>
+<p class="lede"><b>Question:</b> Does one Rust-first contract remain coherent across a simple pattern, a Candle-Settings/penetration pattern, and stateful enhanced-strength Hikkake—without confusing Warm-up with No Match or leaking state between batch series?</p>
+<div class="grid">
+<section class="card">
+<h2>Current execution state</h2>
+<div id="state" class="state"></div>
+<div id="note" class="note"></div>
+</section>
+<section class="card">
+<h2>Free play</h2>
+<div class="actions">
+<button data-action="select" data-value="doji">Select Doji</button>
+<button data-action="select" data-value="morning">Select Morning Star</button>
+<button data-action="select" data-value="hikkake">Select Hikkake</button>
+<button data-action="tick" data-value="warmup">Submit warm-up tick</button>
+<button data-action="tick" data-value="none">Submit no-match tick</button>
+<button data-action="tick" data-value="formation">Submit formation</button>
+<button data-action="tick" data-value="confirm">Submit confirmation</button>
+<button data-action="batch" data-value="owned">Run owned batch</button>
+<button data-action="batch" data-value="prepared">Run prepared series</button>
+<button data-action="error">Submit invalid tick</button>
+<button data-action="reset">Reset stream</button>
+</div>
+</section>
+<section class="card full">
+<h2>Guided walkthroughs</h2>
+<div id="tabs" class="tabs"></div>
+<p id="scenarioText" class="lede"></p>
+<div id="steps" class="steps"></div>
+</section>
+<section class="card full">
+<h2>Proposed public shape</h2>
+<div class="contract">
+<section><h3>Configuration</h3><p>One immutable config per TA-Lib-named definition. All Pattern configs own Candle Settings; only seven also own Penetration. Configuration creates independent streams and prepared runners.</p></section>
+<section><h3>Input</h3><p><code>CandleInput&lt;'a&gt;</code> borrows four aligned slices. <code>Candle</code> is the equivalent streaming tick. No timestamps or consistency repair.</p></section>
+<section><h3>Results</h3><p><code>PatternSignal::NoMatch</code> or <code>Match { direction, strength }</code>. Outer streaming <code>Option</code> means result availability, never match presence.</p></section>
+<section><h3>Four modes</h3><p><code>compute</code> owns a compact Vec; <code>compute_into</code> writes a checked caller slice; a prepared runner reuses allocation but resets semantic state per series; a stream alone persists state.</p></section>
+</div>
+<pre>pub struct CandleInput&lt;'a&gt; { pub open: &'a [Float], pub high: &'a [Float], pub low: &'a [Float], pub close: &'a [Float] }
+pub struct Candle { pub open: Float, pub high: Float, pub low: Float, pub close: Float }
+
+pub enum PatternDirection { Bullish, Bearish }
+pub enum PatternStrength { Partial, Standard, Confirmed }
+pub enum PatternSignal { NoMatch, Match { direction: PatternDirection, strength: PatternStrength } }
+
+impl CDLDOJIConfig {
+    pub fn new(candle_settings: CandleSettings) -&gt; Result&lt;Self&gt;;
+    pub fn lookback(&self) -&gt; usize;
+    pub fn compute(&self, input: CandleInput&lt;'_&gt;) -&gt; Result&lt;CompactOutput&lt;Vec&lt;PatternSignal&gt;&gt;&gt;;
+    pub fn compute_into(&self, input: CandleInput&lt;'_&gt;, out: &mut [PatternSignal]) -&gt; Result&lt;OutputRange&gt;;
+    pub fn prepare(&self, capacity: usize) -&gt; Result&lt;CDLDOJIBatchRunner&gt;;
+    pub fn stream(&self) -&gt; Result&lt;CDLDOJIStream&gt;;
+}
+
+// Seven definitions add a validated Penetration to new(...).
+// Prepared runner: compute_into(input, out), capacity checked before mutation.
+// Stream: next(Candle) -&gt; Result&lt;Option&lt;PatternSignal&gt;&gt;; reset().</pre>
+</section>
+</div>
+</main>
+<script>
+const Model=(()=>{
+ const initial=()=>({pattern:'CDLDOJI',mode:'Streaming',source:0,lookback:10,phase:'Warm-up',last:'No result',pending:'None',preparedRuns:0,note:'Fresh stream. No valid Pattern Signal exists during Warm-up.'});
+ const meta={doji:['CDLDOJI',10],morning:['CDLMORNINGSTAR',12],hikkake:['CDLHIKKAKE',5]};
+ function reduce(s,a){s={...s};
+  if(a.type==='select'){let [p,l]=meta[a.value];return {...initial(),pattern:p,lookback:l,note:`Created an independent ${p} configuration and stream.`}}
+  if(a.type==='reset')return {...initial(),pattern:s.pattern,lookback:s.lookback,note:'Reset is observationally identical to a new stream with the same configuration.'};
+  if(a.type==='error')return {...s,note:'Rejected before mutation: source position, Warm-up, rolling history, and Pending Confirmation are unchanged.'};
+  if(a.type==='batch'){return {...s,mode:a.value==='owned'?'Owned Compact Output':'Prepared Batch Runner',preparedRuns:s.preparedRuns+(a.value==='prepared'?1:0),last:'Dense valid Pattern Signals',pending:'None after independent series',note:a.value==='owned'?'Fresh batch state; returned CompactOutput<Vec<PatternSignal>>.':'Allocation reused; semantic state reset before this independent Observation Series.'}}
+  if(a.type==='tick'){
+   s.mode='Streaming';
+   if(a.value==='warmup'){s.source++;s.phase=s.source<s.lookback?'Warm-up':'Valid';s.last=s.phase==='Warm-up'?'No result':'NoMatch';s.note=s.phase==='Warm-up'?'Outer None: no valid source result yet.':'First valid position: Some(NoMatch), not Warm-up.';return s}
+   if(s.source<s.lookback){s.source=s.lookback;s.phase='Valid'}
+   else s.source++;
+   if(a.value==='none'){s.last='NoMatch';s.note='A valid result exists: Some(PatternSignal::NoMatch).'}
+   if(a.value==='formation'){s.last='Bullish · Standard';s.pending=`Bullish, expires after source ${s.source+3}`;s.note='Formation emitted immediately and replaced any older Pending Confirmation.'}
+   if(a.value==='confirm'){if(s.pending==='None'){s.last='NoMatch';s.note='No Pending Confirmation exists, so this close cannot emit Confirmed.'}else{s.last='Bullish · Confirmed';s.pending='None';s.note='Confirmation emitted in the formation direction and pending state cleared.'}}
+   return s;
+  }
+  return s;
+ }
+ return {initial,reduce};
+})();
+let state=Model.initial();
+const scenarios={
+ simple:{title:'Simple Doji',text:'Feel the distinction between Warm-up and a valid no-match result for a setting-driven one-candle detector.',steps:[['select','doji','Create Doji configuration'],['tick','warmup','Submit early tick'],['tick','none','Reach valid no match']]},
+ configurable:{title:'Configurable Morning Star',text:'A configuration owns Candle Settings and Penetration; each batch execution remains independent.',steps:[['select','morning','Create Morning Star configuration'],['batch','owned','Compute owned output'],['batch','prepared','Reuse prepared allocation']]},
+ hikkake:{title:'Hikkake state',text:'A Standard formation creates pending state; a later strict crossing emits Confirmed. Invalid input cannot age it.',steps:[['select','hikkake','Create Hikkake stream'],['tick','formation','Detect formation'],['error',null,'Reject invalid tick'],['tick','confirm','Confirm pending formation'],['reset',null,'Reset stream']]}
+};
+let active='simple',step=0;
+function dispatch(a){state=Model.reduce(state,a);render()}
+function action(type,value){dispatch({type,value})}
+function render(){
+ document.querySelector('#state').innerHTML=[['Indicator',state.pattern],['Mode',state.mode],['Source position',state.source],['Lookback',state.lookback],['Availability',state.phase],['Last result',`<span class="signal">${state.last}</span>`],['Pending Confirmation',state.pending],['Prepared series run',state.preparedRuns]].map(([k,v])=>`<div class="datum"><b>${k}</b>${v}</div>`).join('');
+ document.querySelector('#note').textContent=state.note;
+ document.querySelector('#tabs').innerHTML=Object.entries(scenarios).map(([k,v])=>`<button class="tab ${k===active?'active':''}" data-tab="${k}">${v.title}</button>`).join('');
+ let sc=scenarios[active];document.querySelector('#scenarioText').textContent=sc.text;
+ document.querySelector('#steps').innerHTML=sc.steps.map((x,i)=>`<button class="${i<step?'done':i===step?'next':''}" data-step="${i}" ${i!==step?'disabled':''}>${i+1}. ${x[2]}</button>`).join('');
+ document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{active=b.dataset.tab;step=0;state=Model.initial();render()});
+ document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{let x=sc.steps[step++];action(x[0],x[1])});
+}
+document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>action(b.dataset.action,b.dataset.value));render();
+</script>
+</body></html>
