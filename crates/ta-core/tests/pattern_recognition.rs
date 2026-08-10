@@ -579,6 +579,39 @@ fn prepared_and_streaming_steady_state_do_not_allocate_or_grow() {
         }),
         0
     );
+
+    let hikkake_series = Series::from_fixture(
+        reference::HIKKAKE_OPEN,
+        reference::HIKKAKE_HIGH,
+        reference::HIKKAKE_LOW,
+        reference::HIKKAKE_CLOSE,
+    );
+    let hikkake_config = CDLHIKKAKEConfig::default();
+    let mut hikkake_runner = hikkake_config
+        .prepare_batch(hikkake_series.open.len())
+        .unwrap();
+    let mut hikkake_output =
+        vec![PatternSignal::NoMatch; reference::HIKKAKE_DEFAULT_F64_CODES.len()];
+    assert_eq!(
+        allocation_events_during(|| {
+            hikkake_runner
+                .compute_into(hikkake_series.input(), &mut hikkake_output)
+                .unwrap();
+        }),
+        0
+    );
+
+    let hikkake_candles = hikkake_series.candles();
+    let mut hikkake_stream = hikkake_config.stream().unwrap();
+    assert_eq!(
+        allocation_events_during(|| {
+            for candle in hikkake_candles.iter().copied() {
+                hikkake_stream.next(candle).unwrap();
+            }
+            hikkake_stream.reset();
+        }),
+        0
+    );
 }
 
 fn single_candle_series() -> Series {
@@ -2720,4 +2753,907 @@ fn hikkake_evidence_rows_cover_pinned_state_predicates_boundaries_and_transition
                 && formula.contains("transition starts")
         }
     ));
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QualificationEvidence {
+    Verified,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BoundaryEvidence {
+    Foundation,
+    SingleCandle,
+    BodyContainmentAndPositionShadow,
+    ThreeCandleReversal,
+    GapContinuation,
+    CrowAndSoldier,
+    LongFormation,
+    HikkakeState,
+}
+
+impl BoundaryEvidence {
+    fn verify(self) {
+        match self {
+            Self::Foundation => {
+                independently_reasoned_boundaries_lock_doji_and_engulfing_semantics();
+            }
+            Self::SingleCandle => {
+                pinned_single_candle_oracles_qualify_every_definition_through_the_public_seam();
+            }
+            Self::BodyContainmentAndPositionShadow => {
+                independently_reasoned_two_candle_boundaries_lock_exact_pinned_predicates();
+                position_shadow_boundaries_lock_strict_and_inclusive_pinned_predicates();
+            }
+            Self::ThreeCandleReversal => {
+                independently_reasoned_three_candle_boundaries_lock_exact_pinned_predicates();
+            }
+            Self::GapContinuation => {
+                independently_reasoned_gap_continuation_boundaries_lock_pinned_predicates_and_signs();
+                tristar_uses_one_i_minus_two_body_doji_threshold_and_strict_gap_direction();
+            }
+            Self::CrowAndSoldier => {
+                crow_soldier_single_boundary_near_misses_lock_literal_comparisons();
+            }
+            Self::LongFormation => {
+                long_formation_scenarios_isolate_first_middle_final_and_strict_boundaries();
+            }
+            Self::HikkakeState => {
+                hikkake_confirmation_is_strict_uses_the_pinned_boundary_and_expires_after_age_three();
+                newer_hikkake_formation_replaces_pending_and_wins_same_position_precedence();
+                modified_hikkake_owns_near_average_and_its_exact_non_strict_formation_boundary();
+                silent_hikkake_transitions_reconstruct_and_consume_pending_before_lookback();
+                prepared_and_streaming_hikkake_state_is_isolated_retained_reset_and_retry_safe();
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct QualificationRow {
+    name: &'static str,
+    pinned_c_default_fixture: QualificationEvidence,
+    required_custom_configuration: QualificationEvidence,
+    canonical_match: QualificationEvidence,
+    one_boundary_near_miss: BoundaryEvidence,
+    four_mode_parity: QualificationEvidence,
+    validation_non_mutation: QualificationEvidence,
+    default_f64: QualificationEvidence,
+    supported_f32: QualificationEvidence,
+    execution_type_assertion: QualificationEvidence,
+}
+
+fn assert_fixture_column(
+    name: &str,
+    series: &Series,
+    lookback: usize,
+    f64_codes: &[i32],
+    f32_codes: &[i32],
+) {
+    assert_eq!(series.open.len(), series.high.len(), "{name} open/high");
+    assert_eq!(series.open.len(), series.low.len(), "{name} open/low");
+    assert_eq!(series.open.len(), series.close.len(), "{name} open/close");
+    assert!(series.open.len() >= lookback, "{name} Lookback");
+    let output_len = series.open.len() - lookback;
+    assert_eq!(f64_codes.len(), output_len, "{name} f64 fixture length");
+    assert_eq!(f32_codes.len(), output_len, "{name} f32 fixture length");
+    for &code in f64_codes.iter().chain(f32_codes) {
+        PatternSignal::from_talib_code(code)
+            .unwrap_or_else(|_| panic!("{name} has non-categorical fixture code {code}"));
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn qualify_catalogue_row<C>(
+    name: &'static str,
+    boundary: BoundaryEvidence,
+    default_config: C,
+    custom_config: C,
+    default_series: &Series,
+    custom_series: &Series,
+    default_lookback: usize,
+    default_f64_codes: &[i32],
+    default_f32_codes: &[i32],
+    custom_lookback: usize,
+    custom_f64_codes: &[i32],
+    custom_f32_codes: &[i32],
+) -> QualificationRow
+where
+    C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    for<'a> C: IndicatorConfig<
+        Input<'a> = CandleInput<'a>,
+        OutputMut<'a> = &'a mut [PatternSignal],
+    >,
+    C::BatchRunner: PreparedBatchRunner<C>,
+    C::Stream: StreamingComputation<C, Tick = Candle, TickOutput = PatternSignal>,
+{
+    assert_eq!(
+        reference::TALIB_GIT_REVISION,
+        "2247d599bddf37ed37e3a709371517e46efc66f6"
+    );
+    assert_fixture_column(
+        name,
+        default_series,
+        default_lookback,
+        default_f64_codes,
+        default_f32_codes,
+    );
+    assert_fixture_column(
+        name,
+        custom_series,
+        custom_lookback,
+        custom_f64_codes,
+        custom_f32_codes,
+    );
+
+    for columns in [
+        [default_f64_codes, custom_f64_codes],
+        [default_f32_codes, custom_f32_codes],
+    ] {
+        assert!(
+            columns
+                .iter()
+                .flat_map(|codes| codes.iter())
+                .any(|&code| code != 0),
+            "{name} canonical match evidence"
+        );
+        if boundary == BoundaryEvidence::SingleCandle {
+            assert!(
+                columns
+                    .iter()
+                    .flat_map(|codes| codes.iter())
+                    .any(|&code| code == 0),
+                "{name} fixture-backed one-boundary near-miss evidence"
+            );
+        }
+    }
+
+    qualify_pattern_fixture(
+        default_config,
+        default_series,
+        default_lookback,
+        &expected_codes(default_f64_codes, default_f32_codes),
+    );
+    qualify_pattern_fixture(
+        custom_config,
+        custom_series,
+        custom_lookback,
+        &expected_codes(custom_f64_codes, custom_f32_codes),
+    );
+
+    QualificationRow {
+        name,
+        pinned_c_default_fixture: QualificationEvidence::Verified,
+        required_custom_configuration: QualificationEvidence::Verified,
+        canonical_match: QualificationEvidence::Verified,
+        one_boundary_near_miss: boundary,
+        four_mode_parity: QualificationEvidence::Verified,
+        validation_non_mutation: QualificationEvidence::Verified,
+        default_f64: QualificationEvidence::Verified,
+        supported_f32: QualificationEvidence::Verified,
+        execution_type_assertion: QualificationEvidence::Verified,
+    }
+}
+
+macro_rules! push_qualification_row {
+    (
+        $rows:ident, $boundary:ident, $name:literal, $default:expr, $custom:expr,
+        $open:ident, $high:ident, $low:ident, $close:ident,
+        $default_lookback:ident, $default_f64:ident, $default_f32:ident,
+        $custom_lookback:ident, $custom_f64:ident, $custom_f32:ident
+    ) => {{
+        let series = Series::from_fixture(
+            reference::$open,
+            reference::$high,
+            reference::$low,
+            reference::$close,
+        );
+        $rows.push(qualify_catalogue_row(
+            $name,
+            BoundaryEvidence::$boundary,
+            $default,
+            $custom,
+            &series,
+            &series,
+            reference::$default_lookback,
+            reference::$default_f64,
+            reference::$default_f32,
+            reference::$custom_lookback,
+            reference::$custom_f64,
+            reference::$custom_f32,
+        ));
+    }};
+}
+
+fn foundation_qualification_rows() -> Vec<QualificationRow> {
+    let mut rows = Vec::with_capacity(2);
+    let default_doji = Series::from_fixture(
+        reference::DOJI_DEFAULT_OPEN,
+        reference::DOJI_DEFAULT_HIGH,
+        reference::DOJI_DEFAULT_LOW,
+        reference::DOJI_DEFAULT_CLOSE,
+    );
+    let custom_doji = Series::from_fixture(
+        reference::DOJI_CUSTOM_OPEN,
+        reference::DOJI_CUSTOM_HIGH,
+        reference::DOJI_CUSTOM_LOW,
+        reference::DOJI_CUSTOM_CLOSE,
+    );
+    let doji_settings = CandleSettings::default().with_setting(
+        CandleSettingType::BodyDoji,
+        CandleSetting::new(CandleRangeKind::RealBody, 3, 0.5 as Float).unwrap(),
+    );
+    rows.push(qualify_catalogue_row(
+        "CDLDOJI",
+        BoundaryEvidence::Foundation,
+        CDLDOJIConfig::default(),
+        CDLDOJIConfig::new(doji_settings).unwrap(),
+        &default_doji,
+        &custom_doji,
+        reference::DOJI_DEFAULT_LOOKBACK,
+        reference::DOJI_DEFAULT_F64_CODES,
+        reference::DOJI_DEFAULT_F32_CODES,
+        reference::DOJI_CUSTOM_LOOKBACK,
+        reference::DOJI_CUSTOM_F64_CODES,
+        reference::DOJI_CUSTOM_F32_CODES,
+    ));
+
+    let engulfing = Series::from_fixture(
+        reference::ENGULFING_OPEN,
+        reference::ENGULFING_HIGH,
+        reference::ENGULFING_LOW,
+        reference::ENGULFING_CLOSE,
+    );
+    let inert_settings = CandleSettings::default().with_setting(
+        CandleSettingType::BodyDoji,
+        CandleSetting::new(CandleRangeKind::HighLow, 100_000, 99.0 as Float).unwrap(),
+    );
+    rows.push(qualify_catalogue_row(
+        "CDLENGULFING",
+        BoundaryEvidence::Foundation,
+        CDLENGULFINGConfig::default(),
+        CDLENGULFINGConfig::new(inert_settings).unwrap(),
+        &engulfing,
+        &engulfing,
+        reference::ENGULFING_LOOKBACK,
+        reference::ENGULFING_F64_CODES,
+        reference::ENGULFING_F32_CODES,
+        reference::ENGULFING_LOOKBACK,
+        reference::ENGULFING_F64_CODES,
+        reference::ENGULFING_F32_CODES,
+    ));
+    rows
+}
+
+fn single_candle_qualification_rows() -> Vec<QualificationRow> {
+    let mut rows = Vec::with_capacity(12);
+    let settings = custom_single_candle_settings();
+    push_qualification_row!(
+        rows, SingleCandle, "CDLBELTHOLD",
+        CDLBELTHOLDConfig::default(), CDLBELTHOLDConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        BELTHOLD_DEFAULT_LOOKBACK, BELTHOLD_DEFAULT_F64_CODES, BELTHOLD_DEFAULT_F32_CODES,
+        BELTHOLD_CUSTOM_LOOKBACK, BELTHOLD_CUSTOM_F64_CODES, BELTHOLD_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLCLOSINGMARUBOZU",
+        CDLCLOSINGMARUBOZUConfig::default(), CDLCLOSINGMARUBOZUConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        CLOSINGMARUBOZU_DEFAULT_LOOKBACK, CLOSINGMARUBOZU_DEFAULT_F64_CODES,
+        CLOSINGMARUBOZU_DEFAULT_F32_CODES, CLOSINGMARUBOZU_CUSTOM_LOOKBACK,
+        CLOSINGMARUBOZU_CUSTOM_F64_CODES, CLOSINGMARUBOZU_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLDRAGONFLYDOJI",
+        CDLDRAGONFLYDOJIConfig::default(), CDLDRAGONFLYDOJIConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        DRAGONFLYDOJI_DEFAULT_LOOKBACK, DRAGONFLYDOJI_DEFAULT_F64_CODES,
+        DRAGONFLYDOJI_DEFAULT_F32_CODES, DRAGONFLYDOJI_CUSTOM_LOOKBACK,
+        DRAGONFLYDOJI_CUSTOM_F64_CODES, DRAGONFLYDOJI_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLGRAVESTONEDOJI",
+        CDLGRAVESTONEDOJIConfig::default(), CDLGRAVESTONEDOJIConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        GRAVESTONEDOJI_DEFAULT_LOOKBACK, GRAVESTONEDOJI_DEFAULT_F64_CODES,
+        GRAVESTONEDOJI_DEFAULT_F32_CODES, GRAVESTONEDOJI_CUSTOM_LOOKBACK,
+        GRAVESTONEDOJI_CUSTOM_F64_CODES, GRAVESTONEDOJI_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLHIGHWAVE",
+        CDLHIGHWAVEConfig::default(), CDLHIGHWAVEConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        HIGHWAVE_DEFAULT_LOOKBACK, HIGHWAVE_DEFAULT_F64_CODES, HIGHWAVE_DEFAULT_F32_CODES,
+        HIGHWAVE_CUSTOM_LOOKBACK, HIGHWAVE_CUSTOM_F64_CODES, HIGHWAVE_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLLONGLEGGEDDOJI",
+        CDLLONGLEGGEDDOJIConfig::default(), CDLLONGLEGGEDDOJIConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        LONGLEGGEDDOJI_DEFAULT_LOOKBACK, LONGLEGGEDDOJI_DEFAULT_F64_CODES,
+        LONGLEGGEDDOJI_DEFAULT_F32_CODES, LONGLEGGEDDOJI_CUSTOM_LOOKBACK,
+        LONGLEGGEDDOJI_CUSTOM_F64_CODES, LONGLEGGEDDOJI_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLLONGLINE",
+        CDLLONGLINEConfig::default(), CDLLONGLINEConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        LONGLINE_DEFAULT_LOOKBACK, LONGLINE_DEFAULT_F64_CODES, LONGLINE_DEFAULT_F32_CODES,
+        LONGLINE_CUSTOM_LOOKBACK, LONGLINE_CUSTOM_F64_CODES, LONGLINE_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLMARUBOZU",
+        CDLMARUBOZUConfig::default(), CDLMARUBOZUConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        MARUBOZU_DEFAULT_LOOKBACK, MARUBOZU_DEFAULT_F64_CODES, MARUBOZU_DEFAULT_F32_CODES,
+        MARUBOZU_CUSTOM_LOOKBACK, MARUBOZU_CUSTOM_F64_CODES, MARUBOZU_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLRICKSHAWMAN",
+        CDLRICKSHAWMANConfig::default(), CDLRICKSHAWMANConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        RICKSHAWMAN_DEFAULT_LOOKBACK, RICKSHAWMAN_DEFAULT_F64_CODES,
+        RICKSHAWMAN_DEFAULT_F32_CODES, RICKSHAWMAN_CUSTOM_LOOKBACK,
+        RICKSHAWMAN_CUSTOM_F64_CODES, RICKSHAWMAN_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLSHORTLINE",
+        CDLSHORTLINEConfig::default(), CDLSHORTLINEConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        SHORTLINE_DEFAULT_LOOKBACK, SHORTLINE_DEFAULT_F64_CODES, SHORTLINE_DEFAULT_F32_CODES,
+        SHORTLINE_CUSTOM_LOOKBACK, SHORTLINE_CUSTOM_F64_CODES, SHORTLINE_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLSPINNINGTOP",
+        CDLSPINNINGTOPConfig::default(), CDLSPINNINGTOPConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        SPINNINGTOP_DEFAULT_LOOKBACK, SPINNINGTOP_DEFAULT_F64_CODES,
+        SPINNINGTOP_DEFAULT_F32_CODES, SPINNINGTOP_CUSTOM_LOOKBACK,
+        SPINNINGTOP_CUSTOM_F64_CODES, SPINNINGTOP_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, SingleCandle, "CDLTAKURI",
+        CDLTAKURIConfig::default(), CDLTAKURIConfig::new(settings).unwrap(),
+        SINGLE_CANDLE_OPEN, SINGLE_CANDLE_HIGH, SINGLE_CANDLE_LOW, SINGLE_CANDLE_CLOSE,
+        TAKURI_DEFAULT_LOOKBACK, TAKURI_DEFAULT_F64_CODES, TAKURI_DEFAULT_F32_CODES,
+        TAKURI_CUSTOM_LOOKBACK, TAKURI_CUSTOM_F64_CODES, TAKURI_CUSTOM_F32_CODES
+    );
+    rows
+}
+
+fn two_candle_qualification_rows() -> Vec<QualificationRow> {
+    let mut rows = Vec::with_capacity(18);
+    let settings = custom_two_candle_settings();
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLCOUNTERATTACK",
+        CDLCOUNTERATTACKConfig::default(), CDLCOUNTERATTACKConfig::new(settings).unwrap(),
+        COUNTERATTACK_OPEN, COUNTERATTACK_HIGH, COUNTERATTACK_LOW, COUNTERATTACK_CLOSE,
+        COUNTERATTACK_DEFAULT_LOOKBACK, COUNTERATTACK_DEFAULT_F64_CODES,
+        COUNTERATTACK_DEFAULT_F32_CODES, COUNTERATTACK_CUSTOM_LOOKBACK,
+        COUNTERATTACK_CUSTOM_F64_CODES, COUNTERATTACK_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLDARKCLOUDCOVER",
+        CDLDARKCLOUDCOVERConfig::default(),
+        CDLDARKCLOUDCOVERConfig::new(settings, Penetration::new(0.25 as Float).unwrap()).unwrap(),
+        DARKCLOUDCOVER_OPEN, DARKCLOUDCOVER_HIGH, DARKCLOUDCOVER_LOW, DARKCLOUDCOVER_CLOSE,
+        DARKCLOUDCOVER_DEFAULT_LOOKBACK, DARKCLOUDCOVER_DEFAULT_F64_CODES,
+        DARKCLOUDCOVER_DEFAULT_F32_CODES, DARKCLOUDCOVER_CUSTOM_LOOKBACK,
+        DARKCLOUDCOVER_CUSTOM_F64_CODES, DARKCLOUDCOVER_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLDOJISTAR",
+        CDLDOJISTARConfig::default(), CDLDOJISTARConfig::new(settings).unwrap(),
+        DOJISTAR_OPEN, DOJISTAR_HIGH, DOJISTAR_LOW, DOJISTAR_CLOSE,
+        DOJISTAR_DEFAULT_LOOKBACK, DOJISTAR_DEFAULT_F64_CODES, DOJISTAR_DEFAULT_F32_CODES,
+        DOJISTAR_CUSTOM_LOOKBACK, DOJISTAR_CUSTOM_F64_CODES, DOJISTAR_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLHARAMI",
+        CDLHARAMIConfig::default(), CDLHARAMIConfig::new(settings).unwrap(),
+        HARAMI_OPEN, HARAMI_HIGH, HARAMI_LOW, HARAMI_CLOSE,
+        HARAMI_DEFAULT_LOOKBACK, HARAMI_DEFAULT_F64_CODES, HARAMI_DEFAULT_F32_CODES,
+        HARAMI_CUSTOM_LOOKBACK, HARAMI_CUSTOM_F64_CODES, HARAMI_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLHARAMICROSS",
+        CDLHARAMICROSSConfig::default(), CDLHARAMICROSSConfig::new(settings).unwrap(),
+        HARAMICROSS_OPEN, HARAMICROSS_HIGH, HARAMICROSS_LOW, HARAMICROSS_CLOSE,
+        HARAMICROSS_DEFAULT_LOOKBACK, HARAMICROSS_DEFAULT_F64_CODES,
+        HARAMICROSS_DEFAULT_F32_CODES, HARAMICROSS_CUSTOM_LOOKBACK,
+        HARAMICROSS_CUSTOM_F64_CODES, HARAMICROSS_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLHOMINGPIGEON",
+        CDLHOMINGPIGEONConfig::default(), CDLHOMINGPIGEONConfig::new(settings).unwrap(),
+        HOMINGPIGEON_OPEN, HOMINGPIGEON_HIGH, HOMINGPIGEON_LOW, HOMINGPIGEON_CLOSE,
+        HOMINGPIGEON_DEFAULT_LOOKBACK, HOMINGPIGEON_DEFAULT_F64_CODES,
+        HOMINGPIGEON_DEFAULT_F32_CODES, HOMINGPIGEON_CUSTOM_LOOKBACK,
+        HOMINGPIGEON_CUSTOM_F64_CODES, HOMINGPIGEON_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLKICKING",
+        CDLKICKINGConfig::default(), CDLKICKINGConfig::new(settings).unwrap(),
+        KICKING_OPEN, KICKING_HIGH, KICKING_LOW, KICKING_CLOSE,
+        KICKING_DEFAULT_LOOKBACK, KICKING_DEFAULT_F64_CODES, KICKING_DEFAULT_F32_CODES,
+        KICKING_CUSTOM_LOOKBACK, KICKING_CUSTOM_F64_CODES, KICKING_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLKICKINGBYLENGTH",
+        CDLKICKINGBYLENGTHConfig::default(), CDLKICKINGBYLENGTHConfig::new(settings).unwrap(),
+        KICKINGBYLENGTH_OPEN, KICKINGBYLENGTH_HIGH, KICKINGBYLENGTH_LOW, KICKINGBYLENGTH_CLOSE,
+        KICKINGBYLENGTH_DEFAULT_LOOKBACK, KICKINGBYLENGTH_DEFAULT_F64_CODES,
+        KICKINGBYLENGTH_DEFAULT_F32_CODES, KICKINGBYLENGTH_CUSTOM_LOOKBACK,
+        KICKINGBYLENGTH_CUSTOM_F64_CODES, KICKINGBYLENGTH_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLMATCHINGLOW",
+        CDLMATCHINGLOWConfig::default(), CDLMATCHINGLOWConfig::new(settings).unwrap(),
+        MATCHINGLOW_OPEN, MATCHINGLOW_HIGH, MATCHINGLOW_LOW, MATCHINGLOW_CLOSE,
+        MATCHINGLOW_DEFAULT_LOOKBACK, MATCHINGLOW_DEFAULT_F64_CODES,
+        MATCHINGLOW_DEFAULT_F32_CODES, MATCHINGLOW_CUSTOM_LOOKBACK,
+        MATCHINGLOW_CUSTOM_F64_CODES, MATCHINGLOW_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLHAMMER",
+        CDLHAMMERConfig::default(), CDLHAMMERConfig::new(settings).unwrap(),
+        HAMMER_OPEN, HAMMER_HIGH, HAMMER_LOW, HAMMER_CLOSE,
+        HAMMER_DEFAULT_LOOKBACK, HAMMER_DEFAULT_F64_CODES, HAMMER_DEFAULT_F32_CODES,
+        HAMMER_CUSTOM_LOOKBACK, HAMMER_CUSTOM_F64_CODES, HAMMER_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLHANGINGMAN",
+        CDLHANGINGMANConfig::default(), CDLHANGINGMANConfig::new(settings).unwrap(),
+        HANGINGMAN_OPEN, HANGINGMAN_HIGH, HANGINGMAN_LOW, HANGINGMAN_CLOSE,
+        HANGINGMAN_DEFAULT_LOOKBACK, HANGINGMAN_DEFAULT_F64_CODES,
+        HANGINGMAN_DEFAULT_F32_CODES, HANGINGMAN_CUSTOM_LOOKBACK,
+        HANGINGMAN_CUSTOM_F64_CODES, HANGINGMAN_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLINNECK",
+        CDLINNECKConfig::default(), CDLINNECKConfig::new(settings).unwrap(),
+        INNECK_OPEN, INNECK_HIGH, INNECK_LOW, INNECK_CLOSE,
+        INNECK_DEFAULT_LOOKBACK, INNECK_DEFAULT_F64_CODES, INNECK_DEFAULT_F32_CODES,
+        INNECK_CUSTOM_LOOKBACK, INNECK_CUSTOM_F64_CODES, INNECK_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLINVERTEDHAMMER",
+        CDLINVERTEDHAMMERConfig::default(), CDLINVERTEDHAMMERConfig::new(settings).unwrap(),
+        INVERTEDHAMMER_OPEN, INVERTEDHAMMER_HIGH, INVERTEDHAMMER_LOW, INVERTEDHAMMER_CLOSE,
+        INVERTEDHAMMER_DEFAULT_LOOKBACK, INVERTEDHAMMER_DEFAULT_F64_CODES,
+        INVERTEDHAMMER_DEFAULT_F32_CODES, INVERTEDHAMMER_CUSTOM_LOOKBACK,
+        INVERTEDHAMMER_CUSTOM_F64_CODES, INVERTEDHAMMER_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLONNECK",
+        CDLONNECKConfig::default(), CDLONNECKConfig::new(settings).unwrap(),
+        ONNECK_OPEN, ONNECK_HIGH, ONNECK_LOW, ONNECK_CLOSE,
+        ONNECK_DEFAULT_LOOKBACK, ONNECK_DEFAULT_F64_CODES, ONNECK_DEFAULT_F32_CODES,
+        ONNECK_CUSTOM_LOOKBACK, ONNECK_CUSTOM_F64_CODES, ONNECK_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLPIERCING",
+        CDLPIERCINGConfig::default(), CDLPIERCINGConfig::new(settings).unwrap(),
+        PIERCING_OPEN, PIERCING_HIGH, PIERCING_LOW, PIERCING_CLOSE,
+        PIERCING_DEFAULT_LOOKBACK, PIERCING_DEFAULT_F64_CODES, PIERCING_DEFAULT_F32_CODES,
+        PIERCING_CUSTOM_LOOKBACK, PIERCING_CUSTOM_F64_CODES, PIERCING_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLSEPARATINGLINES",
+        CDLSEPARATINGLINESConfig::default(), CDLSEPARATINGLINESConfig::new(settings).unwrap(),
+        SEPARATINGLINES_OPEN, SEPARATINGLINES_HIGH, SEPARATINGLINES_LOW, SEPARATINGLINES_CLOSE,
+        SEPARATINGLINES_DEFAULT_LOOKBACK, SEPARATINGLINES_DEFAULT_F64_CODES,
+        SEPARATINGLINES_DEFAULT_F32_CODES, SEPARATINGLINES_CUSTOM_LOOKBACK,
+        SEPARATINGLINES_CUSTOM_F64_CODES, SEPARATINGLINES_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLSHOOTINGSTAR",
+        CDLSHOOTINGSTARConfig::default(), CDLSHOOTINGSTARConfig::new(settings).unwrap(),
+        SHOOTINGSTAR_OPEN, SHOOTINGSTAR_HIGH, SHOOTINGSTAR_LOW, SHOOTINGSTAR_CLOSE,
+        SHOOTINGSTAR_DEFAULT_LOOKBACK, SHOOTINGSTAR_DEFAULT_F64_CODES,
+        SHOOTINGSTAR_DEFAULT_F32_CODES, SHOOTINGSTAR_CUSTOM_LOOKBACK,
+        SHOOTINGSTAR_CUSTOM_F64_CODES, SHOOTINGSTAR_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, BodyContainmentAndPositionShadow, "CDLTHRUSTING",
+        CDLTHRUSTINGConfig::default(), CDLTHRUSTINGConfig::new(settings).unwrap(),
+        THRUSTING_OPEN, THRUSTING_HIGH, THRUSTING_LOW, THRUSTING_CLOSE,
+        THRUSTING_DEFAULT_LOOKBACK, THRUSTING_DEFAULT_F64_CODES, THRUSTING_DEFAULT_F32_CODES,
+        THRUSTING_CUSTOM_LOOKBACK, THRUSTING_CUSTOM_F64_CODES, THRUSTING_CUSTOM_F32_CODES
+    );
+    rows
+}
+
+fn three_candle_qualification_rows() -> Vec<QualificationRow> {
+    let mut rows = Vec::with_capacity(8);
+    let settings = custom_two_candle_settings();
+    let penetration = Penetration::new(0.6 as Float).unwrap();
+    push_qualification_row!(
+        rows, ThreeCandleReversal, "CDL3INSIDE",
+        CDL3INSIDEConfig::default(), CDL3INSIDEConfig::new(settings).unwrap(),
+        THREE_INSIDE_OPEN, THREE_INSIDE_HIGH, THREE_INSIDE_LOW, THREE_INSIDE_CLOSE,
+        THREE_INSIDE_DEFAULT_LOOKBACK, THREE_INSIDE_DEFAULT_F64_CODES,
+        THREE_INSIDE_DEFAULT_F32_CODES, THREE_INSIDE_CUSTOM_LOOKBACK,
+        THREE_INSIDE_CUSTOM_F64_CODES, THREE_INSIDE_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, ThreeCandleReversal, "CDL3OUTSIDE",
+        CDL3OUTSIDEConfig::default(), CDL3OUTSIDEConfig::new(settings).unwrap(),
+        THREE_OUTSIDE_OPEN, THREE_OUTSIDE_HIGH, THREE_OUTSIDE_LOW, THREE_OUTSIDE_CLOSE,
+        THREE_OUTSIDE_DEFAULT_LOOKBACK, THREE_OUTSIDE_DEFAULT_F64_CODES,
+        THREE_OUTSIDE_DEFAULT_F32_CODES, THREE_OUTSIDE_CUSTOM_LOOKBACK,
+        THREE_OUTSIDE_CUSTOM_F64_CODES, THREE_OUTSIDE_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, ThreeCandleReversal, "CDLABANDONEDBABY",
+        CDLABANDONEDBABYConfig::default(), CDLABANDONEDBABYConfig::new(settings, penetration).unwrap(),
+        ABANDONEDBABY_OPEN, ABANDONEDBABY_HIGH, ABANDONEDBABY_LOW, ABANDONEDBABY_CLOSE,
+        ABANDONEDBABY_DEFAULT_LOOKBACK, ABANDONEDBABY_DEFAULT_F64_CODES,
+        ABANDONEDBABY_DEFAULT_F32_CODES, ABANDONEDBABY_CUSTOM_LOOKBACK,
+        ABANDONEDBABY_CUSTOM_F64_CODES, ABANDONEDBABY_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, ThreeCandleReversal, "CDLEVENINGDOJISTAR",
+        CDLEVENINGDOJISTARConfig::default(),
+        CDLEVENINGDOJISTARConfig::new(settings, penetration).unwrap(),
+        EVENINGDOJISTAR_OPEN, EVENINGDOJISTAR_HIGH, EVENINGDOJISTAR_LOW, EVENINGDOJISTAR_CLOSE,
+        EVENINGDOJISTAR_DEFAULT_LOOKBACK, EVENINGDOJISTAR_DEFAULT_F64_CODES,
+        EVENINGDOJISTAR_DEFAULT_F32_CODES, EVENINGDOJISTAR_CUSTOM_LOOKBACK,
+        EVENINGDOJISTAR_CUSTOM_F64_CODES, EVENINGDOJISTAR_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, ThreeCandleReversal, "CDLEVENINGSTAR",
+        CDLEVENINGSTARConfig::default(), CDLEVENINGSTARConfig::new(settings, penetration).unwrap(),
+        EVENINGSTAR_OPEN, EVENINGSTAR_HIGH, EVENINGSTAR_LOW, EVENINGSTAR_CLOSE,
+        EVENINGSTAR_DEFAULT_LOOKBACK, EVENINGSTAR_DEFAULT_F64_CODES,
+        EVENINGSTAR_DEFAULT_F32_CODES, EVENINGSTAR_CUSTOM_LOOKBACK,
+        EVENINGSTAR_CUSTOM_F64_CODES, EVENINGSTAR_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, ThreeCandleReversal, "CDLMORNINGDOJISTAR",
+        CDLMORNINGDOJISTARConfig::default(),
+        CDLMORNINGDOJISTARConfig::new(settings, penetration).unwrap(),
+        MORNINGDOJISTAR_OPEN, MORNINGDOJISTAR_HIGH, MORNINGDOJISTAR_LOW, MORNINGDOJISTAR_CLOSE,
+        MORNINGDOJISTAR_DEFAULT_LOOKBACK, MORNINGDOJISTAR_DEFAULT_F64_CODES,
+        MORNINGDOJISTAR_DEFAULT_F32_CODES, MORNINGDOJISTAR_CUSTOM_LOOKBACK,
+        MORNINGDOJISTAR_CUSTOM_F64_CODES, MORNINGDOJISTAR_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, ThreeCandleReversal, "CDLMORNINGSTAR",
+        CDLMORNINGSTARConfig::default(), CDLMORNINGSTARConfig::new(settings, penetration).unwrap(),
+        MORNINGSTAR_OPEN, MORNINGSTAR_HIGH, MORNINGSTAR_LOW, MORNINGSTAR_CLOSE,
+        MORNINGSTAR_DEFAULT_LOOKBACK, MORNINGSTAR_DEFAULT_F64_CODES,
+        MORNINGSTAR_DEFAULT_F32_CODES, MORNINGSTAR_CUSTOM_LOOKBACK,
+        MORNINGSTAR_CUSTOM_F64_CODES, MORNINGSTAR_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, ThreeCandleReversal, "CDLUNIQUE3RIVER",
+        CDLUNIQUE3RIVERConfig::default(), CDLUNIQUE3RIVERConfig::new(settings).unwrap(),
+        UNIQUE3RIVER_OPEN, UNIQUE3RIVER_HIGH, UNIQUE3RIVER_LOW, UNIQUE3RIVER_CLOSE,
+        UNIQUE3RIVER_DEFAULT_LOOKBACK, UNIQUE3RIVER_DEFAULT_F64_CODES,
+        UNIQUE3RIVER_DEFAULT_F32_CODES, UNIQUE3RIVER_CUSTOM_LOOKBACK,
+        UNIQUE3RIVER_CUSTOM_F64_CODES, UNIQUE3RIVER_CUSTOM_F32_CODES
+    );
+    rows
+}
+
+fn gap_continuation_qualification_rows() -> Vec<QualificationRow> {
+    let mut rows = Vec::with_capacity(8);
+    let settings = custom_two_candle_settings();
+    push_qualification_row!(
+        rows, GapContinuation, "CDL2CROWS",
+        CDL2CROWSConfig::default(), CDL2CROWSConfig::new(settings).unwrap(),
+        TWO_CROWS_OPEN, TWO_CROWS_HIGH, TWO_CROWS_LOW, TWO_CROWS_CLOSE,
+        TWO_CROWS_DEFAULT_LOOKBACK, TWO_CROWS_DEFAULT_F64_CODES, TWO_CROWS_DEFAULT_F32_CODES,
+        TWO_CROWS_CUSTOM_LOOKBACK, TWO_CROWS_CUSTOM_F64_CODES, TWO_CROWS_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, GapContinuation, "CDL3LINESTRIKE",
+        CDL3LINESTRIKEConfig::default(), CDL3LINESTRIKEConfig::new(settings).unwrap(),
+        THREE_LINE_STRIKE_OPEN, THREE_LINE_STRIKE_HIGH, THREE_LINE_STRIKE_LOW,
+        THREE_LINE_STRIKE_CLOSE, THREE_LINE_STRIKE_DEFAULT_LOOKBACK,
+        THREE_LINE_STRIKE_DEFAULT_F64_CODES, THREE_LINE_STRIKE_DEFAULT_F32_CODES,
+        THREE_LINE_STRIKE_CUSTOM_LOOKBACK, THREE_LINE_STRIKE_CUSTOM_F64_CODES,
+        THREE_LINE_STRIKE_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, GapContinuation, "CDLGAPSIDESIDEWHITE",
+        CDLGAPSIDESIDEWHITEConfig::default(), CDLGAPSIDESIDEWHITEConfig::new(settings).unwrap(),
+        GAP_SIDE_SIDE_WHITE_OPEN, GAP_SIDE_SIDE_WHITE_HIGH, GAP_SIDE_SIDE_WHITE_LOW,
+        GAP_SIDE_SIDE_WHITE_CLOSE, GAP_SIDE_SIDE_WHITE_DEFAULT_LOOKBACK,
+        GAP_SIDE_SIDE_WHITE_DEFAULT_F64_CODES, GAP_SIDE_SIDE_WHITE_DEFAULT_F32_CODES,
+        GAP_SIDE_SIDE_WHITE_CUSTOM_LOOKBACK, GAP_SIDE_SIDE_WHITE_CUSTOM_F64_CODES,
+        GAP_SIDE_SIDE_WHITE_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, GapContinuation, "CDLSTICKSANDWICH",
+        CDLSTICKSANDWICHConfig::default(), CDLSTICKSANDWICHConfig::new(settings).unwrap(),
+        STICK_SANDWICH_OPEN, STICK_SANDWICH_HIGH, STICK_SANDWICH_LOW, STICK_SANDWICH_CLOSE,
+        STICK_SANDWICH_DEFAULT_LOOKBACK, STICK_SANDWICH_DEFAULT_F64_CODES,
+        STICK_SANDWICH_DEFAULT_F32_CODES, STICK_SANDWICH_CUSTOM_LOOKBACK,
+        STICK_SANDWICH_CUSTOM_F64_CODES, STICK_SANDWICH_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, GapContinuation, "CDLTASUKIGAP",
+        CDLTASUKIGAPConfig::default(), CDLTASUKIGAPConfig::new(settings).unwrap(),
+        TASUKI_GAP_OPEN, TASUKI_GAP_HIGH, TASUKI_GAP_LOW, TASUKI_GAP_CLOSE,
+        TASUKI_GAP_DEFAULT_LOOKBACK, TASUKI_GAP_DEFAULT_F64_CODES,
+        TASUKI_GAP_DEFAULT_F32_CODES, TASUKI_GAP_CUSTOM_LOOKBACK,
+        TASUKI_GAP_CUSTOM_F64_CODES, TASUKI_GAP_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, GapContinuation, "CDLTRISTAR",
+        CDLTRISTARConfig::default(), CDLTRISTARConfig::new(settings).unwrap(),
+        TRISTAR_OPEN, TRISTAR_HIGH, TRISTAR_LOW, TRISTAR_CLOSE,
+        TRISTAR_DEFAULT_LOOKBACK, TRISTAR_DEFAULT_F64_CODES, TRISTAR_DEFAULT_F32_CODES,
+        TRISTAR_CUSTOM_LOOKBACK, TRISTAR_CUSTOM_F64_CODES, TRISTAR_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, GapContinuation, "CDLUPSIDEGAP2CROWS",
+        CDLUPSIDEGAP2CROWSConfig::default(), CDLUPSIDEGAP2CROWSConfig::new(settings).unwrap(),
+        UPSIDE_GAP_TWO_CROWS_OPEN, UPSIDE_GAP_TWO_CROWS_HIGH, UPSIDE_GAP_TWO_CROWS_LOW,
+        UPSIDE_GAP_TWO_CROWS_CLOSE, UPSIDE_GAP_TWO_CROWS_DEFAULT_LOOKBACK,
+        UPSIDE_GAP_TWO_CROWS_DEFAULT_F64_CODES, UPSIDE_GAP_TWO_CROWS_DEFAULT_F32_CODES,
+        UPSIDE_GAP_TWO_CROWS_CUSTOM_LOOKBACK, UPSIDE_GAP_TWO_CROWS_CUSTOM_F64_CODES,
+        UPSIDE_GAP_TWO_CROWS_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, GapContinuation, "CDLXSIDEGAP3METHODS",
+        CDLXSIDEGAP3METHODSConfig::default(), CDLXSIDEGAP3METHODSConfig::new(settings).unwrap(),
+        X_SIDE_GAP_THREE_METHODS_OPEN, X_SIDE_GAP_THREE_METHODS_HIGH,
+        X_SIDE_GAP_THREE_METHODS_LOW, X_SIDE_GAP_THREE_METHODS_CLOSE,
+        X_SIDE_GAP_THREE_METHODS_DEFAULT_LOOKBACK, X_SIDE_GAP_THREE_METHODS_DEFAULT_F64_CODES,
+        X_SIDE_GAP_THREE_METHODS_DEFAULT_F32_CODES, X_SIDE_GAP_THREE_METHODS_CUSTOM_LOOKBACK,
+        X_SIDE_GAP_THREE_METHODS_CUSTOM_F64_CODES, X_SIDE_GAP_THREE_METHODS_CUSTOM_F32_CODES
+    );
+    rows
+}
+
+fn crow_soldier_qualification_rows() -> Vec<QualificationRow> {
+    let mut rows = Vec::with_capacity(7);
+    let settings = custom_two_candle_settings();
+    push_qualification_row!(
+        rows, CrowAndSoldier, "CDL3BLACKCROWS",
+        CDL3BLACKCROWSConfig::default(), CDL3BLACKCROWSConfig::new(settings).unwrap(),
+        THREE_BLACK_CROWS_OPEN, THREE_BLACK_CROWS_HIGH, THREE_BLACK_CROWS_LOW,
+        THREE_BLACK_CROWS_CLOSE, THREE_BLACK_CROWS_DEFAULT_LOOKBACK,
+        THREE_BLACK_CROWS_DEFAULT_F64_CODES, THREE_BLACK_CROWS_DEFAULT_F32_CODES,
+        THREE_BLACK_CROWS_CUSTOM_LOOKBACK, THREE_BLACK_CROWS_CUSTOM_F64_CODES,
+        THREE_BLACK_CROWS_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, CrowAndSoldier, "CDL3STARSINSOUTH",
+        CDL3STARSINSOUTHConfig::default(), CDL3STARSINSOUTHConfig::new(settings).unwrap(),
+        THREE_STARS_IN_SOUTH_OPEN, THREE_STARS_IN_SOUTH_HIGH, THREE_STARS_IN_SOUTH_LOW,
+        THREE_STARS_IN_SOUTH_CLOSE, THREE_STARS_IN_SOUTH_DEFAULT_LOOKBACK,
+        THREE_STARS_IN_SOUTH_DEFAULT_F64_CODES, THREE_STARS_IN_SOUTH_DEFAULT_F32_CODES,
+        THREE_STARS_IN_SOUTH_CUSTOM_LOOKBACK, THREE_STARS_IN_SOUTH_CUSTOM_F64_CODES,
+        THREE_STARS_IN_SOUTH_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, CrowAndSoldier, "CDL3WHITESOLDIERS",
+        CDL3WHITESOLDIERSConfig::default(), CDL3WHITESOLDIERSConfig::new(settings).unwrap(),
+        THREE_WHITE_SOLDIERS_OPEN, THREE_WHITE_SOLDIERS_HIGH, THREE_WHITE_SOLDIERS_LOW,
+        THREE_WHITE_SOLDIERS_CLOSE, THREE_WHITE_SOLDIERS_DEFAULT_LOOKBACK,
+        THREE_WHITE_SOLDIERS_DEFAULT_F64_CODES, THREE_WHITE_SOLDIERS_DEFAULT_F32_CODES,
+        THREE_WHITE_SOLDIERS_CUSTOM_LOOKBACK, THREE_WHITE_SOLDIERS_CUSTOM_F64_CODES,
+        THREE_WHITE_SOLDIERS_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, CrowAndSoldier, "CDLADVANCEBLOCK",
+        CDLADVANCEBLOCKConfig::default(), CDLADVANCEBLOCKConfig::new(settings).unwrap(),
+        ADVANCE_BLOCK_OPEN, ADVANCE_BLOCK_HIGH, ADVANCE_BLOCK_LOW, ADVANCE_BLOCK_CLOSE,
+        ADVANCE_BLOCK_DEFAULT_LOOKBACK, ADVANCE_BLOCK_DEFAULT_F64_CODES,
+        ADVANCE_BLOCK_DEFAULT_F32_CODES, ADVANCE_BLOCK_CUSTOM_LOOKBACK,
+        ADVANCE_BLOCK_CUSTOM_F64_CODES, ADVANCE_BLOCK_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, CrowAndSoldier, "CDLCONCEALBABYSWALL",
+        CDLCONCEALBABYSWALLConfig::default(), CDLCONCEALBABYSWALLConfig::new(settings).unwrap(),
+        CONCEAL_BABY_SWALLOW_OPEN, CONCEAL_BABY_SWALLOW_HIGH, CONCEAL_BABY_SWALLOW_LOW,
+        CONCEAL_BABY_SWALLOW_CLOSE, CONCEAL_BABY_SWALLOW_DEFAULT_LOOKBACK,
+        CONCEAL_BABY_SWALLOW_DEFAULT_F64_CODES, CONCEAL_BABY_SWALLOW_DEFAULT_F32_CODES,
+        CONCEAL_BABY_SWALLOW_CUSTOM_LOOKBACK, CONCEAL_BABY_SWALLOW_CUSTOM_F64_CODES,
+        CONCEAL_BABY_SWALLOW_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, CrowAndSoldier, "CDLIDENTICAL3CROWS",
+        CDLIDENTICAL3CROWSConfig::default(), CDLIDENTICAL3CROWSConfig::new(settings).unwrap(),
+        IDENTICAL_THREE_CROWS_OPEN, IDENTICAL_THREE_CROWS_HIGH, IDENTICAL_THREE_CROWS_LOW,
+        IDENTICAL_THREE_CROWS_CLOSE, IDENTICAL_THREE_CROWS_DEFAULT_LOOKBACK,
+        IDENTICAL_THREE_CROWS_DEFAULT_F64_CODES, IDENTICAL_THREE_CROWS_DEFAULT_F32_CODES,
+        IDENTICAL_THREE_CROWS_CUSTOM_LOOKBACK, IDENTICAL_THREE_CROWS_CUSTOM_F64_CODES,
+        IDENTICAL_THREE_CROWS_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, CrowAndSoldier, "CDLSTALLEDPATTERN",
+        CDLSTALLEDPATTERNConfig::default(), CDLSTALLEDPATTERNConfig::new(settings).unwrap(),
+        STALLED_PATTERN_OPEN, STALLED_PATTERN_HIGH, STALLED_PATTERN_LOW, STALLED_PATTERN_CLOSE,
+        STALLED_PATTERN_DEFAULT_LOOKBACK, STALLED_PATTERN_DEFAULT_F64_CODES,
+        STALLED_PATTERN_DEFAULT_F32_CODES, STALLED_PATTERN_CUSTOM_LOOKBACK,
+        STALLED_PATTERN_CUSTOM_F64_CODES, STALLED_PATTERN_CUSTOM_F32_CODES
+    );
+    rows
+}
+
+fn long_formation_qualification_rows() -> Vec<QualificationRow> {
+    let mut rows = Vec::with_capacity(4);
+    let settings = custom_two_candle_settings();
+    let penetration = Penetration::new(1.5 as Float).unwrap();
+    push_qualification_row!(
+        rows, LongFormation, "CDLBREAKAWAY",
+        CDLBREAKAWAYConfig::default(), CDLBREAKAWAYConfig::new(settings).unwrap(),
+        BREAKAWAY_OPEN, BREAKAWAY_HIGH, BREAKAWAY_LOW, BREAKAWAY_CLOSE,
+        BREAKAWAY_DEFAULT_LOOKBACK, BREAKAWAY_DEFAULT_F64_CODES, BREAKAWAY_DEFAULT_F32_CODES,
+        BREAKAWAY_CUSTOM_LOOKBACK, BREAKAWAY_CUSTOM_F64_CODES, BREAKAWAY_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, LongFormation, "CDLLADDERBOTTOM",
+        CDLLADDERBOTTOMConfig::default(), CDLLADDERBOTTOMConfig::new(settings).unwrap(),
+        LADDERBOTTOM_OPEN, LADDERBOTTOM_HIGH, LADDERBOTTOM_LOW, LADDERBOTTOM_CLOSE,
+        LADDERBOTTOM_DEFAULT_LOOKBACK, LADDERBOTTOM_DEFAULT_F64_CODES,
+        LADDERBOTTOM_DEFAULT_F32_CODES, LADDERBOTTOM_CUSTOM_LOOKBACK,
+        LADDERBOTTOM_CUSTOM_F64_CODES, LADDERBOTTOM_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, LongFormation, "CDLMATHOLD",
+        CDLMATHOLDConfig::default(), CDLMATHOLDConfig::new(settings, penetration).unwrap(),
+        MATHOLD_OPEN, MATHOLD_HIGH, MATHOLD_LOW, MATHOLD_CLOSE,
+        MATHOLD_DEFAULT_LOOKBACK, MATHOLD_DEFAULT_F64_CODES, MATHOLD_DEFAULT_F32_CODES,
+        MATHOLD_CUSTOM_LOOKBACK, MATHOLD_CUSTOM_F64_CODES, MATHOLD_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, LongFormation, "CDLRISEFALL3METHODS",
+        CDLRISEFALL3METHODSConfig::default(), CDLRISEFALL3METHODSConfig::new(settings).unwrap(),
+        RISEFALL3METHODS_OPEN, RISEFALL3METHODS_HIGH, RISEFALL3METHODS_LOW,
+        RISEFALL3METHODS_CLOSE, RISEFALL3METHODS_DEFAULT_LOOKBACK,
+        RISEFALL3METHODS_DEFAULT_F64_CODES, RISEFALL3METHODS_DEFAULT_F32_CODES,
+        RISEFALL3METHODS_CUSTOM_LOOKBACK, RISEFALL3METHODS_CUSTOM_F64_CODES,
+        RISEFALL3METHODS_CUSTOM_F32_CODES
+    );
+    rows
+}
+
+fn hikkake_qualification_rows() -> Vec<QualificationRow> {
+    let mut rows = Vec::with_capacity(2);
+    let settings = CandleSettings::default().with_setting(
+        CandleSettingType::Near,
+        CandleSetting::new(CandleRangeKind::HighLow, 3, 0.125 as Float).unwrap(),
+    );
+    push_qualification_row!(
+        rows, HikkakeState, "CDLHIKKAKE",
+        CDLHIKKAKEConfig::default(), CDLHIKKAKEConfig::new(settings).unwrap(),
+        HIKKAKE_OPEN, HIKKAKE_HIGH, HIKKAKE_LOW, HIKKAKE_CLOSE,
+        HIKKAKE_DEFAULT_LOOKBACK, HIKKAKE_DEFAULT_F64_CODES, HIKKAKE_DEFAULT_F32_CODES,
+        HIKKAKE_CUSTOM_LOOKBACK, HIKKAKE_CUSTOM_F64_CODES, HIKKAKE_CUSTOM_F32_CODES
+    );
+    push_qualification_row!(
+        rows, HikkakeState, "CDLHIKKAKEMOD",
+        CDLHIKKAKEMODConfig::default(), CDLHIKKAKEMODConfig::new(settings).unwrap(),
+        HIKKAKEMOD_OPEN, HIKKAKEMOD_HIGH, HIKKAKEMOD_LOW, HIKKAKEMOD_CLOSE,
+        HIKKAKEMOD_DEFAULT_LOOKBACK, HIKKAKEMOD_DEFAULT_F64_CODES,
+        HIKKAKEMOD_DEFAULT_F32_CODES, HIKKAKEMOD_CUSTOM_LOOKBACK,
+        HIKKAKEMOD_CUSTOM_F64_CODES, HIKKAKEMOD_CUSTOM_F32_CODES
+    );
+    rows
+}
+
+#[test]
+fn complete_pattern_recognition_catalogue_focused_smoke_qualifies_all_61_rows() {
+    let mut rows = Vec::with_capacity(61);
+    rows.extend(foundation_qualification_rows());
+    rows.extend(single_candle_qualification_rows());
+    rows.extend(two_candle_qualification_rows());
+    rows.extend(three_candle_qualification_rows());
+    rows.extend(gap_continuation_qualification_rows());
+    rows.extend(crow_soldier_qualification_rows());
+    rows.extend(long_formation_qualification_rows());
+    rows.extend(hikkake_qualification_rows());
+
+    assert_eq!(rows.len(), 61);
+    for row in &rows {
+        assert_eq!(
+            row.pinned_c_default_fixture,
+            QualificationEvidence::Verified,
+            "{} pinned C default fixture",
+            row.name
+        );
+        assert_eq!(
+            row.required_custom_configuration,
+            QualificationEvidence::Verified,
+            "{} custom configuration",
+            row.name
+        );
+        assert_eq!(
+            row.canonical_match,
+            QualificationEvidence::Verified,
+            "{} canonical match",
+            row.name
+        );
+        assert_eq!(
+            row.four_mode_parity,
+            QualificationEvidence::Verified,
+            "{} four-mode parity",
+            row.name
+        );
+        assert_eq!(
+            row.validation_non_mutation,
+            QualificationEvidence::Verified,
+            "{} validation non-mutation",
+            row.name
+        );
+        assert_eq!(
+            row.default_f64,
+            QualificationEvidence::Verified,
+            "{} default f64",
+            row.name
+        );
+        assert_eq!(
+            row.supported_f32,
+            QualificationEvidence::Verified,
+            "{} supported f32",
+            row.name
+        );
+        assert_eq!(
+            row.execution_type_assertion,
+            QualificationEvidence::Verified,
+            "{} execution type assertion",
+            row.name
+        );
+        assert!(matches!(
+            row.one_boundary_near_miss,
+            BoundaryEvidence::Foundation
+                | BoundaryEvidence::SingleCandle
+                | BoundaryEvidence::BodyContainmentAndPositionShadow
+                | BoundaryEvidence::ThreeCandleReversal
+                | BoundaryEvidence::GapContinuation
+                | BoundaryEvidence::CrowAndSoldier
+                | BoundaryEvidence::LongFormation
+                | BoundaryEvidence::HikkakeState
+        ));
+    }
+
+    for boundary in [
+        BoundaryEvidence::Foundation,
+        BoundaryEvidence::SingleCandle,
+        BoundaryEvidence::BodyContainmentAndPositionShadow,
+        BoundaryEvidence::ThreeCandleReversal,
+        BoundaryEvidence::GapContinuation,
+        BoundaryEvidence::CrowAndSoldier,
+        BoundaryEvidence::LongFormation,
+        BoundaryEvidence::HikkakeState,
+    ] {
+        assert!(
+            rows.iter()
+                .any(|row| row.one_boundary_near_miss == boundary),
+            "missing executable {boundary:?} boundary evidence"
+        );
+        boundary.verify();
+    }
+
+    let mut matrix_names: Vec<_> = rows.iter().map(|row| row.name).collect();
+    matrix_names.sort_unstable();
+    assert!(
+        matrix_names.windows(2).all(|names| names[0] != names[1]),
+        "each Pattern Recognition definition must have exactly one qualification row"
+    );
+
+    let mut catalogue_names: Vec<_> = ta_core::inventory::TALIB_FUNCTIONS
+        .iter()
+        .filter(|info| info.group == ta_core::inventory::FunctionGroup::PatternRecognition)
+        .map(|info| {
+            assert_eq!(
+                info.status,
+                ta_core::inventory::ImplementationStatus::Implemented,
+                "{}",
+                info.name
+            );
+            info.name
+        })
+        .collect();
+    catalogue_names.sort_unstable();
+    assert_eq!(catalogue_names.len(), 61);
+    assert_eq!(matrix_names, catalogue_names);
+    assert_eq!(ta_core::inventory::FUNCTION_COUNT, 161);
+    assert_eq!(ta_core::inventory::IMPLEMENTED_FUNCTION_COUNT, 161);
 }

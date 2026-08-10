@@ -24,6 +24,10 @@ harness = false
 name = "execution_allocations"
 harness = false
 
+[[bench]]
+name = "pattern_recognition_baselines"
+harness = false
+
 [dependencies]
 ta-core = { path = "../ta-core" }
 
