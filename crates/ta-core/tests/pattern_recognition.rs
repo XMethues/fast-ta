@@ -823,27 +823,322 @@ fn pinned_single_candle_oracles_qualify_every_definition_through_the_public_seam
     );
 }
 
-#[test]
-fn single_candle_evidence_rows_cover_pinned_sources_and_canonical_near_misses() {
-    const ROWS: [(&str, &str); 12] = [
-        ("CDLBELTHOLD", "cdlbelthold/cdlbelthold.c"),
-        (
-            "CDLCLOSINGMARUBOZU",
-            "cdlclosingmarubozu/cdlclosingmarubozu.c",
+fn period_zero_high_low_settings(settings: &[(CandleSettingType, Float)]) -> CandleSettings {
+    settings.iter().fold(
+        CandleSettings::default(),
+        |candle_settings, &(setting_type, factor)| {
+            candle_settings.with_setting(
+                setting_type,
+                CandleSetting::new(CandleRangeKind::HighLow, 0, factor).unwrap(),
+            )
+        },
+    )
+}
+
+fn assert_single_candle_boundary<C>(
+    config: C,
+    canonical: Candle,
+    near_miss: Candle,
+    pinned_predicate: &str,
+) where
+    C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    for<'a> C:
+        IndicatorConfig<Input<'a> = CandleInput<'a>, OutputMut<'a> = &'a mut [PatternSignal]>,
+{
+    fn compute_one<C>(config: C, candle: Candle) -> ta_core::CompactOutput<Vec<PatternSignal>>
+    where
+        C: 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+        for<'a> C:
+            IndicatorConfig<Input<'a> = CandleInput<'a>, OutputMut<'a> = &'a mut [PatternSignal]>,
+    {
+        let open = [candle.open];
+        let high = [candle.high];
+        let low = [candle.low];
+        let close = [candle.close];
+        config
+            .compute(CandleInput {
+                open: &open,
+                high: &high,
+                low: &low,
+                close: &close,
+            })
+            .unwrap()
+    }
+
+    assert_eq!(config.lookback(), 0, "{pinned_predicate} Lookback");
+    let canonical_output = compute_one(config, canonical);
+    assert_eq!(
+        canonical_output.range(),
+        OutputRange::new(0, 1),
+        "{pinned_predicate} canonical source alignment"
+    );
+    assert!(
+        matches!(
+            canonical_output.values().as_slice(),
+            [PatternSignal::Match {
+                strength: PatternStrength::Standard,
+                ..
+            }]
         ),
-        ("CDLDRAGONFLYDOJI", "cdldragonflydoji/cdldragonflydoji.c"),
-        ("CDLGRAVESTONEDOJI", "cdlgravestonedoji/cdlgravestonedoji.c"),
-        ("CDLHIGHWAVE", "cdlhighwave/cdlhighwave.c"),
-        ("CDLLONGLEGGEDDOJI", "cdllongleggeddoji/cdllongleggeddoji.c"),
-        ("CDLLONGLINE", "cdllongline/cdllongline.c"),
-        ("CDLMARUBOZU", "cdlmarubozu/cdlmarubozu.c"),
-        ("CDLRICKSHAWMAN", "cdlrickshawman/cdlrickshawman.c"),
-        ("CDLSHORTLINE", "cdlshortline/cdlshortline.c"),
-        ("CDLSPINNINGTOP", "cdlspinningtop/cdlspinningtop.c"),
-        ("CDLTAKURI", "cdltakuri/cdltakuri.c"),
-    ];
-    assert_eq!(ROWS.len(), 12);
-    assert!(ROWS.iter().all(|(_, source)| source.ends_with(".c")));
+        "{pinned_predicate} canonical match"
+    );
+
+    let near_miss_output = compute_one(config, near_miss);
+    assert_eq!(
+        near_miss_output.range(),
+        OutputRange::new(0, 1),
+        "{pinned_predicate} near-miss source alignment"
+    );
+    assert_eq!(
+        near_miss_output.values(),
+        &[PatternSignal::NoMatch],
+        "{pinned_predicate} isolated one-boundary near miss"
+    );
+}
+
+#[test]
+fn single_candle_canonical_matches_and_isolated_boundaries_follow_pinned_c() {
+    let belt_settings = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyLong, 0.5 as Float),
+        (CandleSettingType::ShadowVeryShort, 0.125 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLBELTHOLDConfig::new(belt_settings).unwrap(),
+        Candle {
+            open: 2.0,
+            high: 10.0,
+            low: 2.0,
+            close: 7.0,
+        },
+        Candle {
+            open: 2.0,
+            high: 10.0,
+            low: 2.0,
+            close: 6.0,
+        },
+        "cdlbelthold.c: real body > BodyLong",
+    );
+    assert_single_candle_boundary(
+        CDLCLOSINGMARUBOZUConfig::new(belt_settings).unwrap(),
+        Candle {
+            open: 2.0,
+            high: 7.0,
+            low: -1.0,
+            close: 7.0,
+        },
+        Candle {
+            open: 2.0,
+            high: 6.0,
+            low: -2.0,
+            close: 6.0,
+        },
+        "cdlclosingmarubozu.c: real body > BodyLong",
+    );
+
+    let doji_very_short = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyDoji, 0.125 as Float),
+        (CandleSettingType::ShadowVeryShort, 0.125 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLDRAGONFLYDOJIConfig::new(doji_very_short).unwrap(),
+        Candle {
+            open: 7.0,
+            high: 7.5,
+            low: -0.5,
+            close: 7.0,
+        },
+        Candle {
+            open: 7.0,
+            high: 8.0,
+            low: 0.0,
+            close: 7.0,
+        },
+        "cdldragonflydoji.c: upper shadow < ShadowVeryShort",
+    );
+    assert_single_candle_boundary(
+        CDLGRAVESTONEDOJIConfig::new(doji_very_short).unwrap(),
+        Candle {
+            open: 1.0,
+            high: 8.5,
+            low: 0.5,
+            close: 1.0,
+        },
+        Candle {
+            open: 1.0,
+            high: 8.0,
+            low: 0.0,
+            close: 1.0,
+        },
+        "cdlgravestonedoji.c: lower shadow < ShadowVeryShort",
+    );
+
+    let high_wave_settings = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyShort, 0.5 as Float),
+        (CandleSettingType::ShadowVeryLong, 0.25 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLHIGHWAVEConfig::new(high_wave_settings).unwrap(),
+        Candle {
+            open: 3.5,
+            high: 8.0,
+            low: 0.0,
+            close: 4.5,
+        },
+        Candle {
+            open: 2.0,
+            high: 8.0,
+            low: 0.0,
+            close: 3.0,
+        },
+        "cdlhighwave.c: lower shadow > ShadowVeryLong",
+    );
+
+    let long_legged_settings = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyDoji, 0.125 as Float),
+        (CandleSettingType::ShadowLong, 0.25 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLLONGLEGGEDDOJIConfig::new(long_legged_settings).unwrap(),
+        Candle {
+            open: 3.5,
+            high: 8.0,
+            low: 0.0,
+            close: 4.5,
+        },
+        Candle {
+            open: 3.25,
+            high: 8.0,
+            low: 0.0,
+            close: 4.75,
+        },
+        "cdllongleggeddoji.c: real body <= BodyDoji",
+    );
+
+    let long_line_settings = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyLong, 0.5 as Float),
+        (CandleSettingType::ShadowShort, 0.25 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLLONGLINEConfig::new(long_line_settings).unwrap(),
+        Candle {
+            open: 1.0,
+            high: 8.0,
+            low: 0.0,
+            close: 7.0,
+        },
+        Candle {
+            open: 0.0,
+            high: 8.0,
+            low: 0.0,
+            close: 6.0,
+        },
+        "cdllongline.c: upper shadow < ShadowShort",
+    );
+
+    let marubozu_settings = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyLong, 0.5 as Float),
+        (CandleSettingType::ShadowVeryShort, 0.125 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLMARUBOZUConfig::new(marubozu_settings).unwrap(),
+        Candle {
+            open: 0.5,
+            high: 8.0,
+            low: 0.0,
+            close: 7.5,
+        },
+        Candle {
+            open: 0.0,
+            high: 8.0,
+            low: 0.0,
+            close: 7.0,
+        },
+        "cdlmarubozu.c: upper shadow < ShadowVeryShort",
+    );
+
+    let rickshaw_settings = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyDoji, 0.125 as Float),
+        (CandleSettingType::ShadowLong, 0.125 as Float),
+        (CandleSettingType::Near, 0.125 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLRICKSHAWMANConfig::new(rickshaw_settings).unwrap(),
+        Candle {
+            open: 3.5,
+            high: 8.0,
+            low: 0.0,
+            close: 4.5,
+        },
+        Candle {
+            open: 2.0,
+            high: 8.0,
+            low: 0.0,
+            close: 2.5,
+        },
+        "cdlrickshawman.c: body overlaps the midpoint Near band",
+    );
+
+    let short_line_settings = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyShort, 0.5 as Float),
+        (CandleSettingType::ShadowShort, 0.375 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLSHORTLINEConfig::new(short_line_settings).unwrap(),
+        Candle {
+            open: 2.5,
+            high: 8.0,
+            low: 0.0,
+            close: 5.5,
+        },
+        Candle {
+            open: 2.0,
+            high: 8.0,
+            low: 0.0,
+            close: 6.0,
+        },
+        "cdlshortline.c: real body < BodyShort",
+    );
+
+    let spinning_top_settings =
+        period_zero_high_low_settings(&[(CandleSettingType::BodyShort, 0.5 as Float)]);
+    assert_single_candle_boundary(
+        CDLSPINNINGTOPConfig::new(spinning_top_settings).unwrap(),
+        Candle {
+            open: 3.5,
+            high: 8.0,
+            low: 0.0,
+            close: 4.5,
+        },
+        Candle {
+            open: 6.0,
+            high: 8.0,
+            low: 0.0,
+            close: 7.0,
+        },
+        "cdlspinningtop.c: upper shadow > real body",
+    );
+
+    let takuri_settings = period_zero_high_low_settings(&[
+        (CandleSettingType::BodyDoji, 0.125 as Float),
+        (CandleSettingType::ShadowVeryShort, 0.75 as Float),
+        (CandleSettingType::ShadowVeryLong, 0.5 as Float),
+    ]);
+    assert_single_candle_boundary(
+        CDLTAKURIConfig::new(takuri_settings).unwrap(),
+        Candle {
+            open: 5.0,
+            high: 8.0,
+            low: 0.0,
+            close: 5.0,
+        },
+        Candle {
+            open: 4.0,
+            high: 8.0,
+            low: 0.0,
+            close: 4.0,
+        },
+        "cdltakuri.c: lower shadow > ShadowVeryLong",
+    );
 }
 
 fn custom_two_candle_settings() -> CandleSettings {
@@ -3697,7 +3992,7 @@ impl BoundaryEvidence {
                 independently_reasoned_boundaries_lock_doji_and_engulfing_semantics();
             }
             Self::SingleCandle => {
-                pinned_single_candle_oracles_qualify_every_definition_through_the_public_seam();
+                single_candle_canonical_matches_and_isolated_boundaries_follow_pinned_c();
             }
             Self::BodyContainmentAndPositionShadow => {
                 independently_reasoned_two_candle_boundaries_lock_exact_pinned_predicates();

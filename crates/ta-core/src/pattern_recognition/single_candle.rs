@@ -502,14 +502,13 @@ impl PatternDefinition for CDLRICKSHAWMANConfig {
         context: &RecognitionContext<'_>,
         _state: &mut Self::State,
     ) -> PatternSignal {
-        let candle = context.candle(0);
-        let midpoint = candle.low + context.high_low_range(0) / 2.0;
+        let midpoint = context.low(0) + context.high_low_range(0) / 2.0;
         let near = context.average(CandleSettingType::Near, 0);
         if context.real_body(0) <= context.average(CandleSettingType::BodyDoji, 0)
             && context.lower_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
             && context.upper_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
-            && candle.open.min(candle.close) <= midpoint + near
-            && candle.open.max(candle.close) >= midpoint - near
+            && context.open(0).min(context.close(0)) <= midpoint + near
+            && context.open(0).max(context.close(0)) >= midpoint - near
         {
             positive_signal()
         } else {
