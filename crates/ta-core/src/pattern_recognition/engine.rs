@@ -3,11 +3,11 @@
 use super::{
     Candle, CandleInput, CandleRangeKind, CandleSettingType, CandleSettings, PatternSignal,
 };
+use crate::{common::validate_finite_value, TalibError};
 use crate::{
     validate_all_same_len, validate_finite_slices, validate_input_len, validate_output_len,
     CompactOutput, Float, OutputRange, Result,
 };
-use crate::{common::validate_finite_value, TalibError};
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -113,7 +113,10 @@ impl CandleHistory {
 
     #[inline]
     fn frame(&self, offset: usize) -> &CandleFrame {
-        assert!(offset < self.frames.len(), "pattern requested unavailable Candle offset");
+        assert!(
+            offset < self.frames.len(),
+            "pattern requested unavailable Candle offset"
+        );
         let newest = (self.first + self.frames.len() - 1) % self.capacity;
         let index = (newest + self.capacity - offset) % self.capacity;
         &self.frames[index]
@@ -425,11 +428,7 @@ pub(crate) fn prepared_compute_into<D: PatternDefinition>(
 ) -> Result<OutputRange> {
     validate_prepared_capacity(input, max_input_len)?;
     let shape = validate_batch(engine.definition(), input)?;
-    validate_output_len(
-        engine.definition().name(),
-        output.len(),
-        shape.output_count,
-    )?;
+    validate_output_len(engine.definition().name(), output.len(), shape.output_count)?;
     Ok(engine.run_validated(input, output, shape))
 }
 

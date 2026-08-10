@@ -108,8 +108,7 @@ impl PatternDefinition for CDLHAMMERConfig {
         let previous = context.candle(1);
         if context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
             && context.lower_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
-            && context.upper_shadow(0)
-                < context.average(CandleSettingType::ShadowVeryShort, 0)
+            && context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
             && current.open.min(current.close)
                 <= previous.low + context.average(CandleSettingType::Near, 1)
         {
@@ -171,8 +170,7 @@ impl PatternDefinition for CDLHANGINGMANConfig {
         let previous = context.candle(1);
         if context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
             && context.lower_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
-            && context.upper_shadow(0)
-                < context.average(CandleSettingType::ShadowVeryShort, 0)
+            && context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
             && current.open.min(current.close)
                 >= previous.high - context.average(CandleSettingType::Near, 1)
         {
@@ -285,8 +283,7 @@ impl PatternDefinition for CDLINVERTEDHAMMERConfig {
         if context.real_body_gap_down(0, 1)
             && context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
             && context.upper_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
-            && context.lower_shadow(0)
-                < context.average(CandleSettingType::ShadowVeryShort, 0)
+            && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
         {
             standard(PatternDirection::Bullish)
         } else {
@@ -454,12 +451,10 @@ impl PatternDefinition for CDLSEPARATINGLINESConfig {
         let color = context.color(0);
         let short_leading_shadow = match color {
             CandleColor::White => {
-                context.lower_shadow(0)
-                    < context.average(CandleSettingType::ShadowVeryShort, 0)
+                context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
             }
             CandleColor::Black => {
-                context.upper_shadow(0)
-                    < context.average(CandleSettingType::ShadowVeryShort, 0)
+                context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
             }
         };
         if context.color(1) != color
@@ -526,8 +521,7 @@ impl PatternDefinition for CDLSHOOTINGSTARConfig {
         if context.real_body_gap_up(0, 1)
             && context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
             && context.upper_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
-            && context.lower_shadow(0)
-                < context.average(CandleSettingType::ShadowVeryShort, 0)
+            && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
         {
             standard(PatternDirection::Bearish)
         } else {
@@ -579,8 +573,7 @@ impl PatternDefinition for CDLTHRUSTINGConfig {
             && context.real_body(1) > context.average(CandleSettingType::BodyLong, 1)
             && context.color(0) == CandleColor::White
             && current.open < previous.low
-            && current.close
-                > previous.close + context.average(CandleSettingType::Equal, 1)
+            && current.close > previous.close + context.average(CandleSettingType::Equal, 1)
             && current.close <= previous.close + context.real_body(1) * (0.5 as Float)
         {
             standard(PatternDirection::Bearish)

@@ -63,67 +63,64 @@ use ta_core::overlap::{
     T3BatchRunner, T3Config, T3Stream, TEMABatchRunner, TEMAConfig, TEMAStream, TRIMABatchRunner,
     TRIMAConfig, TRIMAStream, WMABatchRunner, WMAConfig, WMAStream,
 };
-use ta_core::price_transform::{
-    AVGDEVBatchRunner, AVGDEVConfig, AVGDEVStream, AVGPRICEBatchRunner, AVGPRICEConfig,
-    AVGPRICEStream, MEDPRICEBatchRunner, MEDPRICEConfig, MEDPRICEStream, TYPPRICEBatchRunner,
-    TYPPRICEConfig, TYPPRICEStream, WCLPRICEBatchRunner, WCLPRICEConfig, WCLPRICEStream,
-};
 use ta_core::pattern_recognition::{
-    CDL2CROWSBatchRunner, CDL2CROWSConfig, CDL2CROWSStream, CDL3LINESTRIKEBatchRunner,
-    CDL3LINESTRIKEConfig, CDL3LINESTRIKEStream, CDLGAPSIDESIDEWHITEBatchRunner,
-    CDLGAPSIDESIDEWHITEConfig, CDLGAPSIDESIDEWHITEStream, CDLSTICKSANDWICHBatchRunner,
-    CDLSTICKSANDWICHConfig, CDLSTICKSANDWICHStream, CDLTASUKIGAPBatchRunner, CDLTASUKIGAPConfig,
-    CDLTASUKIGAPStream, CDLTRISTARBatchRunner, CDLTRISTARConfig, CDLTRISTARStream,
-    CDLUPSIDEGAP2CROWSBatchRunner, CDLUPSIDEGAP2CROWSConfig, CDLUPSIDEGAP2CROWSStream,
-    CDLXSIDEGAP3METHODSBatchRunner, CDLXSIDEGAP3METHODSConfig, CDLXSIDEGAP3METHODSStream,
-    CDL3BLACKCROWSBatchRunner, CDL3BLACKCROWSConfig, CDL3BLACKCROWSStream,
-    CDL3STARSINSOUTHBatchRunner, CDL3STARSINSOUTHConfig, CDL3STARSINSOUTHStream,
-    CDL3WHITESOLDIERSBatchRunner, CDL3WHITESOLDIERSConfig, CDL3WHITESOLDIERSStream,
-    CDLADVANCEBLOCKBatchRunner, CDLADVANCEBLOCKConfig, CDLADVANCEBLOCKStream,
-    CDLCONCEALBABYSWALLBatchRunner, CDLCONCEALBABYSWALLConfig, CDLCONCEALBABYSWALLStream,
-    CDLIDENTICAL3CROWSBatchRunner, CDLIDENTICAL3CROWSConfig, CDLIDENTICAL3CROWSStream,
-    CDLSTALLEDPATTERNBatchRunner, CDLSTALLEDPATTERNConfig, CDLSTALLEDPATTERNStream,
-    CDLBREAKAWAYBatchRunner, CDLBREAKAWAYConfig, CDLBREAKAWAYStream,
-    CDLLADDERBOTTOMBatchRunner, CDLLADDERBOTTOMConfig, CDLLADDERBOTTOMStream,
-    CDLMATHOLDBatchRunner, CDLMATHOLDConfig, CDLMATHOLDStream,
-    CDLRISEFALL3METHODSBatchRunner, CDLRISEFALL3METHODSConfig, CDLRISEFALL3METHODSStream,
-    CDL3INSIDEBatchRunner, CDL3INSIDEConfig, CDL3INSIDEStream, CDL3OUTSIDEBatchRunner,
-    CDL3OUTSIDEConfig, CDL3OUTSIDEStream, CDLABANDONEDBABYBatchRunner, CDLABANDONEDBABYConfig,
-    CDLABANDONEDBABYStream,
-    CDLBELTHOLDBatchRunner, CDLBELTHOLDConfig, CDLBELTHOLDStream,
+    CDL2CROWSBatchRunner, CDL2CROWSConfig, CDL2CROWSStream, CDL3BLACKCROWSBatchRunner,
+    CDL3BLACKCROWSConfig, CDL3BLACKCROWSStream, CDL3INSIDEBatchRunner, CDL3INSIDEConfig,
+    CDL3INSIDEStream, CDL3LINESTRIKEBatchRunner, CDL3LINESTRIKEConfig, CDL3LINESTRIKEStream,
+    CDL3OUTSIDEBatchRunner, CDL3OUTSIDEConfig, CDL3OUTSIDEStream, CDL3STARSINSOUTHBatchRunner,
+    CDL3STARSINSOUTHConfig, CDL3STARSINSOUTHStream, CDL3WHITESOLDIERSBatchRunner,
+    CDL3WHITESOLDIERSConfig, CDL3WHITESOLDIERSStream, CDLABANDONEDBABYBatchRunner,
+    CDLABANDONEDBABYConfig, CDLABANDONEDBABYStream, CDLADVANCEBLOCKBatchRunner,
+    CDLADVANCEBLOCKConfig, CDLADVANCEBLOCKStream, CDLBELTHOLDBatchRunner, CDLBELTHOLDConfig,
+    CDLBELTHOLDStream, CDLBREAKAWAYBatchRunner, CDLBREAKAWAYConfig, CDLBREAKAWAYStream,
     CDLCLOSINGMARUBOZUBatchRunner, CDLCLOSINGMARUBOZUConfig, CDLCLOSINGMARUBOZUStream,
+    CDLCONCEALBABYSWALLBatchRunner, CDLCONCEALBABYSWALLConfig, CDLCONCEALBABYSWALLStream,
     CDLCOUNTERATTACKBatchRunner, CDLCOUNTERATTACKConfig, CDLCOUNTERATTACKStream,
     CDLDARKCLOUDCOVERBatchRunner, CDLDARKCLOUDCOVERConfig, CDLDARKCLOUDCOVERStream,
     CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJISTARBatchRunner, CDLDOJISTARConfig,
     CDLDOJISTARStream, CDLDOJIStream, CDLDRAGONFLYDOJIBatchRunner, CDLDRAGONFLYDOJIConfig,
     CDLDRAGONFLYDOJIStream, CDLENGULFINGBatchRunner, CDLENGULFINGConfig, CDLENGULFINGStream,
+    CDLEVENINGDOJISTARBatchRunner, CDLEVENINGDOJISTARConfig, CDLEVENINGDOJISTARStream,
+    CDLEVENINGSTARBatchRunner, CDLEVENINGSTARConfig, CDLEVENINGSTARStream,
+    CDLGAPSIDESIDEWHITEBatchRunner, CDLGAPSIDESIDEWHITEConfig, CDLGAPSIDESIDEWHITEStream,
     CDLGRAVESTONEDOJIBatchRunner, CDLGRAVESTONEDOJIConfig, CDLGRAVESTONEDOJIStream,
     CDLHAMMERBatchRunner, CDLHAMMERConfig, CDLHAMMERStream, CDLHANGINGMANBatchRunner,
-    CDLHANGINGMANConfig, CDLHANGINGMANStream, CDLHARAMIBatchRunner, CDLHARAMIConfig,
-    CDLHARAMICROSSBatchRunner, CDLHARAMICROSSConfig, CDLHARAMICROSSStream, CDLHARAMIStream,
-    CDLHIGHWAVEBatchRunner, CDLHIGHWAVEConfig, CDLHIGHWAVEStream, CDLHOMINGPIGEONBatchRunner,
-    CDLHIKKAKEBatchRunner, CDLHIKKAKEConfig, CDLHIKKAKEStream, CDLHIKKAKEMODBatchRunner,
-    CDLHIKKAKEMODConfig, CDLHIKKAKEMODStream,
-    CDLHOMINGPIGEONConfig, CDLHOMINGPIGEONStream, CDLINNECKBatchRunner, CDLINNECKConfig,
-    CDLINNECKStream, CDLINVERTEDHAMMERBatchRunner, CDLINVERTEDHAMMERConfig,
-    CDLINVERTEDHAMMERStream, CDLKICKINGBatchRunner, CDLKICKINGBYLENGTHBatchRunner,
-    CDLKICKINGBYLENGTHConfig, CDLKICKINGBYLENGTHStream, CDLKICKINGConfig, CDLKICKINGStream,
+    CDLHANGINGMANConfig, CDLHANGINGMANStream, CDLHARAMIBatchRunner, CDLHARAMICROSSBatchRunner,
+    CDLHARAMICROSSConfig, CDLHARAMICROSSStream, CDLHARAMIConfig, CDLHARAMIStream,
+    CDLHIGHWAVEBatchRunner, CDLHIGHWAVEConfig, CDLHIGHWAVEStream, CDLHIKKAKEBatchRunner,
+    CDLHIKKAKEConfig, CDLHIKKAKEMODBatchRunner, CDLHIKKAKEMODConfig, CDLHIKKAKEMODStream,
+    CDLHIKKAKEStream, CDLHOMINGPIGEONBatchRunner, CDLHOMINGPIGEONConfig, CDLHOMINGPIGEONStream,
+    CDLIDENTICAL3CROWSBatchRunner, CDLIDENTICAL3CROWSConfig, CDLIDENTICAL3CROWSStream,
+    CDLINNECKBatchRunner, CDLINNECKConfig, CDLINNECKStream, CDLINVERTEDHAMMERBatchRunner,
+    CDLINVERTEDHAMMERConfig, CDLINVERTEDHAMMERStream, CDLKICKINGBYLENGTHBatchRunner,
+    CDLKICKINGBYLENGTHConfig, CDLKICKINGBYLENGTHStream, CDLKICKINGBatchRunner, CDLKICKINGConfig,
+    CDLKICKINGStream, CDLLADDERBOTTOMBatchRunner, CDLLADDERBOTTOMConfig, CDLLADDERBOTTOMStream,
     CDLLONGLEGGEDDOJIBatchRunner, CDLLONGLEGGEDDOJIConfig, CDLLONGLEGGEDDOJIStream,
     CDLLONGLINEBatchRunner, CDLLONGLINEConfig, CDLLONGLINEStream, CDLMARUBOZUBatchRunner,
     CDLMARUBOZUConfig, CDLMARUBOZUStream, CDLMATCHINGLOWBatchRunner, CDLMATCHINGLOWConfig,
-    CDLMATCHINGLOWStream, CDLONNECKBatchRunner, CDLONNECKConfig, CDLONNECKStream,
-    CDLPIERCINGBatchRunner, CDLPIERCINGConfig, CDLPIERCINGStream, CDLRICKSHAWMANBatchRunner,
-    CDLRICKSHAWMANConfig, CDLRICKSHAWMANStream, CDLSEPARATINGLINESBatchRunner,
-    CDLSEPARATINGLINESConfig, CDLSEPARATINGLINESStream, CDLSHOOTINGSTARBatchRunner,
-    CDLSHOOTINGSTARConfig, CDLSHOOTINGSTARStream, CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig,
-    CDLSHORTLINEStream, CDLSPINNINGTOPBatchRunner, CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream,
-    CDLTAKURIBatchRunner, CDLTAKURIConfig, CDLTAKURIStream, CDLTHRUSTINGBatchRunner,
-    CDLTHRUSTINGConfig, CDLTHRUSTINGStream,
-    CDLEVENINGDOJISTARBatchRunner, CDLEVENINGDOJISTARConfig, CDLEVENINGDOJISTARStream,
-    CDLEVENINGSTARBatchRunner, CDLEVENINGSTARConfig, CDLEVENINGSTARStream,
+    CDLMATCHINGLOWStream, CDLMATHOLDBatchRunner, CDLMATHOLDConfig, CDLMATHOLDStream,
     CDLMORNINGDOJISTARBatchRunner, CDLMORNINGDOJISTARConfig, CDLMORNINGDOJISTARStream,
-    CDLMORNINGSTARBatchRunner, CDLMORNINGSTARConfig, CDLMORNINGSTARStream,
-    CDLUNIQUE3RIVERBatchRunner, CDLUNIQUE3RIVERConfig, CDLUNIQUE3RIVERStream,
+    CDLMORNINGSTARBatchRunner, CDLMORNINGSTARConfig, CDLMORNINGSTARStream, CDLONNECKBatchRunner,
+    CDLONNECKConfig, CDLONNECKStream, CDLPIERCINGBatchRunner, CDLPIERCINGConfig, CDLPIERCINGStream,
+    CDLRICKSHAWMANBatchRunner, CDLRICKSHAWMANConfig, CDLRICKSHAWMANStream,
+    CDLRISEFALL3METHODSBatchRunner, CDLRISEFALL3METHODSConfig, CDLRISEFALL3METHODSStream,
+    CDLSEPARATINGLINESBatchRunner, CDLSEPARATINGLINESConfig, CDLSEPARATINGLINESStream,
+    CDLSHOOTINGSTARBatchRunner, CDLSHOOTINGSTARConfig, CDLSHOOTINGSTARStream,
+    CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig, CDLSHORTLINEStream, CDLSPINNINGTOPBatchRunner,
+    CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream, CDLSTALLEDPATTERNBatchRunner,
+    CDLSTALLEDPATTERNConfig, CDLSTALLEDPATTERNStream, CDLSTICKSANDWICHBatchRunner,
+    CDLSTICKSANDWICHConfig, CDLSTICKSANDWICHStream, CDLTAKURIBatchRunner, CDLTAKURIConfig,
+    CDLTAKURIStream, CDLTASUKIGAPBatchRunner, CDLTASUKIGAPConfig, CDLTASUKIGAPStream,
+    CDLTHRUSTINGBatchRunner, CDLTHRUSTINGConfig, CDLTHRUSTINGStream, CDLTRISTARBatchRunner,
+    CDLTRISTARConfig, CDLTRISTARStream, CDLUNIQUE3RIVERBatchRunner, CDLUNIQUE3RIVERConfig,
+    CDLUNIQUE3RIVERStream, CDLUPSIDEGAP2CROWSBatchRunner, CDLUPSIDEGAP2CROWSConfig,
+    CDLUPSIDEGAP2CROWSStream, CDLXSIDEGAP3METHODSBatchRunner, CDLXSIDEGAP3METHODSConfig,
+    CDLXSIDEGAP3METHODSStream,
+};
+use ta_core::price_transform::{
+    AVGDEVBatchRunner, AVGDEVConfig, AVGDEVStream, AVGPRICEBatchRunner, AVGPRICEConfig,
+    AVGPRICEStream, MEDPRICEBatchRunner, MEDPRICEConfig, MEDPRICEStream, TYPPRICEBatchRunner,
+    TYPPRICEConfig, TYPPRICEStream, WCLPRICEBatchRunner, WCLPRICEConfig, WCLPRICEStream,
 };
 use ta_core::statistic::{
     BETABatchRunner, BETAConfig, BETAStream, CORRELBatchRunner, CORRELConfig, CORRELStream,
@@ -493,11 +490,7 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
 
     // Pattern Recognition (50 implemented indicators).
     assert_execution_types::<CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream>();
-    assert_execution_types::<
-        CDLENGULFINGConfig,
-        CDLENGULFINGBatchRunner,
-        CDLENGULFINGStream,
-    >();
+    assert_execution_types::<CDLENGULFINGConfig, CDLENGULFINGBatchRunner, CDLENGULFINGStream>();
     assert_execution_types::<CDLBELTHOLDConfig, CDLBELTHOLDBatchRunner, CDLBELTHOLDStream>();
     assert_execution_types::<
         CDLCLOSINGMARUBOZUConfig,
@@ -522,17 +515,11 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     >();
     assert_execution_types::<CDLLONGLINEConfig, CDLLONGLINEBatchRunner, CDLLONGLINEStream>();
     assert_execution_types::<CDLMARUBOZUConfig, CDLMARUBOZUBatchRunner, CDLMARUBOZUStream>();
-    assert_execution_types::<
-        CDLRICKSHAWMANConfig,
-        CDLRICKSHAWMANBatchRunner,
-        CDLRICKSHAWMANStream,
-    >();
+    assert_execution_types::<CDLRICKSHAWMANConfig, CDLRICKSHAWMANBatchRunner, CDLRICKSHAWMANStream>(
+    );
     assert_execution_types::<CDLSHORTLINEConfig, CDLSHORTLINEBatchRunner, CDLSHORTLINEStream>();
-    assert_execution_types::<
-        CDLSPINNINGTOPConfig,
-        CDLSPINNINGTOPBatchRunner,
-        CDLSPINNINGTOPStream,
-    >();
+    assert_execution_types::<CDLSPINNINGTOPConfig, CDLSPINNINGTOPBatchRunner, CDLSPINNINGTOPStream>(
+    );
     assert_execution_types::<CDLTAKURIConfig, CDLTAKURIBatchRunner, CDLTAKURIStream>();
     assert_execution_types::<
         CDLCOUNTERATTACKConfig,
@@ -546,11 +533,8 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     >();
     assert_execution_types::<CDLDOJISTARConfig, CDLDOJISTARBatchRunner, CDLDOJISTARStream>();
     assert_execution_types::<CDLHARAMIConfig, CDLHARAMIBatchRunner, CDLHARAMIStream>();
-    assert_execution_types::<
-        CDLHARAMICROSSConfig,
-        CDLHARAMICROSSBatchRunner,
-        CDLHARAMICROSSStream,
-    >();
+    assert_execution_types::<CDLHARAMICROSSConfig, CDLHARAMICROSSBatchRunner, CDLHARAMICROSSStream>(
+    );
     assert_execution_types::<
         CDLHOMINGPIGEONConfig,
         CDLHOMINGPIGEONBatchRunner,
@@ -562,17 +546,10 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLKICKINGBYLENGTHBatchRunner,
         CDLKICKINGBYLENGTHStream,
     >();
-    assert_execution_types::<
-        CDLMATCHINGLOWConfig,
-        CDLMATCHINGLOWBatchRunner,
-        CDLMATCHINGLOWStream,
-    >();
+    assert_execution_types::<CDLMATCHINGLOWConfig, CDLMATCHINGLOWBatchRunner, CDLMATCHINGLOWStream>(
+    );
     assert_execution_types::<CDLHAMMERConfig, CDLHAMMERBatchRunner, CDLHAMMERStream>();
-    assert_execution_types::<
-        CDLHANGINGMANConfig,
-        CDLHANGINGMANBatchRunner,
-        CDLHANGINGMANStream,
-    >();
+    assert_execution_types::<CDLHANGINGMANConfig, CDLHANGINGMANBatchRunner, CDLHANGINGMANStream>();
     assert_execution_types::<CDLINNECKConfig, CDLINNECKBatchRunner, CDLINNECKStream>();
     assert_execution_types::<
         CDLINVERTEDHAMMERConfig,
@@ -605,32 +582,23 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLEVENINGDOJISTARBatchRunner,
         CDLEVENINGDOJISTARStream,
     >();
-    assert_execution_types::<
-        CDLEVENINGSTARConfig,
-        CDLEVENINGSTARBatchRunner,
-        CDLEVENINGSTARStream,
-    >();
+    assert_execution_types::<CDLEVENINGSTARConfig, CDLEVENINGSTARBatchRunner, CDLEVENINGSTARStream>(
+    );
     assert_execution_types::<
         CDLMORNINGDOJISTARConfig,
         CDLMORNINGDOJISTARBatchRunner,
         CDLMORNINGDOJISTARStream,
     >();
-    assert_execution_types::<
-        CDLMORNINGSTARConfig,
-        CDLMORNINGSTARBatchRunner,
-        CDLMORNINGSTARStream,
-    >();
+    assert_execution_types::<CDLMORNINGSTARConfig, CDLMORNINGSTARBatchRunner, CDLMORNINGSTARStream>(
+    );
     assert_execution_types::<
         CDLUNIQUE3RIVERConfig,
         CDLUNIQUE3RIVERBatchRunner,
         CDLUNIQUE3RIVERStream,
     >();
     assert_execution_types::<CDL2CROWSConfig, CDL2CROWSBatchRunner, CDL2CROWSStream>();
-    assert_execution_types::<
-        CDL3LINESTRIKEConfig,
-        CDL3LINESTRIKEBatchRunner,
-        CDL3LINESTRIKEStream,
-    >();
+    assert_execution_types::<CDL3LINESTRIKEConfig, CDL3LINESTRIKEBatchRunner, CDL3LINESTRIKEStream>(
+    );
     assert_execution_types::<
         CDLGAPSIDESIDEWHITEConfig,
         CDLGAPSIDESIDEWHITEBatchRunner,
@@ -653,18 +621,39 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLXSIDEGAP3METHODSBatchRunner,
         CDLXSIDEGAP3METHODSStream,
     >();
-    assert_execution_types::<CDL3BLACKCROWSConfig, CDL3BLACKCROWSBatchRunner, CDL3BLACKCROWSStream>();
-    assert_execution_types::<CDL3STARSINSOUTHConfig, CDL3STARSINSOUTHBatchRunner, CDL3STARSINSOUTHStream>();
-    assert_execution_types::<CDL3WHITESOLDIERSConfig, CDL3WHITESOLDIERSBatchRunner, CDL3WHITESOLDIERSStream>();
-    assert_execution_types::<CDLADVANCEBLOCKConfig, CDLADVANCEBLOCKBatchRunner, CDLADVANCEBLOCKStream>();
-    assert_execution_types::<CDLCONCEALBABYSWALLConfig, CDLCONCEALBABYSWALLBatchRunner, CDLCONCEALBABYSWALLStream>();
-    assert_execution_types::<CDLIDENTICAL3CROWSConfig, CDLIDENTICAL3CROWSBatchRunner, CDLIDENTICAL3CROWSStream>();
-    assert_execution_types::<CDLSTALLEDPATTERNConfig, CDLSTALLEDPATTERNBatchRunner, CDLSTALLEDPATTERNStream>();
+    assert_execution_types::<CDL3BLACKCROWSConfig, CDL3BLACKCROWSBatchRunner, CDL3BLACKCROWSStream>(
+    );
     assert_execution_types::<
-        CDLBREAKAWAYConfig,
-        CDLBREAKAWAYBatchRunner,
-        CDLBREAKAWAYStream,
+        CDL3STARSINSOUTHConfig,
+        CDL3STARSINSOUTHBatchRunner,
+        CDL3STARSINSOUTHStream,
     >();
+    assert_execution_types::<
+        CDL3WHITESOLDIERSConfig,
+        CDL3WHITESOLDIERSBatchRunner,
+        CDL3WHITESOLDIERSStream,
+    >();
+    assert_execution_types::<
+        CDLADVANCEBLOCKConfig,
+        CDLADVANCEBLOCKBatchRunner,
+        CDLADVANCEBLOCKStream,
+    >();
+    assert_execution_types::<
+        CDLCONCEALBABYSWALLConfig,
+        CDLCONCEALBABYSWALLBatchRunner,
+        CDLCONCEALBABYSWALLStream,
+    >();
+    assert_execution_types::<
+        CDLIDENTICAL3CROWSConfig,
+        CDLIDENTICAL3CROWSBatchRunner,
+        CDLIDENTICAL3CROWSStream,
+    >();
+    assert_execution_types::<
+        CDLSTALLEDPATTERNConfig,
+        CDLSTALLEDPATTERNBatchRunner,
+        CDLSTALLEDPATTERNStream,
+    >();
+    assert_execution_types::<CDLBREAKAWAYConfig, CDLBREAKAWAYBatchRunner, CDLBREAKAWAYStream>();
     assert_execution_types::<
         CDLLADDERBOTTOMConfig,
         CDLLADDERBOTTOMBatchRunner,
@@ -677,11 +666,7 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLRISEFALL3METHODSStream,
     >();
     assert_execution_types::<CDLHIKKAKEConfig, CDLHIKKAKEBatchRunner, CDLHIKKAKEStream>();
-    assert_execution_types::<
-        CDLHIKKAKEMODConfig,
-        CDLHIKKAKEMODBatchRunner,
-        CDLHIKKAKEMODStream,
-    >();
+    assert_execution_types::<CDLHIKKAKEMODConfig, CDLHIKKAKEMODBatchRunner, CDLHIKKAKEMODStream>();
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
     assert_execution_types::<CORRELConfig, CORRELBatchRunner, CORRELStream>();

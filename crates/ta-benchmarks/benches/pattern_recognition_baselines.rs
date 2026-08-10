@@ -10,9 +10,9 @@ use std::sync::Once;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use support::ohlc_fixture;
 use ta_core::pattern_recognition::{
-    Candle, CandleInput, CandleSetting, CandleSettingType, CandleSettings, PatternSignal,
-    Penetration, CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig, CDLHIKKAKEConfig,
-    CDLHIKKAKEMODConfig, CDLMORNINGSTARConfig,
+    CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig, CDLHIKKAKEConfig,
+    CDLHIKKAKEMODConfig, CDLMORNINGSTARConfig, Candle, CandleInput, CandleSetting,
+    CandleSettingType, CandleSettings, PatternSignal, Penetration,
 };
 use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
@@ -26,7 +26,11 @@ fn command_output(program: &str, arguments: &[&str]) -> String {
         .output()
         .ok()
         .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().replace('\n', " | "))
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .replace('\n', " | ")
+        })
         .filter(|output| !output.is_empty())
         .unwrap_or_else(|| "unavailable".to_owned())
 }
@@ -75,12 +79,8 @@ fn large_period_settings() -> CandleSettings {
         let default = defaults.setting(setting_type);
         settings = settings.with_setting(
             setting_type,
-            CandleSetting::new(
-                default.range_kind(),
-                LARGE_AVERAGE_PERIOD,
-                default.factor(),
-            )
-            .expect("valid large-period Candle Setting"),
+            CandleSetting::new(default.range_kind(), LARGE_AVERAGE_PERIOD, default.factor())
+                .expect("valid large-period Candle Setting"),
         );
     }
     settings
@@ -89,17 +89,13 @@ fn large_period_settings() -> CandleSettings {
 fn benchmark_construction<C, F>(c: &mut Criterion, name: &str, variant: &str, make_config: F)
 where
     C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
-    for<'a> C: IndicatorConfig<
-        Input<'a> = CandleInput<'a>,
-        OutputMut<'a> = &'a mut [PatternSignal],
-    >,
+    for<'a> C:
+        IndicatorConfig<Input<'a> = CandleInput<'a>, OutputMut<'a> = &'a mut [PatternSignal]>,
     C::BatchRunner: PreparedBatchRunner<C>,
     C::Stream: StreamingComputation<C, Tick = Candle, TickOutput = PatternSignal>,
     F: Copy + Fn() -> C,
 {
-    let mut group = c.benchmark_group(format!(
-        "pattern_recognition/construction/{name}/{variant}"
-    ));
+    let mut group = c.benchmark_group(format!("pattern_recognition/construction/{name}/{variant}"));
     group.bench_function("config", |b| b.iter(|| black_box(make_config())));
     group.bench_function("prepared_65536", |b| {
         b.iter(|| {
@@ -119,16 +115,12 @@ where
 fn benchmark_throughput<C>(c: &mut Criterion, name: &str, variant: &str, config: C)
 where
     C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
-    for<'a> C: IndicatorConfig<
-        Input<'a> = CandleInput<'a>,
-        OutputMut<'a> = &'a mut [PatternSignal],
-    >,
+    for<'a> C:
+        IndicatorConfig<Input<'a> = CandleInput<'a>, OutputMut<'a> = &'a mut [PatternSignal]>,
     C::BatchRunner: PreparedBatchRunner<C>,
     C::Stream: StreamingComputation<C, Tick = Candle, TickOutput = PatternSignal>,
 {
-    let mut group = c.benchmark_group(format!(
-        "pattern_recognition/throughput/{name}/{variant}"
-    ));
+    let mut group = c.benchmark_group(format!("pattern_recognition/throughput/{name}/{variant}"));
 
     for &size in SIZES {
         let fixture = ohlc_fixture(size);
@@ -175,7 +167,10 @@ where
         group.bench_with_input(BenchmarkId::new("prepared", size), &size, |b, _| {
             b.iter(|| {
                 let range = prepared
-                    .compute_into(black_box(input()), black_box(prepared_output.as_mut_slice()))
+                    .compute_into(
+                        black_box(input()),
+                        black_box(prepared_output.as_mut_slice()),
+                    )
                     .expect("valid prepared Pattern Recognition fixture");
                 black_box((range, prepared_output.as_slice()));
             })
@@ -200,12 +195,7 @@ fn bench_pattern_recognition(c: &mut Criterion) {
     record_environment_provenance();
 
     benchmark_construction(c, "CDLENGULFING", "default", CDLENGULFINGConfig::default);
-    benchmark_throughput(
-        c,
-        "CDLENGULFING",
-        "default",
-        CDLENGULFINGConfig::default(),
-    );
+    benchmark_throughput(c, "CDLENGULFING", "default", CDLENGULFINGConfig::default());
 
     benchmark_construction(c, "CDLDOJI", "default", CDLDOJIConfig::default);
     benchmark_throughput(c, "CDLDOJI", "default", CDLDOJIConfig::default());
@@ -243,7 +233,12 @@ fn bench_pattern_recognition(c: &mut Criterion) {
             .expect("valid large-period CDL3WHITESOLDIERS"),
     );
 
-    benchmark_construction(c, "CDLMORNINGSTAR", "default", CDLMORNINGSTARConfig::default);
+    benchmark_construction(
+        c,
+        "CDLMORNINGSTAR",
+        "default",
+        CDLMORNINGSTARConfig::default,
+    );
     benchmark_throughput(
         c,
         "CDLMORNINGSTAR",
@@ -279,8 +274,7 @@ fn bench_pattern_recognition(c: &mut Criterion) {
         CDLHIKKAKEMODConfig::default(),
     );
     benchmark_construction(c, "CDLHIKKAKEMOD", "period_200", || {
-        CDLHIKKAKEMODConfig::new(large_period_settings())
-            .expect("valid large-period CDLHIKKAKEMOD")
+        CDLHIKKAKEMODConfig::new(large_period_settings()).expect("valid large-period CDLHIKKAKEMOD")
     });
     benchmark_throughput(
         c,

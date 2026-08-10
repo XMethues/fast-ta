@@ -2,7 +2,8 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{
-    CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength, Penetration,
+    CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
+    Penetration,
 };
 use crate::{Float, Result};
 
@@ -182,8 +183,7 @@ definition!(
             && first.close > second.close
             && second.close > third.close
             && context.color(1) == CandleColor::Black
-            && context.upper_shadow(1)
-                > context.average(CandleSettingType::ShadowVeryShort, 1)
+            && context.upper_shadow(1) > context.average(CandleSettingType::ShadowVeryShort, 1)
             && context.color(0) == CandleColor::White
             && fifth.open > fourth.open
             && fifth.close > fourth.high
@@ -269,11 +269,7 @@ impl PatternDefinition for CDLMATHOLDConfig {
 
     fn initial_state(&self) -> Self::State {}
 
-    fn transition(
-        &self,
-        context: &RecognitionContext<'_>,
-        _: &mut Self::State,
-    ) -> PatternSignal {
+    fn transition(&self, context: &RecognitionContext<'_>, _: &mut Self::State) -> PatternSignal {
         let first = context.candle(4);
         let second = context.candle(3);
         let third = context.candle(2);
@@ -342,11 +338,7 @@ impl PatternDefinition for CDLRISEFALL3METHODSConfig {
 
     fn initial_state(&self) -> Self::State {}
 
-    fn transition(
-        &self,
-        context: &RecognitionContext<'_>,
-        _: &mut Self::State,
-    ) -> PatternSignal {
+    fn transition(&self, context: &RecognitionContext<'_>, _: &mut Self::State) -> PatternSignal {
         let first = context.candle(4);
         let second = context.candle(3);
         let third = context.candle(2);
@@ -368,8 +360,7 @@ impl PatternDefinition for CDLRISEFALL3METHODSConfig {
             }
         };
         let reaction_within_first_range = |candle: super::Candle| {
-            candle.open.min(candle.close) < first.high
-                && candle.open.max(candle.close) > first.low
+            candle.open.min(candle.close) < first.high && candle.open.max(candle.close) > first.low
         };
 
         if first_color != context.color(3)

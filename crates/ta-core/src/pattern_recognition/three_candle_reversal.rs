@@ -2,7 +2,8 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{
-    CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength, Penetration,
+    CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
+    Penetration,
 };
 use crate::{Float, Result};
 
@@ -167,8 +168,12 @@ impl PatternDefinition for CDL3INSIDEConfig {
         let third = context.candle(0);
         let first_color = context.color(2);
         let reversal = match first_color {
-            CandleColor::White => context.color(0) == CandleColor::Black && third.close < first.open,
-            CandleColor::Black => context.color(0) == CandleColor::White && third.close > first.open,
+            CandleColor::White => {
+                context.color(0) == CandleColor::Black && third.close < first.open
+            }
+            CandleColor::Black => {
+                context.color(0) == CandleColor::White && third.close > first.open
+            }
         };
         if body_high(context, 1) < body_high(context, 2)
             && body_low(context, 1) > body_low(context, 2)
@@ -325,15 +330,13 @@ impl PatternDefinition for CDLABANDONEDBABYConfig {
         let reversal = match third_color {
             CandleColor::Black => {
                 context.color(2) == CandleColor::White
-                    && third.close
-                        < first.close - context.real_body(2) * self.penetration.value()
+                    && third.close < first.close - context.real_body(2) * self.penetration.value()
                     && context.candle_gap_up(1, 2)
                     && context.candle_gap_down(0, 1)
             }
             CandleColor::White => {
                 context.color(2) == CandleColor::Black
-                    && third.close
-                        > first.close + context.real_body(2) * self.penetration.value()
+                    && third.close > first.close + context.real_body(2) * self.penetration.value()
                     && context.candle_gap_down(1, 2)
                     && context.candle_gap_up(0, 1)
             }

@@ -184,11 +184,7 @@ impl CandleSetting {
     /// `average_period` may be `0..=100_000`. A zero period selects the
     /// classified Candle's current range. `factor` must be finite and
     /// nonnegative.
-    pub fn new(
-        range_kind: CandleRangeKind,
-        average_period: usize,
-        factor: Float,
-    ) -> Result<Self> {
+    pub fn new(range_kind: CandleRangeKind, average_period: usize, factor: Float) -> Result<Self> {
         if average_period > 100_000 {
             return Err(TalibError::invalid_period(
                 average_period,
@@ -307,11 +303,7 @@ impl CandleSettings {
 
     /// Returns a new collection with one validated setting replaced.
     #[inline]
-    pub fn with_setting(
-        mut self,
-        setting_type: CandleSettingType,
-        setting: CandleSetting,
-    ) -> Self {
+    pub fn with_setting(mut self, setting_type: CandleSettingType, setting: CandleSetting) -> Self {
         self.settings[setting_type.index()] = setting;
         self
     }

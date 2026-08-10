@@ -1,9 +1,7 @@
 //! Stateful local definitions for ordinary and modified Hikkake.
 
 use super::engine::{PatternDefinition, RecognitionContext};
-use super::{
-    CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
-};
+use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
 use crate::Result;
 
 #[derive(Debug, Clone, Copy)]
@@ -144,11 +142,7 @@ impl PatternDefinition for CDLHIKKAKEConfig {
     }
 }
 
-impl_pattern_execution!(
-    CDLHIKKAKEConfig,
-    CDLHIKKAKEBatchRunner,
-    CDLHIKKAKEStream
-);
+impl_pattern_execution!(CDLHIKKAKEConfig, CDLHIKKAKEBatchRunner, CDLHIKKAKEStream);
 
 /// Immutable CDLHIKKAKEMOD Indicator Configuration.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -239,15 +233,13 @@ impl PatternDefinition for CDLHIKKAKEMODConfig {
         let formation = if nested_inside
             && current.high < third.high
             && current.low < third.low
-            && second.close
-                <= second.low + context.average(CandleSettingType::Near, 2)
+            && second.close <= second.low + context.average(CandleSettingType::Near, 2)
         {
             Some((PatternDirection::Bullish, third.high))
         } else if nested_inside
             && current.high > third.high
             && current.low > third.low
-            && second.close
-                >= second.high - context.average(CandleSettingType::Near, 2)
+            && second.close >= second.high - context.average(CandleSettingType::Near, 2)
         {
             Some((PatternDirection::Bearish, third.low))
         } else {

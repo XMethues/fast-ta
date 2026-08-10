@@ -42,10 +42,10 @@ pub mod math_transform;
 pub mod momentum;
 /// Overlap studies: Moving averages and other price overlay indicators.
 pub mod overlap;
-/// Price Transform functions.
-pub mod price_transform;
 /// Pattern Recognition indicators.
 pub mod pattern_recognition;
+/// Price Transform functions.
+pub mod price_transform;
 pub mod simd;
 /// Statistic Functions.
 pub mod statistic;

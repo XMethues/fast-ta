@@ -1,9 +1,7 @@
 //! CDLDOJI local definition and concrete execution types.
 
 use super::engine::{PatternDefinition, RecognitionContext};
-use super::{
-    CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
-};
+use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
 use crate::Result;
 
 /// Immutable CDLDOJI Indicator Configuration.
