@@ -9,18 +9,22 @@ use std::cell::Cell;
 use ta_core::pattern_recognition::{
     Candle, CandleInput, CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings,
     PatternDirection, PatternSignal, PatternStrength, Penetration, CDL2CROWSConfig,
-    CDL3INSIDEConfig, CDL3LINESTRIKEConfig, CDL3OUTSIDEConfig, CDLABANDONEDBABYConfig,
-    CDLBELTHOLDConfig, CDLCLOSINGMARUBOZUConfig, CDLCOUNTERATTACKConfig,
+    CDL3BLACKCROWSConfig, CDL3INSIDEConfig, CDL3LINESTRIKEConfig, CDL3OUTSIDEConfig,
+    CDL3STARSINSOUTHConfig, CDL3WHITESOLDIERSConfig, CDLADVANCEBLOCKConfig,
+    CDLABANDONEDBABYConfig, CDLBELTHOLDConfig, CDLCLOSINGMARUBOZUConfig,
+    CDLCONCEALBABYSWALLConfig, CDLCOUNTERATTACKConfig,
     CDLDARKCLOUDCOVERConfig, CDLDOJIConfig, CDLDOJISTARConfig, CDLDRAGONFLYDOJIConfig,
     CDLENGULFINGConfig, CDLEVENINGDOJISTARConfig, CDLEVENINGSTARConfig,
     CDLGAPSIDESIDEWHITEConfig, CDLGRAVESTONEDOJIConfig, CDLHAMMERConfig,
     CDLHANGINGMANConfig, CDLHARAMIConfig, CDLHARAMICROSSConfig, CDLHIGHWAVEConfig,
-    CDLHOMINGPIGEONConfig, CDLINNECKConfig, CDLINVERTEDHAMMERConfig,
+    CDLHOMINGPIGEONConfig, CDLIDENTICAL3CROWSConfig, CDLINNECKConfig,
+    CDLINVERTEDHAMMERConfig,
     CDLKICKINGBYLENGTHConfig, CDLKICKINGConfig, CDLLONGLEGGEDDOJIConfig,
     CDLLONGLINEConfig, CDLMARUBOZUConfig, CDLMATCHINGLOWConfig, CDLMORNINGDOJISTARConfig,
     CDLMORNINGSTARConfig, CDLONNECKConfig, CDLPIERCINGConfig, CDLRICKSHAWMANConfig,
     CDLSEPARATINGLINESConfig, CDLSHOOTINGSTARConfig, CDLSHORTLINEConfig,
-    CDLSPINNINGTOPConfig, CDLSTICKSANDWICHConfig, CDLTAKURIConfig, CDLTASUKIGAPConfig,
+    CDLSPINNINGTOPConfig, CDLSTALLEDPATTERNConfig, CDLSTICKSANDWICHConfig, CDLTAKURIConfig,
+    CDLTASUKIGAPConfig,
     CDLTHRUSTINGConfig, CDLTRISTARConfig, CDLUNIQUE3RIVERConfig, CDLUPSIDEGAP2CROWSConfig,
     CDLXSIDEGAP3METHODSConfig,
 };
@@ -1044,6 +1048,84 @@ fn pinned_gap_continuation_oracles_qualify_every_definition_through_the_public_s
         X_SIDE_GAP_THREE_METHODS_DEFAULT_F32_CODES, X_SIDE_GAP_THREE_METHODS_CUSTOM_LOOKBACK,
         X_SIDE_GAP_THREE_METHODS_CUSTOM_F64_CODES, X_SIDE_GAP_THREE_METHODS_CUSTOM_F32_CODES
     );
+}
+
+#[test]
+fn pinned_crow_soldier_oracles_qualify_every_definition_through_the_public_seam() {
+    let settings = custom_two_candle_settings();
+    qualify_two_candle!(CDL3BLACKCROWSConfig::default(), CDL3BLACKCROWSConfig::new(settings).unwrap(),
+        THREE_BLACK_CROWS_OPEN, THREE_BLACK_CROWS_HIGH, THREE_BLACK_CROWS_LOW, THREE_BLACK_CROWS_CLOSE,
+        THREE_BLACK_CROWS_DEFAULT_LOOKBACK, THREE_BLACK_CROWS_DEFAULT_F64_CODES, THREE_BLACK_CROWS_DEFAULT_F32_CODES,
+        THREE_BLACK_CROWS_CUSTOM_LOOKBACK, THREE_BLACK_CROWS_CUSTOM_F64_CODES, THREE_BLACK_CROWS_CUSTOM_F32_CODES);
+    qualify_two_candle!(CDL3STARSINSOUTHConfig::default(), CDL3STARSINSOUTHConfig::new(settings).unwrap(),
+        THREE_STARS_IN_SOUTH_OPEN, THREE_STARS_IN_SOUTH_HIGH, THREE_STARS_IN_SOUTH_LOW, THREE_STARS_IN_SOUTH_CLOSE,
+        THREE_STARS_IN_SOUTH_DEFAULT_LOOKBACK, THREE_STARS_IN_SOUTH_DEFAULT_F64_CODES, THREE_STARS_IN_SOUTH_DEFAULT_F32_CODES,
+        THREE_STARS_IN_SOUTH_CUSTOM_LOOKBACK, THREE_STARS_IN_SOUTH_CUSTOM_F64_CODES, THREE_STARS_IN_SOUTH_CUSTOM_F32_CODES);
+    qualify_two_candle!(CDL3WHITESOLDIERSConfig::default(), CDL3WHITESOLDIERSConfig::new(settings).unwrap(),
+        THREE_WHITE_SOLDIERS_OPEN, THREE_WHITE_SOLDIERS_HIGH, THREE_WHITE_SOLDIERS_LOW, THREE_WHITE_SOLDIERS_CLOSE,
+        THREE_WHITE_SOLDIERS_DEFAULT_LOOKBACK, THREE_WHITE_SOLDIERS_DEFAULT_F64_CODES, THREE_WHITE_SOLDIERS_DEFAULT_F32_CODES,
+        THREE_WHITE_SOLDIERS_CUSTOM_LOOKBACK, THREE_WHITE_SOLDIERS_CUSTOM_F64_CODES, THREE_WHITE_SOLDIERS_CUSTOM_F32_CODES);
+    qualify_two_candle!(CDLADVANCEBLOCKConfig::default(), CDLADVANCEBLOCKConfig::new(settings).unwrap(),
+        ADVANCE_BLOCK_OPEN, ADVANCE_BLOCK_HIGH, ADVANCE_BLOCK_LOW, ADVANCE_BLOCK_CLOSE,
+        ADVANCE_BLOCK_DEFAULT_LOOKBACK, ADVANCE_BLOCK_DEFAULT_F64_CODES, ADVANCE_BLOCK_DEFAULT_F32_CODES,
+        ADVANCE_BLOCK_CUSTOM_LOOKBACK, ADVANCE_BLOCK_CUSTOM_F64_CODES, ADVANCE_BLOCK_CUSTOM_F32_CODES);
+    qualify_two_candle!(CDLCONCEALBABYSWALLConfig::default(), CDLCONCEALBABYSWALLConfig::new(settings).unwrap(),
+        CONCEAL_BABY_SWALLOW_OPEN, CONCEAL_BABY_SWALLOW_HIGH, CONCEAL_BABY_SWALLOW_LOW, CONCEAL_BABY_SWALLOW_CLOSE,
+        CONCEAL_BABY_SWALLOW_DEFAULT_LOOKBACK, CONCEAL_BABY_SWALLOW_DEFAULT_F64_CODES, CONCEAL_BABY_SWALLOW_DEFAULT_F32_CODES,
+        CONCEAL_BABY_SWALLOW_CUSTOM_LOOKBACK, CONCEAL_BABY_SWALLOW_CUSTOM_F64_CODES, CONCEAL_BABY_SWALLOW_CUSTOM_F32_CODES);
+    qualify_two_candle!(CDLIDENTICAL3CROWSConfig::default(), CDLIDENTICAL3CROWSConfig::new(settings).unwrap(),
+        IDENTICAL_THREE_CROWS_OPEN, IDENTICAL_THREE_CROWS_HIGH, IDENTICAL_THREE_CROWS_LOW, IDENTICAL_THREE_CROWS_CLOSE,
+        IDENTICAL_THREE_CROWS_DEFAULT_LOOKBACK, IDENTICAL_THREE_CROWS_DEFAULT_F64_CODES, IDENTICAL_THREE_CROWS_DEFAULT_F32_CODES,
+        IDENTICAL_THREE_CROWS_CUSTOM_LOOKBACK, IDENTICAL_THREE_CROWS_CUSTOM_F64_CODES, IDENTICAL_THREE_CROWS_CUSTOM_F32_CODES);
+    qualify_two_candle!(CDLSTALLEDPATTERNConfig::default(), CDLSTALLEDPATTERNConfig::new(settings).unwrap(),
+        STALLED_PATTERN_OPEN, STALLED_PATTERN_HIGH, STALLED_PATTERN_LOW, STALLED_PATTERN_CLOSE,
+        STALLED_PATTERN_DEFAULT_LOOKBACK, STALLED_PATTERN_DEFAULT_F64_CODES, STALLED_PATTERN_DEFAULT_F32_CODES,
+        STALLED_PATTERN_CUSTOM_LOOKBACK, STALLED_PATTERN_CUSTOM_F64_CODES, STALLED_PATTERN_CUSTOM_F32_CODES);
+}
+
+#[test]
+fn crow_soldier_single_boundary_near_misses_lock_literal_comparisons() {
+    fn check<C>(config: C, open: &[f64], high: &[f64], low: &[f64], close: &[f64], mutate: impl Fn(&mut Series))
+    where
+        C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+        for<'a> C: IndicatorConfig<Input<'a> = CandleInput<'a>>,
+    {
+        let canonical = Series::from_fixture(open, high, low, close);
+        assert_ne!(config.compute(canonical.input()).unwrap().values().last().unwrap().to_talib_code(), 0);
+        let mut boundary = Series::from_fixture(open, high, low, close);
+        mutate(&mut boundary);
+        assert_eq!(config.compute(boundary.input()).unwrap().values().last().unwrap().to_talib_code(), 0);
+    }
+    check(CDL3BLACKCROWSConfig::default(), reference::THREE_BLACK_CROWS_OPEN, reference::THREE_BLACK_CROWS_HIGH, reference::THREE_BLACK_CROWS_LOW, reference::THREE_BLACK_CROWS_CLOSE,
+        |s| s.high[10] = s.close[11]);
+    check(CDL3STARSINSOUTHConfig::default(), reference::THREE_STARS_IN_SOUTH_OPEN, reference::THREE_STARS_IN_SOUTH_HIGH, reference::THREE_STARS_IN_SOUTH_LOW, reference::THREE_STARS_IN_SOUTH_CLOSE,
+        |s| s.high[12] = s.high[11]);
+    check(CDL3WHITESOLDIERSConfig::default(), reference::THREE_WHITE_SOLDIERS_OPEN, reference::THREE_WHITE_SOLDIERS_HIGH, reference::THREE_WHITE_SOLDIERS_LOW, reference::THREE_WHITE_SOLDIERS_CLOSE,
+        |s| s.close[12] = s.close[11]);
+    check(CDLADVANCEBLOCKConfig::default(), reference::ADVANCE_BLOCK_OPEN, reference::ADVANCE_BLOCK_HIGH, reference::ADVANCE_BLOCK_LOW, reference::ADVANCE_BLOCK_CLOSE,
+        |s| s.high[10] = s.close[10] + 2.0 as Float);
+    check(CDLCONCEALBABYSWALLConfig::default(), reference::CONCEAL_BABY_SWALLOW_OPEN, reference::CONCEAL_BABY_SWALLOW_HIGH, reference::CONCEAL_BABY_SWALLOW_LOW, reference::CONCEAL_BABY_SWALLOW_CLOSE,
+        |s| s.high[13] = s.high[12]);
+    check(CDLIDENTICAL3CROWSConfig::default(), reference::IDENTICAL_THREE_CROWS_OPEN, reference::IDENTICAL_THREE_CROWS_HIGH, reference::IDENTICAL_THREE_CROWS_LOW, reference::IDENTICAL_THREE_CROWS_CLOSE,
+        |s| s.open[12] = s.close[11] + 1.0 as Float);
+    check(CDLSTALLEDPATTERNConfig::default(), reference::STALLED_PATTERN_OPEN, reference::STALLED_PATTERN_HIGH, reference::STALLED_PATTERN_LOW, reference::STALLED_PATTERN_CLOSE,
+        |s| s.close[12] = s.close[11]);
+}
+
+#[test]
+fn crow_soldier_evidence_rows_cover_pinned_offsets_settings_and_boundaries() {
+    const ROWS: [(&str, &str, &str, &str, usize); 7] = [
+        ("CDL3BLACKCROWS", "cdl3blackcrows/cdl3blackcrows.c", "four-Candle do-loop", "prior white at i-3; ShadowVeryShort at i-2..i; strict opens/closes", 13),
+        ("CDL3STARSINSOUTH", "cdl3starsinsouth/cdl3starsinsouth.c", "three-Candle do-loop", "BodyLong, BodyShort, ShadowLong, ShadowVeryShort; strict engulfment", 12),
+        ("CDL3WHITESOLDIERS", "cdl3whitesoldiers/cdl3whitesoldiers.c", "three-Candle do-loop", "Near/Far at literal prior offsets; BodyShort and ShadowVeryShort", 12),
+        ("CDLADVANCEBLOCK", "cdladvanceblock/cdladvanceblock.c", "three-Candle do-loop", "Near/Far weakening disjunction; BodyLong, ShadowShort, ShadowLong", 12),
+        ("CDLCONCEALBABYSWALL", "cdlconcealbabyswall/cdlconcealbabyswall.c", "four-Candle do-loop", "ShadowVeryShort at i-3..i-1; strict range engulfment", 13),
+        ("CDLIDENTICAL3CROWS", "cdlidentical3crows/cdlidentical3crows.c", "three-Candle do-loop", "Equal inclusive opening bands; strict ShadowVeryShort and declines", 12),
+        ("CDLSTALLEDPATTERN", "cdlstalledpattern/cdlstalledpattern.c", "three-Candle do-loop", "BodyLong/BodyShort, Near shoulder, ShadowVeryShort", 12),
+    ];
+    assert_eq!(ROWS.len(), 7);
+    assert!(ROWS.iter().all(|(name, source, loop_shape, settings, lookback)|
+        name.starts_with("CDL") && source.ends_with(".c") && loop_shape.contains("Candle") && !settings.is_empty() && *lookback >= 12));
 }
 
 #[test]

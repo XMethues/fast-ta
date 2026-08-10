@@ -106,6 +106,7 @@ macro_rules! impl_pattern_execution {
 }
 
 mod body_containment;
+mod crows_soldiers;
 mod doji;
 mod gap_continuation;
 mod engulfing;
@@ -122,6 +123,15 @@ pub use body_containment::{
     CDLKICKINGBatchRunner, CDLKICKINGBYLENGTHBatchRunner, CDLKICKINGBYLENGTHConfig,
     CDLKICKINGBYLENGTHStream, CDLKICKINGConfig, CDLKICKINGStream, CDLMATCHINGLOWBatchRunner,
     CDLMATCHINGLOWConfig, CDLMATCHINGLOWStream,
+};
+pub use crows_soldiers::{
+    CDL3BLACKCROWSBatchRunner, CDL3BLACKCROWSConfig, CDL3BLACKCROWSStream,
+    CDL3STARSINSOUTHBatchRunner, CDL3STARSINSOUTHConfig, CDL3STARSINSOUTHStream,
+    CDL3WHITESOLDIERSBatchRunner, CDL3WHITESOLDIERSConfig, CDL3WHITESOLDIERSStream,
+    CDLADVANCEBLOCKBatchRunner, CDLADVANCEBLOCKConfig, CDLADVANCEBLOCKStream,
+    CDLCONCEALBABYSWALLBatchRunner, CDLCONCEALBABYSWALLConfig, CDLCONCEALBABYSWALLStream,
+    CDLIDENTICAL3CROWSBatchRunner, CDLIDENTICAL3CROWSConfig, CDLIDENTICAL3CROWSStream,
+    CDLSTALLEDPATTERNBatchRunner, CDLSTALLEDPATTERNConfig, CDLSTALLEDPATTERNStream,
 };
 pub use gap_continuation::{
     CDL2CROWSBatchRunner, CDL2CROWSConfig, CDL2CROWSStream, CDL3LINESTRIKEBatchRunner,

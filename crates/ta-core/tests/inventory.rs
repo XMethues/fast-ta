@@ -76,6 +76,13 @@ use ta_core::pattern_recognition::{
     CDLTASUKIGAPStream, CDLTRISTARBatchRunner, CDLTRISTARConfig, CDLTRISTARStream,
     CDLUPSIDEGAP2CROWSBatchRunner, CDLUPSIDEGAP2CROWSConfig, CDLUPSIDEGAP2CROWSStream,
     CDLXSIDEGAP3METHODSBatchRunner, CDLXSIDEGAP3METHODSConfig, CDLXSIDEGAP3METHODSStream,
+    CDL3BLACKCROWSBatchRunner, CDL3BLACKCROWSConfig, CDL3BLACKCROWSStream,
+    CDL3STARSINSOUTHBatchRunner, CDL3STARSINSOUTHConfig, CDL3STARSINSOUTHStream,
+    CDL3WHITESOLDIERSBatchRunner, CDL3WHITESOLDIERSConfig, CDL3WHITESOLDIERSStream,
+    CDLADVANCEBLOCKBatchRunner, CDLADVANCEBLOCKConfig, CDLADVANCEBLOCKStream,
+    CDLCONCEALBABYSWALLBatchRunner, CDLCONCEALBABYSWALLConfig, CDLCONCEALBABYSWALLStream,
+    CDLIDENTICAL3CROWSBatchRunner, CDLIDENTICAL3CROWSConfig, CDLIDENTICAL3CROWSStream,
+    CDLSTALLEDPATTERNBatchRunner, CDLSTALLEDPATTERNConfig, CDLSTALLEDPATTERNStream,
     CDL3INSIDEBatchRunner, CDL3INSIDEConfig, CDL3INSIDEStream, CDL3OUTSIDEBatchRunner,
     CDL3OUTSIDEConfig, CDL3OUTSIDEStream, CDLABANDONEDBABYBatchRunner, CDLABANDONEDBABYConfig,
     CDLABANDONEDBABYStream,
@@ -343,6 +350,13 @@ fn first_tranche_functions_are_marked_implemented() {
         "CDLTRISTAR",
         "CDLUPSIDEGAP2CROWS",
         "CDLXSIDEGAP3METHODS",
+        "CDL3BLACKCROWS",
+        "CDL3STARSINSOUTH",
+        "CDL3WHITESOLDIERS",
+        "CDLADVANCEBLOCK",
+        "CDLCONCEALBABYSWALL",
+        "CDLIDENTICAL3CROWS",
+        "CDLSTALLEDPATTERN",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -627,6 +641,13 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLXSIDEGAP3METHODSBatchRunner,
         CDLXSIDEGAP3METHODSStream,
     >();
+    assert_execution_types::<CDL3BLACKCROWSConfig, CDL3BLACKCROWSBatchRunner, CDL3BLACKCROWSStream>();
+    assert_execution_types::<CDL3STARSINSOUTHConfig, CDL3STARSINSOUTHBatchRunner, CDL3STARSINSOUTHStream>();
+    assert_execution_types::<CDL3WHITESOLDIERSConfig, CDL3WHITESOLDIERSBatchRunner, CDL3WHITESOLDIERSStream>();
+    assert_execution_types::<CDLADVANCEBLOCKConfig, CDLADVANCEBLOCKBatchRunner, CDLADVANCEBLOCKStream>();
+    assert_execution_types::<CDLCONCEALBABYSWALLConfig, CDLCONCEALBABYSWALLBatchRunner, CDLCONCEALBABYSWALLStream>();
+    assert_execution_types::<CDLIDENTICAL3CROWSConfig, CDLIDENTICAL3CROWSBatchRunner, CDLIDENTICAL3CROWSStream>();
+    assert_execution_types::<CDLSTALLEDPATTERNConfig, CDLSTALLEDPATTERNBatchRunner, CDLSTALLEDPATTERNStream>();
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
     assert_execution_types::<CORRELConfig, CORRELBatchRunner, CORRELStream>();
@@ -836,6 +857,13 @@ fn inventory_count_matches_execution_seam_coverage() {
         "CDLTRISTAR",
         "CDLUPSIDEGAP2CROWS",
         "CDLXSIDEGAP3METHODS",
+        "CDL3BLACKCROWS",
+        "CDL3STARSINSOUTH",
+        "CDL3WHITESOLDIERS",
+        "CDLADVANCEBLOCK",
+        "CDLCONCEALBABYSWALL",
+        "CDLIDENTICAL3CROWS",
+        "CDLSTALLEDPATTERN",
     ];
 
     assert_eq!(
@@ -855,8 +883,10 @@ fn inventory_count_matches_execution_seam_coverage() {
 
 #[test]
 fn remaining_pattern_recognition_functions_remain_planned() {
-    let info = function("CDLIDENTICAL3CROWS").expect("missing CDLIDENTICAL3CROWS");
-    assert_eq!(info.status, ImplementationStatus::Planned);
+    for name in ["CDLBREAKAWAY", "CDLHIKKAKE", "CDLLADDERBOTTOM"] {
+        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(info.status, ImplementationStatus::Planned, "{name}");
+    }
 }
 
 #[test]

@@ -271,6 +271,51 @@ GAP_CONTINUATION_FIXTURES = {
     ),
 }
 
+CROW_SOLDIER_FIXTURES = {
+    "CDL3BLACKCROWS": (
+        [10.0] * 10 + [10.0, 20.0, 19.0, 17.0],
+        [12.0] * 10 + [21.0, 20.2, 18.2, 16.2],
+        [9.0] * 10 + [9.0, 17.9, 15.9, 13.9],
+        [11.0] * 10 + [20.0, 18.0, 16.0, 14.0],
+    ),
+    "CDL3STARSINSOUTH": (
+        [10.0] * 10 + [20.0, 15.0, 13.8],
+        [12.0] * 10 + [21.0, 16.0, 14.0],
+        [9.0] * 10 + [3.0, 11.0, 12.8],
+        [11.0] * 10 + [12.0, 13.0, 13.0],
+    ),
+    "CDL3WHITESOLDIERS": (
+        [10.0] * 10 + [10.0, 11.0, 12.0],
+        [12.0] * 10 + [12.1, 13.1, 14.1],
+        [9.0] * 10 + [9.9, 10.9, 11.9],
+        [11.0] * 10 + [12.0, 13.0, 14.0],
+    ),
+    "CDLADVANCEBLOCK": (
+        [10.0] * 10 + [10.0, 12.0, 13.2],
+        [12.0] * 10 + [13.1, 13.7, 15.0],
+        [9.0] * 10 + [9.9, 11.9, 13.1],
+        [11.0] * 10 + [13.0, 13.5, 13.8],
+    ),
+    "CDLCONCEALBABYSWALL": (
+        [10.0] * 10 + [20.0, 18.0, 14.0, 16.0],
+        [12.0] * 10 + [20.1, 18.1, 17.0, 17.5],
+        [9.0] * 10 + [17.9, 15.9, 12.0, 11.0],
+        [11.0] * 10 + [18.0, 16.0, 13.0, 12.0],
+    ),
+    "CDLIDENTICAL3CROWS": (
+        [10.0] * 10 + [20.0, 18.0, 16.0],
+        [12.0] * 10 + [20.1, 18.1, 16.1],
+        [9.0] * 10 + [17.9, 15.9, 13.9],
+        [11.0] * 10 + [18.0, 16.0, 14.0],
+    ),
+    "CDLSTALLEDPATTERN": (
+        [10.0] * 10 + [10.0, 11.0, 13.1],
+        [12.0] * 10 + [12.1, 13.1, 13.6],
+        [9.0] * 10 + [9.9, 10.9, 13.0],
+        [11.0] * 10 + [12.0, 13.0, 13.5],
+    ),
+}
+
 STAR_NAMES = {
     "CDLABANDONEDBABY",
     "CDLEVENINGDOJISTAR",
@@ -352,6 +397,7 @@ class TalibReference:
             *(name for name in TWO_CANDLE_FIXTURES if name != "CDLDARKCLOUDCOVER"),
             *(name for name in THREE_CANDLE_FIXTURES if name not in STAR_NAMES),
             *GAP_CONTINUATION_FIXTURES,
+            *CROW_SOLDIER_FIXTURES,
         )
         for name in standard_names:
             function = getattr(self.library, f"TA_{name}")
@@ -627,6 +673,28 @@ def render(reference: TalibReference) -> str:
 
     reference.set_custom_two_candle()
     for name, observations in GAP_CONTINUATION_FIXTURES.items():
+        prefix = fixture_prefix(name) + "_CUSTOM"
+        append_result(
+            lines,
+            prefix,
+            reference.compute(name, observations, False),
+            reference.compute(name, observations, True),
+        )
+    lines.append("")
+    reference.restore_defaults()
+    for name, observations in CROW_SOLDIER_FIXTURES.items():
+        prefix = fixture_prefix(name)
+        append_columns(lines, prefix, observations)
+        append_result(
+            lines,
+            prefix + "_DEFAULT",
+            reference.compute(name, observations, False),
+            reference.compute(name, observations, True),
+        )
+    lines.append("")
+
+    reference.set_custom_two_candle()
+    for name, observations in CROW_SOLDIER_FIXTURES.items():
         prefix = fixture_prefix(name) + "_CUSTOM"
         append_result(
             lines,

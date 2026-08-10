@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 148;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 155;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -220,18 +220,18 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("HT_TRENDMODE", CycleIndicators, Implemented),
     // Pattern Recognition — 61 functions.
     function!("CDL2CROWS", PatternRecognition, Implemented),
-    function!("CDL3BLACKCROWS", PatternRecognition, Planned),
+    function!("CDL3BLACKCROWS", PatternRecognition, Implemented),
     function!("CDL3INSIDE", PatternRecognition, Implemented),
     function!("CDL3LINESTRIKE", PatternRecognition, Implemented),
     function!("CDL3OUTSIDE", PatternRecognition, Implemented),
-    function!("CDL3STARSINSOUTH", PatternRecognition, Planned),
-    function!("CDL3WHITESOLDIERS", PatternRecognition, Planned),
+    function!("CDL3STARSINSOUTH", PatternRecognition, Implemented),
+    function!("CDL3WHITESOLDIERS", PatternRecognition, Implemented),
     function!("CDLABANDONEDBABY", PatternRecognition, Implemented),
-    function!("CDLADVANCEBLOCK", PatternRecognition, Planned),
+    function!("CDLADVANCEBLOCK", PatternRecognition, Implemented),
     function!("CDLBELTHOLD", PatternRecognition, Implemented),
     function!("CDLBREAKAWAY", PatternRecognition, Planned),
     function!("CDLCLOSINGMARUBOZU", PatternRecognition, Implemented),
-    function!("CDLCONCEALBABYSWALL", PatternRecognition, Planned),
+    function!("CDLCONCEALBABYSWALL", PatternRecognition, Implemented),
     function!("CDLCOUNTERATTACK", PatternRecognition, Implemented),
     function!("CDLDARKCLOUDCOVER", PatternRecognition, Implemented),
     function!("CDLDOJI", PatternRecognition, Implemented),
@@ -250,7 +250,7 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLHIKKAKE", PatternRecognition, Planned),
     function!("CDLHIKKAKEMOD", PatternRecognition, Planned),
     function!("CDLHOMINGPIGEON", PatternRecognition, Implemented),
-    function!("CDLIDENTICAL3CROWS", PatternRecognition, Planned),
+    function!("CDLIDENTICAL3CROWS", PatternRecognition, Implemented),
     function!("CDLINNECK", PatternRecognition, Implemented),
     function!("CDLINVERTEDHAMMER", PatternRecognition, Implemented),
     function!("CDLKICKING", PatternRecognition, Implemented),
@@ -271,7 +271,7 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLSHOOTINGSTAR", PatternRecognition, Implemented),
     function!("CDLSHORTLINE", PatternRecognition, Implemented),
     function!("CDLSPINNINGTOP", PatternRecognition, Implemented),
-    function!("CDLSTALLEDPATTERN", PatternRecognition, Planned),
+    function!("CDLSTALLEDPATTERN", PatternRecognition, Implemented),
     function!("CDLSTICKSANDWICH", PatternRecognition, Implemented),
     function!("CDLTAKURI", PatternRecognition, Implemented),
     function!("CDLTASUKIGAP", PatternRecognition, Implemented),
