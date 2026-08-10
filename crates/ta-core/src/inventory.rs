@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 140;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 148;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -219,10 +219,10 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("HT_SINE", CycleIndicators, Implemented),
     function!("HT_TRENDMODE", CycleIndicators, Implemented),
     // Pattern Recognition — 61 functions.
-    function!("CDL2CROWS", PatternRecognition, Planned),
+    function!("CDL2CROWS", PatternRecognition, Implemented),
     function!("CDL3BLACKCROWS", PatternRecognition, Planned),
     function!("CDL3INSIDE", PatternRecognition, Implemented),
-    function!("CDL3LINESTRIKE", PatternRecognition, Planned),
+    function!("CDL3LINESTRIKE", PatternRecognition, Implemented),
     function!("CDL3OUTSIDE", PatternRecognition, Implemented),
     function!("CDL3STARSINSOUTH", PatternRecognition, Planned),
     function!("CDL3WHITESOLDIERS", PatternRecognition, Planned),
@@ -240,7 +240,7 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLENGULFING", PatternRecognition, Implemented),
     function!("CDLEVENINGDOJISTAR", PatternRecognition, Implemented),
     function!("CDLEVENINGSTAR", PatternRecognition, Implemented),
-    function!("CDLGAPSIDESIDEWHITE", PatternRecognition, Planned),
+    function!("CDLGAPSIDESIDEWHITE", PatternRecognition, Implemented),
     function!("CDLGRAVESTONEDOJI", PatternRecognition, Implemented),
     function!("CDLHAMMER", PatternRecognition, Implemented),
     function!("CDLHANGINGMAN", PatternRecognition, Implemented),
@@ -272,14 +272,14 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLSHORTLINE", PatternRecognition, Implemented),
     function!("CDLSPINNINGTOP", PatternRecognition, Implemented),
     function!("CDLSTALLEDPATTERN", PatternRecognition, Planned),
-    function!("CDLSTICKSANDWICH", PatternRecognition, Planned),
+    function!("CDLSTICKSANDWICH", PatternRecognition, Implemented),
     function!("CDLTAKURI", PatternRecognition, Implemented),
-    function!("CDLTASUKIGAP", PatternRecognition, Planned),
+    function!("CDLTASUKIGAP", PatternRecognition, Implemented),
     function!("CDLTHRUSTING", PatternRecognition, Implemented),
-    function!("CDLTRISTAR", PatternRecognition, Planned),
+    function!("CDLTRISTAR", PatternRecognition, Implemented),
     function!("CDLUNIQUE3RIVER", PatternRecognition, Implemented),
-    function!("CDLUPSIDEGAP2CROWS", PatternRecognition, Planned),
-    function!("CDLXSIDEGAP3METHODS", PatternRecognition, Planned),
+    function!("CDLUPSIDEGAP2CROWS", PatternRecognition, Implemented),
+    function!("CDLXSIDEGAP3METHODS", PatternRecognition, Implemented),
     // Statistic Functions — 9 functions.
     function!("BETA", StatisticFunctions, Implemented),
     function!("CORREL", StatisticFunctions, Implemented),

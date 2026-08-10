@@ -69,6 +69,13 @@ use ta_core::price_transform::{
     TYPPRICEConfig, TYPPRICEStream, WCLPRICEBatchRunner, WCLPRICEConfig, WCLPRICEStream,
 };
 use ta_core::pattern_recognition::{
+    CDL2CROWSBatchRunner, CDL2CROWSConfig, CDL2CROWSStream, CDL3LINESTRIKEBatchRunner,
+    CDL3LINESTRIKEConfig, CDL3LINESTRIKEStream, CDLGAPSIDESIDEWHITEBatchRunner,
+    CDLGAPSIDESIDEWHITEConfig, CDLGAPSIDESIDEWHITEStream, CDLSTICKSANDWICHBatchRunner,
+    CDLSTICKSANDWICHConfig, CDLSTICKSANDWICHStream, CDLTASUKIGAPBatchRunner, CDLTASUKIGAPConfig,
+    CDLTASUKIGAPStream, CDLTRISTARBatchRunner, CDLTRISTARConfig, CDLTRISTARStream,
+    CDLUPSIDEGAP2CROWSBatchRunner, CDLUPSIDEGAP2CROWSConfig, CDLUPSIDEGAP2CROWSStream,
+    CDLXSIDEGAP3METHODSBatchRunner, CDLXSIDEGAP3METHODSConfig, CDLXSIDEGAP3METHODSStream,
     CDL3INSIDEBatchRunner, CDL3INSIDEConfig, CDL3INSIDEStream, CDL3OUTSIDEBatchRunner,
     CDL3OUTSIDEConfig, CDL3OUTSIDEStream, CDLABANDONEDBABYBatchRunner, CDLABANDONEDBABYConfig,
     CDLABANDONEDBABYStream,
@@ -328,6 +335,14 @@ fn first_tranche_functions_are_marked_implemented() {
         "CDLMORNINGDOJISTAR",
         "CDLMORNINGSTAR",
         "CDLUNIQUE3RIVER",
+        "CDL2CROWS",
+        "CDL3LINESTRIKE",
+        "CDLGAPSIDESIDEWHITE",
+        "CDLSTICKSANDWICH",
+        "CDLTASUKIGAP",
+        "CDLTRISTAR",
+        "CDLUPSIDEGAP2CROWS",
+        "CDLXSIDEGAP3METHODS",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -450,7 +465,7 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<NATRConfig, NATRBatchRunner, NATRStream>();
     assert_execution_types::<TRANGEConfig, TRANGEBatchRunner, TRANGEStream>();
 
-    // Pattern Recognition (23 implemented indicators).
+    // Pattern Recognition (48 implemented indicators).
     assert_execution_types::<CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream>();
     assert_execution_types::<
         CDLENGULFINGConfig,
@@ -583,6 +598,34 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLUNIQUE3RIVERConfig,
         CDLUNIQUE3RIVERBatchRunner,
         CDLUNIQUE3RIVERStream,
+    >();
+    assert_execution_types::<CDL2CROWSConfig, CDL2CROWSBatchRunner, CDL2CROWSStream>();
+    assert_execution_types::<
+        CDL3LINESTRIKEConfig,
+        CDL3LINESTRIKEBatchRunner,
+        CDL3LINESTRIKEStream,
+    >();
+    assert_execution_types::<
+        CDLGAPSIDESIDEWHITEConfig,
+        CDLGAPSIDESIDEWHITEBatchRunner,
+        CDLGAPSIDESIDEWHITEStream,
+    >();
+    assert_execution_types::<
+        CDLSTICKSANDWICHConfig,
+        CDLSTICKSANDWICHBatchRunner,
+        CDLSTICKSANDWICHStream,
+    >();
+    assert_execution_types::<CDLTASUKIGAPConfig, CDLTASUKIGAPBatchRunner, CDLTASUKIGAPStream>();
+    assert_execution_types::<CDLTRISTARConfig, CDLTRISTARBatchRunner, CDLTRISTARStream>();
+    assert_execution_types::<
+        CDLUPSIDEGAP2CROWSConfig,
+        CDLUPSIDEGAP2CROWSBatchRunner,
+        CDLUPSIDEGAP2CROWSStream,
+    >();
+    assert_execution_types::<
+        CDLXSIDEGAP3METHODSConfig,
+        CDLXSIDEGAP3METHODSBatchRunner,
+        CDLXSIDEGAP3METHODSStream,
     >();
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
@@ -785,6 +828,14 @@ fn inventory_count_matches_execution_seam_coverage() {
         "CDLMORNINGDOJISTAR",
         "CDLMORNINGSTAR",
         "CDLUNIQUE3RIVER",
+        "CDL2CROWS",
+        "CDL3LINESTRIKE",
+        "CDLGAPSIDESIDEWHITE",
+        "CDLSTICKSANDWICH",
+        "CDLTASUKIGAP",
+        "CDLTRISTAR",
+        "CDLUPSIDEGAP2CROWS",
+        "CDLXSIDEGAP3METHODS",
     ];
 
     assert_eq!(

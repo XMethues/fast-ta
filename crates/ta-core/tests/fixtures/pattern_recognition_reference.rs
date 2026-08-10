@@ -406,3 +406,99 @@ pub const UNIQUE3RIVER_DEFAULT_F32_CODES: &[i32] = &[100];
 pub const UNIQUE3RIVER_CUSTOM_LOOKBACK: usize = 5;
 pub const UNIQUE3RIVER_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
 pub const UNIQUE3RIVER_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+
+pub const TWO_CROWS_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 24.0, 23.0, 10.0];
+pub const TWO_CROWS_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 25.0, 24.0, 12.0];
+pub const TWO_CROWS_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 21.5, 14.0, 9.0];
+pub const TWO_CROWS_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 20.0, 22.0, 15.0, 11.0];
+pub const TWO_CROWS_DEFAULT_LOOKBACK: usize = 12;
+pub const TWO_CROWS_DEFAULT_F64_CODES: &[i32] = &[-100, 0];
+pub const TWO_CROWS_DEFAULT_F32_CODES: &[i32] = &[-100, 0];
+
+pub const THREE_LINE_STRIKE_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 11.0, 13.0, 17.0, 10.0, 10.0, 20.0, 19.0, 17.0, 13.0];
+pub const THREE_LINE_STRIKE_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.5, 14.5, 16.5, 18.0, 12.0, 12.0, 21.0, 20.0, 18.0, 22.0];
+pub const THREE_LINE_STRIKE_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.5, 10.5, 12.5, 8.0, 9.0, 9.0, 17.5, 15.5, 13.5, 12.0];
+pub const THREE_LINE_STRIKE_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 12.0, 14.0, 16.0, 9.0, 11.0, 11.0, 18.0, 16.0, 14.0, 21.0];
+pub const THREE_LINE_STRIKE_DEFAULT_LOOKBACK: usize = 8;
+pub const THREE_LINE_STRIKE_DEFAULT_F64_CODES: &[i32] = &[0, 0, 0, 100, 0, 0, 0, 0, 0, -100];
+pub const THREE_LINE_STRIKE_DEFAULT_F32_CODES: &[i32] = &[0, 0, 0, 100, 0, 0, 0, 0, 0, -100];
+
+pub const GAP_SIDE_SIDE_WHITE_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 15.0, 15.0, 20.0, 13.0, 13.0];
+pub const GAP_SIDE_SIDE_WHITE_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.5, 17.5, 17.5, 20.5, 15.5, 15.5];
+pub const GAP_SIDE_SIDE_WHITE_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.5, 14.5, 14.5, 17.5, 12.5, 12.5];
+pub const GAP_SIDE_SIDE_WHITE_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 12.0, 17.0, 17.0, 18.0, 15.0, 15.0];
+pub const GAP_SIDE_SIDE_WHITE_DEFAULT_LOOKBACK: usize = 7;
+pub const GAP_SIDE_SIDE_WHITE_DEFAULT_F64_CODES: &[i32] = &[0, 0, 100, 0, 0, -100];
+pub const GAP_SIDE_SIDE_WHITE_DEFAULT_F32_CODES: &[i32] = &[0, 0, 100, 0, 0, -100];
+
+pub const STICK_SANDWICH_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 12.0, 20.0, 10.0];
+pub const STICK_SANDWICH_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 18.5, 21.0, 12.0];
+pub const STICK_SANDWICH_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 11.0, 9.0, 9.0];
+pub const STICK_SANDWICH_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.0, 18.0, 10.0, 11.0];
+pub const STICK_SANDWICH_DEFAULT_LOOKBACK: usize = 7;
+pub const STICK_SANDWICH_DEFAULT_F64_CODES: &[i32] = &[0, 0, 100, 0];
+pub const STICK_SANDWICH_DEFAULT_F32_CODES: &[i32] = &[0, 0, 100, 0];
+
+pub const TASUKI_GAP_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 15.0, 17.0, 20.0, 15.0, 13.0];
+pub const TASUKI_GAP_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.5, 18.5, 17.5, 20.5, 15.5, 16.5];
+pub const TASUKI_GAP_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.5, 14.5, 13.5, 17.5, 11.5, 12.5];
+pub const TASUKI_GAP_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 12.0, 18.0, 14.0, 18.0, 12.0, 16.0];
+pub const TASUKI_GAP_DEFAULT_LOOKBACK: usize = 7;
+pub const TASUKI_GAP_DEFAULT_F64_CODES: &[i32] = &[0, 0, 100, 0, 0, -100];
+pub const TASUKI_GAP_DEFAULT_F32_CODES: &[i32] = &[0, 0, 100, 0, 0, -100];
+
+pub const TRISTAR_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 12.0, 11.0, 10.0, 20.0, 18.0, 19.0];
+pub const TRISTAR_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 10.5, 12.5, 11.5, 12.0, 20.5, 18.5, 19.5];
+pub const TRISTAR_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.5, 11.5, 10.5, 9.0, 19.5, 17.5, 18.5];
+pub const TRISTAR_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.1, 12.1, 11.1, 11.0, 20.1, 18.1, 19.1];
+pub const TRISTAR_DEFAULT_LOOKBACK: usize = 12;
+pub const TRISTAR_DEFAULT_F64_CODES: &[i32] = &[-100, 0, 0, 0, 100];
+pub const TRISTAR_DEFAULT_F32_CODES: &[i32] = &[-100, 0, 0, 0, 100];
+
+pub const UPSIDE_GAP_TWO_CROWS_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 23.0, 24.0, 10.0];
+pub const UPSIDE_GAP_TWO_CROWS_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 23.5, 24.5, 12.0];
+pub const UPSIDE_GAP_TWO_CROWS_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 21.5, 20.5, 9.0];
+pub const UPSIDE_GAP_TWO_CROWS_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 20.0, 22.0, 21.0, 11.0];
+pub const UPSIDE_GAP_TWO_CROWS_DEFAULT_LOOKBACK: usize = 12;
+pub const UPSIDE_GAP_TWO_CROWS_DEFAULT_F64_CODES: &[i32] = &[-100, 0];
+pub const UPSIDE_GAP_TWO_CROWS_DEFAULT_F32_CODES: &[i32] = &[-100, 0];
+
+pub const X_SIDE_GAP_THREE_METHODS_OPEN: &[f64] = &[10.0, 15.0, 17.0, 20.0, 15.0, 13.0];
+pub const X_SIDE_GAP_THREE_METHODS_HIGH: &[f64] = &[12.5, 18.5, 17.5, 20.5, 15.5, 20.0];
+pub const X_SIDE_GAP_THREE_METHODS_LOW: &[f64] = &[9.5, 14.5, 10.5, 17.5, 11.5, 12.5];
+pub const X_SIDE_GAP_THREE_METHODS_CLOSE: &[f64] = &[12.0, 18.0, 11.0, 18.0, 12.0, 19.0];
+pub const X_SIDE_GAP_THREE_METHODS_DEFAULT_LOOKBACK: usize = 2;
+pub const X_SIDE_GAP_THREE_METHODS_DEFAULT_F64_CODES: &[i32] = &[100, 0, 0, -100];
+pub const X_SIDE_GAP_THREE_METHODS_DEFAULT_F32_CODES: &[i32] = &[100, 0, 0, -100];
+
+pub const TWO_CROWS_CUSTOM_LOOKBACK: usize = 5;
+pub const TWO_CROWS_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100, 0];
+pub const TWO_CROWS_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100, 0];
+
+pub const THREE_LINE_STRIKE_CUSTOM_LOOKBACK: usize = 6;
+pub const THREE_LINE_STRIKE_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, -100];
+pub const THREE_LINE_STRIKE_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, -100];
+
+pub const GAP_SIDE_SIDE_WHITE_CUSTOM_LOOKBACK: usize = 5;
+pub const GAP_SIDE_SIDE_WHITE_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 100, 0, 0, -100];
+pub const GAP_SIDE_SIDE_WHITE_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 100, 0, 0, -100];
+
+pub const STICK_SANDWICH_CUSTOM_LOOKBACK: usize = 5;
+pub const STICK_SANDWICH_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 100, 0];
+pub const STICK_SANDWICH_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 100, 0];
+
+pub const TASUKI_GAP_CUSTOM_LOOKBACK: usize = 5;
+pub const TASUKI_GAP_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 100, 0, 0, -100];
+pub const TASUKI_GAP_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 100, 0, 0, -100];
+
+pub const TRISTAR_CUSTOM_LOOKBACK: usize = 5;
+pub const TRISTAR_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100, 0, 0, 0, 100];
+pub const TRISTAR_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100, 0, 0, 0, 100];
+
+pub const UPSIDE_GAP_TWO_CROWS_CUSTOM_LOOKBACK: usize = 5;
+pub const UPSIDE_GAP_TWO_CROWS_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100, 0];
+pub const UPSIDE_GAP_TWO_CROWS_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100, 0];
+
+pub const X_SIDE_GAP_THREE_METHODS_CUSTOM_LOOKBACK: usize = 2;
+pub const X_SIDE_GAP_THREE_METHODS_CUSTOM_F64_CODES: &[i32] = &[100, 0, 0, -100];
+pub const X_SIDE_GAP_THREE_METHODS_CUSTOM_F32_CODES: &[i32] = &[100, 0, 0, -100];

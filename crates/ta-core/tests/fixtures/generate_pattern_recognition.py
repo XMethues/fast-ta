@@ -220,6 +220,57 @@ THREE_CANDLE_FIXTURES = {
     ),
 }
 
+GAP_CONTINUATION_FIXTURES = {
+    "CDL2CROWS": (
+        [10.0] * 10 + [10.0, 24.0, 23.0, 10.0],
+        [12.0] * 10 + [21.0, 25.0, 24.0, 12.0],
+        [9.0] * 10 + [9.0, 21.5, 14.0, 9.0],
+        [11.0] * 10 + [20.0, 22.0, 15.0, 11.0],
+    ),
+    "CDL3LINESTRIKE": (
+        [10.0] * 8 + [10.0, 11.0, 13.0, 17.0, 10.0, 10.0, 20.0, 19.0, 17.0, 13.0],
+        [12.0] * 8 + [12.5, 14.5, 16.5, 18.0, 12.0, 12.0, 21.0, 20.0, 18.0, 22.0],
+        [9.0] * 8 + [9.5, 10.5, 12.5, 8.0, 9.0, 9.0, 17.5, 15.5, 13.5, 12.0],
+        [11.0] * 8 + [12.0, 14.0, 16.0, 9.0, 11.0, 11.0, 18.0, 16.0, 14.0, 21.0],
+    ),
+    "CDLGAPSIDESIDEWHITE": (
+        [10.0] * 7 + [10.0, 15.0, 15.0, 20.0, 13.0, 13.0],
+        [12.0] * 7 + [12.5, 17.5, 17.5, 20.5, 15.5, 15.5],
+        [9.0] * 7 + [9.5, 14.5, 14.5, 17.5, 12.5, 12.5],
+        [11.0] * 7 + [12.0, 17.0, 17.0, 18.0, 15.0, 15.0],
+    ),
+    "CDLSTICKSANDWICH": (
+        [10.0] * 7 + [20.0, 12.0, 20.0, 10.0],
+        [12.0] * 7 + [21.0, 18.5, 21.0, 12.0],
+        [9.0] * 7 + [9.0, 11.0, 9.0, 9.0],
+        [11.0] * 7 + [10.0, 18.0, 10.0, 11.0],
+    ),
+    "CDLTASUKIGAP": (
+        [10.0] * 7 + [10.0, 15.0, 17.0, 20.0, 15.0, 13.0],
+        [12.0] * 7 + [12.5, 18.5, 17.5, 20.5, 15.5, 16.5],
+        [9.0] * 7 + [9.5, 14.5, 13.5, 17.5, 11.5, 12.5],
+        [11.0] * 7 + [12.0, 18.0, 14.0, 18.0, 12.0, 16.0],
+    ),
+    "CDLTRISTAR": (
+        [10.0] * 10 + [10.0, 12.0, 11.0, 10.0, 20.0, 18.0, 19.0],
+        [12.0] * 10 + [10.5, 12.5, 11.5, 12.0, 20.5, 18.5, 19.5],
+        [9.0] * 10 + [9.5, 11.5, 10.5, 9.0, 19.5, 17.5, 18.5],
+        [11.0] * 10 + [10.1, 12.1, 11.1, 11.0, 20.1, 18.1, 19.1],
+    ),
+    "CDLUPSIDEGAP2CROWS": (
+        [10.0] * 10 + [10.0, 23.0, 24.0, 10.0],
+        [12.0] * 10 + [21.0, 23.5, 24.5, 12.0],
+        [9.0] * 10 + [9.0, 21.5, 20.5, 9.0],
+        [11.0] * 10 + [20.0, 22.0, 21.0, 11.0],
+    ),
+    "CDLXSIDEGAP3METHODS": (
+        [10.0, 15.0, 17.0, 20.0, 15.0, 13.0],
+        [12.5, 18.5, 17.5, 20.5, 15.5, 20.0],
+        [9.5, 14.5, 10.5, 17.5, 11.5, 12.5],
+        [12.0, 18.0, 11.0, 18.0, 12.0, 19.0],
+    ),
+}
+
 STAR_NAMES = {
     "CDLABANDONEDBABY",
     "CDLEVENINGDOJISTAR",
@@ -300,6 +351,7 @@ class TalibReference:
             *SINGLE_CANDLE_NAMES,
             *(name for name in TWO_CANDLE_FIXTURES if name != "CDLDARKCLOUDCOVER"),
             *(name for name in THREE_CANDLE_FIXTURES if name not in STAR_NAMES),
+            *GAP_CONTINUATION_FIXTURES,
         )
         for name in standard_names:
             function = getattr(self.library, f"TA_{name}")
@@ -416,8 +468,15 @@ def rust_float(value: float) -> str:
 
 def fixture_prefix(name: str) -> str:
     return {
+        "CDL2CROWS": "TWO_CROWS",
         "CDL3INSIDE": "THREE_INSIDE",
+        "CDL3LINESTRIKE": "THREE_LINE_STRIKE",
         "CDL3OUTSIDE": "THREE_OUTSIDE",
+        "CDLGAPSIDESIDEWHITE": "GAP_SIDE_SIDE_WHITE",
+        "CDLSTICKSANDWICH": "STICK_SANDWICH",
+        "CDLTASUKIGAP": "TASUKI_GAP",
+        "CDLUPSIDEGAP2CROWS": "UPSIDE_GAP_TWO_CROWS",
+        "CDLXSIDEGAP3METHODS": "X_SIDE_GAP_THREE_METHODS",
     }.get(name, name.removeprefix("CDL"))
 
 
@@ -552,6 +611,28 @@ def render(reference: TalibReference) -> str:
             prefix,
             reference.compute(name, observations, False, penetration),
             reference.compute(name, observations, True, penetration),
+        )
+    lines.append("")
+    reference.restore_defaults()
+    for name, observations in GAP_CONTINUATION_FIXTURES.items():
+        prefix = fixture_prefix(name)
+        append_columns(lines, prefix, observations)
+        append_result(
+            lines,
+            prefix + "_DEFAULT",
+            reference.compute(name, observations, False),
+            reference.compute(name, observations, True),
+        )
+    lines.append("")
+
+    reference.set_custom_two_candle()
+    for name, observations in GAP_CONTINUATION_FIXTURES.items():
+        prefix = fixture_prefix(name) + "_CUSTOM"
+        append_result(
+            lines,
+            prefix,
+            reference.compute(name, observations, False),
+            reference.compute(name, observations, True),
         )
     lines.append("")
     return "\n".join(lines)

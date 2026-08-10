@@ -8,17 +8,21 @@ use std::cell::Cell;
 
 use ta_core::pattern_recognition::{
     Candle, CandleInput, CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings,
-    PatternDirection, PatternSignal, PatternStrength, Penetration, CDL3INSIDEConfig,
-    CDL3OUTSIDEConfig, CDLABANDONEDBABYConfig, CDLBELTHOLDConfig, CDLCLOSINGMARUBOZUConfig,
-    CDLCOUNTERATTACKConfig, CDLDARKCLOUDCOVERConfig, CDLDOJIConfig, CDLDOJISTARConfig,
-    CDLDRAGONFLYDOJIConfig, CDLENGULFINGConfig, CDLEVENINGDOJISTARConfig,
-    CDLEVENINGSTARConfig, CDLGRAVESTONEDOJIConfig, CDLHAMMERConfig, CDLHANGINGMANConfig,
-    CDLHARAMIConfig, CDLHARAMICROSSConfig, CDLHIGHWAVEConfig, CDLHOMINGPIGEONConfig,
-    CDLINNECKConfig, CDLINVERTEDHAMMERConfig, CDLKICKINGBYLENGTHConfig, CDLKICKINGConfig,
-    CDLLONGLEGGEDDOJIConfig, CDLLONGLINEConfig, CDLMARUBOZUConfig, CDLMATCHINGLOWConfig,
-    CDLMORNINGDOJISTARConfig, CDLMORNINGSTARConfig, CDLONNECKConfig, CDLPIERCINGConfig,
-    CDLRICKSHAWMANConfig, CDLSEPARATINGLINESConfig, CDLSHOOTINGSTARConfig, CDLSHORTLINEConfig,
-    CDLSPINNINGTOPConfig, CDLTAKURIConfig, CDLTHRUSTINGConfig, CDLUNIQUE3RIVERConfig,
+    PatternDirection, PatternSignal, PatternStrength, Penetration, CDL2CROWSConfig,
+    CDL3INSIDEConfig, CDL3LINESTRIKEConfig, CDL3OUTSIDEConfig, CDLABANDONEDBABYConfig,
+    CDLBELTHOLDConfig, CDLCLOSINGMARUBOZUConfig, CDLCOUNTERATTACKConfig,
+    CDLDARKCLOUDCOVERConfig, CDLDOJIConfig, CDLDOJISTARConfig, CDLDRAGONFLYDOJIConfig,
+    CDLENGULFINGConfig, CDLEVENINGDOJISTARConfig, CDLEVENINGSTARConfig,
+    CDLGAPSIDESIDEWHITEConfig, CDLGRAVESTONEDOJIConfig, CDLHAMMERConfig,
+    CDLHANGINGMANConfig, CDLHARAMIConfig, CDLHARAMICROSSConfig, CDLHIGHWAVEConfig,
+    CDLHOMINGPIGEONConfig, CDLINNECKConfig, CDLINVERTEDHAMMERConfig,
+    CDLKICKINGBYLENGTHConfig, CDLKICKINGConfig, CDLLONGLEGGEDDOJIConfig,
+    CDLLONGLINEConfig, CDLMARUBOZUConfig, CDLMATCHINGLOWConfig, CDLMORNINGDOJISTARConfig,
+    CDLMORNINGSTARConfig, CDLONNECKConfig, CDLPIERCINGConfig, CDLRICKSHAWMANConfig,
+    CDLSEPARATINGLINESConfig, CDLSHOOTINGSTARConfig, CDLSHORTLINEConfig,
+    CDLSPINNINGTOPConfig, CDLSTICKSANDWICHConfig, CDLTAKURIConfig, CDLTASUKIGAPConfig,
+    CDLTHRUSTINGConfig, CDLTRISTARConfig, CDLUNIQUE3RIVERConfig, CDLUPSIDEGAP2CROWSConfig,
+    CDLXSIDEGAP3METHODSConfig,
 };
 use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
@@ -979,6 +983,70 @@ fn pinned_three_candle_oracles_qualify_every_definition_through_the_public_seam(
 }
 
 #[test]
+fn pinned_gap_continuation_oracles_qualify_every_definition_through_the_public_seam() {
+    let settings = custom_two_candle_settings();
+    qualify_two_candle!(
+        CDL2CROWSConfig::default(), CDL2CROWSConfig::new(settings).unwrap(),
+        TWO_CROWS_OPEN, TWO_CROWS_HIGH, TWO_CROWS_LOW, TWO_CROWS_CLOSE,
+        TWO_CROWS_DEFAULT_LOOKBACK, TWO_CROWS_DEFAULT_F64_CODES, TWO_CROWS_DEFAULT_F32_CODES,
+        TWO_CROWS_CUSTOM_LOOKBACK, TWO_CROWS_CUSTOM_F64_CODES, TWO_CROWS_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDL3LINESTRIKEConfig::default(), CDL3LINESTRIKEConfig::new(settings).unwrap(),
+        THREE_LINE_STRIKE_OPEN, THREE_LINE_STRIKE_HIGH, THREE_LINE_STRIKE_LOW,
+        THREE_LINE_STRIKE_CLOSE, THREE_LINE_STRIKE_DEFAULT_LOOKBACK,
+        THREE_LINE_STRIKE_DEFAULT_F64_CODES, THREE_LINE_STRIKE_DEFAULT_F32_CODES,
+        THREE_LINE_STRIKE_CUSTOM_LOOKBACK, THREE_LINE_STRIKE_CUSTOM_F64_CODES,
+        THREE_LINE_STRIKE_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLGAPSIDESIDEWHITEConfig::default(),
+        CDLGAPSIDESIDEWHITEConfig::new(settings).unwrap(),
+        GAP_SIDE_SIDE_WHITE_OPEN, GAP_SIDE_SIDE_WHITE_HIGH, GAP_SIDE_SIDE_WHITE_LOW,
+        GAP_SIDE_SIDE_WHITE_CLOSE, GAP_SIDE_SIDE_WHITE_DEFAULT_LOOKBACK,
+        GAP_SIDE_SIDE_WHITE_DEFAULT_F64_CODES, GAP_SIDE_SIDE_WHITE_DEFAULT_F32_CODES,
+        GAP_SIDE_SIDE_WHITE_CUSTOM_LOOKBACK, GAP_SIDE_SIDE_WHITE_CUSTOM_F64_CODES,
+        GAP_SIDE_SIDE_WHITE_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLSTICKSANDWICHConfig::default(), CDLSTICKSANDWICHConfig::new(settings).unwrap(),
+        STICK_SANDWICH_OPEN, STICK_SANDWICH_HIGH, STICK_SANDWICH_LOW, STICK_SANDWICH_CLOSE,
+        STICK_SANDWICH_DEFAULT_LOOKBACK, STICK_SANDWICH_DEFAULT_F64_CODES,
+        STICK_SANDWICH_DEFAULT_F32_CODES, STICK_SANDWICH_CUSTOM_LOOKBACK,
+        STICK_SANDWICH_CUSTOM_F64_CODES, STICK_SANDWICH_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLTASUKIGAPConfig::default(), CDLTASUKIGAPConfig::new(settings).unwrap(),
+        TASUKI_GAP_OPEN, TASUKI_GAP_HIGH, TASUKI_GAP_LOW, TASUKI_GAP_CLOSE,
+        TASUKI_GAP_DEFAULT_LOOKBACK, TASUKI_GAP_DEFAULT_F64_CODES,
+        TASUKI_GAP_DEFAULT_F32_CODES, TASUKI_GAP_CUSTOM_LOOKBACK,
+        TASUKI_GAP_CUSTOM_F64_CODES, TASUKI_GAP_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLTRISTARConfig::default(), CDLTRISTARConfig::new(settings).unwrap(),
+        TRISTAR_OPEN, TRISTAR_HIGH, TRISTAR_LOW, TRISTAR_CLOSE,
+        TRISTAR_DEFAULT_LOOKBACK, TRISTAR_DEFAULT_F64_CODES, TRISTAR_DEFAULT_F32_CODES,
+        TRISTAR_CUSTOM_LOOKBACK, TRISTAR_CUSTOM_F64_CODES, TRISTAR_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLUPSIDEGAP2CROWSConfig::default(), CDLUPSIDEGAP2CROWSConfig::new(settings).unwrap(),
+        UPSIDE_GAP_TWO_CROWS_OPEN, UPSIDE_GAP_TWO_CROWS_HIGH, UPSIDE_GAP_TWO_CROWS_LOW,
+        UPSIDE_GAP_TWO_CROWS_CLOSE, UPSIDE_GAP_TWO_CROWS_DEFAULT_LOOKBACK,
+        UPSIDE_GAP_TWO_CROWS_DEFAULT_F64_CODES, UPSIDE_GAP_TWO_CROWS_DEFAULT_F32_CODES,
+        UPSIDE_GAP_TWO_CROWS_CUSTOM_LOOKBACK, UPSIDE_GAP_TWO_CROWS_CUSTOM_F64_CODES,
+        UPSIDE_GAP_TWO_CROWS_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLXSIDEGAP3METHODSConfig::default(), CDLXSIDEGAP3METHODSConfig::new(settings).unwrap(),
+        X_SIDE_GAP_THREE_METHODS_OPEN, X_SIDE_GAP_THREE_METHODS_HIGH,
+        X_SIDE_GAP_THREE_METHODS_LOW, X_SIDE_GAP_THREE_METHODS_CLOSE,
+        X_SIDE_GAP_THREE_METHODS_DEFAULT_LOOKBACK, X_SIDE_GAP_THREE_METHODS_DEFAULT_F64_CODES,
+        X_SIDE_GAP_THREE_METHODS_DEFAULT_F32_CODES, X_SIDE_GAP_THREE_METHODS_CUSTOM_LOOKBACK,
+        X_SIDE_GAP_THREE_METHODS_CUSTOM_F64_CODES, X_SIDE_GAP_THREE_METHODS_CUSTOM_F32_CODES
+    );
+}
+
+#[test]
 fn star_definitions_own_pinned_penetration_defaults_and_accept_values_above_one() {
     let settings = CandleSettings::default();
     let above_one = Penetration::new(4.0 as Float).unwrap();
@@ -1467,4 +1535,286 @@ fn three_candle_evidence_rows_cover_pinned_sources_and_qualification_scenarios()
     ];
     assert_eq!(reference::TALIB_GIT_REVISION, "2247d599bddf37ed37e3a709371517e46efc66f6");
     assert!(ROWS.iter().all(|(_, source, scenario)| source.ends_with(".c") && !scenario.is_empty()));
+}
+
+fn gap_boundary_settings() -> CandleSettings {
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::BodyLong,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 0.5 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Near,
+            CandleSetting::new(CandleRangeKind::HighLow, 0, 0.2 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Equal,
+            CandleSetting::new(CandleRangeKind::HighLow, 0, 0.05 as Float).unwrap(),
+        )
+}
+
+#[test]
+fn independently_reasoned_gap_continuation_boundaries_lock_pinned_predicates_and_signs() {
+    let settings = gap_boundary_settings();
+
+    let two_crows = CDL2CROWSConfig::new(settings).unwrap();
+    assert_eq!(
+        boundary_code(
+            two_crows,
+            &[
+                candle(10.0, 21.0, 9.0, 20.0),
+                candle(24.0, 25.0, 21.5, 22.0),
+                candle(23.0, 24.0, 14.0, 15.0),
+            ],
+        ),
+        -100
+    );
+    assert_eq!(
+        boundary_code(
+            two_crows,
+            &[
+                candle(10.0, 21.0, 9.0, 20.0),
+                candle(24.0, 25.0, 20.0, 20.0),
+                candle(23.0, 24.0, 14.0, 15.0),
+            ],
+        ),
+        0
+    );
+
+    let line_strike = CDL3LINESTRIKEConfig::new(settings).unwrap();
+    let bullish_strike = [
+        candle(10.0, 12.5, 9.5, 12.0),
+        candle(11.0, 14.5, 10.5, 14.0),
+        candle(13.0, 16.5, 12.5, 16.0),
+        candle(17.0, 18.0, 8.0, 9.0),
+    ];
+    let bearish_strike = [
+        candle(20.0, 20.5, 17.5, 18.0),
+        candle(19.0, 19.5, 15.5, 16.0),
+        candle(17.0, 17.5, 13.5, 14.0),
+        candle(13.0, 22.0, 12.0, 21.0),
+    ];
+    assert_eq!(boundary_code(line_strike, &bullish_strike), 100);
+    assert_eq!(boundary_code(line_strike, &bearish_strike), -100);
+    assert_eq!(
+        boundary_code(
+            line_strike,
+            &[
+                bullish_strike[0],
+                bullish_strike[1],
+                bullish_strike[2],
+                candle(17.0, 18.0, 9.0, 10.0),
+            ],
+        ),
+        0
+    );
+
+    let side_by_side = CDLGAPSIDESIDEWHITEConfig::new(settings).unwrap();
+    let upside_side_by_side = [
+        candle(10.0, 12.5, 9.5, 12.0),
+        candle(15.0, 17.5, 14.5, 17.0),
+        candle(15.0, 17.5, 14.5, 17.0),
+    ];
+    let downside_side_by_side = [
+        candle(20.0, 20.5, 17.5, 18.0),
+        candle(13.0, 15.5, 12.5, 15.0),
+        candle(13.0, 15.5, 12.5, 15.0),
+    ];
+    assert_eq!(boundary_code(side_by_side, &upside_side_by_side), 100);
+    assert_eq!(boundary_code(side_by_side, &downside_side_by_side), -100);
+    assert_eq!(
+        boundary_code(
+            side_by_side,
+            &[
+                upside_side_by_side[0],
+                candle(12.0, 14.5, 11.5, 14.0),
+                candle(12.0, 14.5, 11.5, 14.0),
+            ],
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            side_by_side,
+            &[
+                downside_side_by_side[0],
+                candle(16.0, 18.5, 15.5, 18.0),
+                candle(16.0, 18.5, 15.5, 18.0),
+            ],
+        ),
+        0
+    );
+
+    let stick_sandwich = CDLSTICKSANDWICHConfig::new(settings).unwrap();
+    let stick_match = [
+        candle(20.0, 21.0, 9.0, 10.0),
+        candle(12.0, 18.5, 11.0, 18.0),
+        candle(20.0, 21.0, 9.0, 10.0),
+    ];
+    assert_eq!(boundary_code(stick_sandwich, &stick_match), 100);
+    assert_eq!(
+        boundary_code(
+            stick_sandwich,
+            &[
+                stick_match[0],
+                candle(12.0, 18.5, 10.0, 18.0),
+                stick_match[2],
+            ],
+        ),
+        0
+    );
+
+    let tasuki = CDLTASUKIGAPConfig::new(settings).unwrap();
+    let upside_tasuki = [
+        candle(10.0, 12.5, 9.5, 12.0),
+        candle(15.0, 18.5, 14.5, 18.0),
+        candle(17.0, 17.5, 13.5, 14.0),
+    ];
+    let downside_tasuki = [
+        candle(20.0, 20.5, 17.5, 18.0),
+        candle(15.0, 15.5, 11.5, 12.0),
+        candle(13.0, 16.5, 12.5, 16.0),
+    ];
+    assert_eq!(boundary_code(tasuki, &upside_tasuki), 100);
+    assert_eq!(boundary_code(tasuki, &downside_tasuki), -100);
+    assert_eq!(
+        boundary_code(
+            tasuki,
+            &[
+                candle(10.0, 15.5, 9.5, 15.0),
+                upside_tasuki[1],
+                upside_tasuki[2],
+            ],
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            tasuki,
+            &[
+                candle(20.0, 20.5, 14.5, 15.0),
+                downside_tasuki[1],
+                downside_tasuki[2],
+            ],
+        ),
+        0
+    );
+
+    let upside_gap_two_crows = CDLUPSIDEGAP2CROWSConfig::new(settings).unwrap();
+    let upside_gap_match = [
+        candle(10.0, 21.0, 9.0, 20.0),
+        candle(23.0, 23.5, 21.5, 22.0),
+        candle(24.0, 24.5, 20.5, 21.0),
+    ];
+    assert_eq!(boundary_code(upside_gap_two_crows, &upside_gap_match), -100);
+    assert_eq!(
+        boundary_code(
+            upside_gap_two_crows,
+            &[
+                candle(10.0, 23.0, 9.0, 22.0),
+                upside_gap_match[1],
+                upside_gap_match[2],
+            ],
+        ),
+        0
+    );
+
+    let x_side = CDLXSIDEGAP3METHODSConfig::new(settings).unwrap();
+    let upside_x_side = [
+        candle(10.0, 12.5, 9.5, 12.0),
+        candle(15.0, 18.5, 14.5, 18.0),
+        candle(17.0, 17.5, 10.5, 11.0),
+    ];
+    let downside_x_side = [
+        candle(20.0, 20.5, 17.5, 18.0),
+        candle(15.0, 15.5, 11.5, 12.0),
+        candle(13.0, 20.0, 12.5, 19.0),
+    ];
+    assert_eq!(boundary_code(x_side, &upside_x_side), 100);
+    assert_eq!(boundary_code(x_side, &downside_x_side), -100);
+    assert_eq!(
+        boundary_code(
+            x_side,
+            &[
+                candle(10.0, 15.5, 9.5, 15.0),
+                upside_x_side[1],
+                upside_x_side[2],
+            ],
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            x_side,
+            &[
+                candle(20.0, 20.5, 14.5, 15.0),
+                downside_x_side[1],
+                downside_x_side[2],
+            ],
+        ),
+        0
+    );
+}
+
+#[test]
+fn tristar_uses_one_i_minus_two_body_doji_threshold_and_strict_gap_direction() {
+    let settings = CandleSettings::default().with_setting(
+        CandleSettingType::BodyDoji,
+        CandleSetting::new(CandleRangeKind::HighLow, 3, 0.1 as Float).unwrap(),
+    );
+    let tristar = CDLTRISTARConfig::new(settings).unwrap();
+    let seeds = [
+        candle(10.0, 15.0, 5.0, 11.0),
+        candle(10.0, 15.0, 5.0, 11.0),
+        candle(10.0, 15.0, 5.0, 11.0),
+    ];
+    let bearish = [
+        seeds[0],
+        seeds[1],
+        seeds[2],
+        candle(10.0, 60.0, 0.0, 10.5),
+        candle(12.0, 13.0, 11.0, 12.5),
+        candle(11.0, 12.0, 10.0, 11.5),
+    ];
+    let bullish = [
+        seeds[0],
+        seeds[1],
+        seeds[2],
+        candle(20.0, 60.0, 0.0, 20.5),
+        candle(18.0, 19.0, 17.0, 18.5),
+        candle(19.0, 20.0, 18.0, 19.5),
+    ];
+    assert_eq!(boundary_code(tristar, &bearish), -100);
+    assert_eq!(boundary_code(tristar, &bullish), 100);
+
+    let mut per_candle_recalculation_trap = bearish;
+    per_candle_recalculation_trap[4] = candle(12.0, 15.0, 11.0, 14.0);
+    assert_eq!(boundary_code(tristar, &per_candle_recalculation_trap), 0);
+
+    let mut touching_real_bodies = bearish;
+    touching_real_bodies[4] = candle(10.5, 11.5, 10.0, 11.0);
+    touching_real_bodies[5] = candle(10.0, 11.0, 9.5, 10.5);
+    assert_eq!(boundary_code(tristar, &touching_real_bodies), 0);
+}
+
+#[test]
+fn gap_continuation_evidence_rows_cover_pinned_spans_settings_and_boundaries() {
+    const ROWS: [(&str, &str, &str, &str, usize); 8] = [
+        ("CDL2CROWS", "cdl2crows/cdl2crows.c", "three-Candle do-loop", "BodyLong; strict real-body gap; fixed bearish sign", 12),
+        ("CDL3LINESTRIKE", "cdl3linestrike/cdl3linestrike.c", "four-Candle do-loop", "Near at i-3/i-2; sign from i-1", 8),
+        ("CDLGAPSIDESIDEWHITE", "cdlgapsidesidewhite/cdlgapsidesidewhite.c", "three-Candle do-loop", "Near and Equal at i-1; sign from gap direction", 7),
+        ("CDLSTICKSANDWICH", "cdlsticksandwich/cdlsticksandwich.c", "three-Candle do-loop", "Equal at i-2; fixed bullish sign", 7),
+        ("CDLTASUKIGAP", "cdltasukigap/cdltasukigap.c", "three-Candle do-loop", "Near at i-1; strict gap and sign from i-1", 7),
+        ("CDLTRISTAR", "cdltristar/cdltristar.c", "three-Candle do-loop", "one BodyDoji total at i-2; sign from gap direction", 12),
+        ("CDLUPSIDEGAP2CROWS", "cdlupsidegap2crows/cdlupsidegap2crows.c", "three-Candle do-loop", "BodyLong at i-2 and BodyShort at i-1; fixed bearish sign", 12),
+        ("CDLXSIDEGAP3METHODS", "cdlxsidegap3methods/cdlxsidegap3methods.c", "three-Candle do-loop", "no settings; fixed Lookback 2; sign from i-2", 2),
+    ];
+    assert_eq!(reference::TALIB_GIT_REVISION, "2247d599bddf37ed37e3a709371517e46efc66f6");
+    assert!(ROWS.iter().all(|(_, source, span, settings, lookback)| {
+        source.ends_with(".c") && !span.is_empty() && !settings.is_empty() && *lookback >= 2
+    }));
 }

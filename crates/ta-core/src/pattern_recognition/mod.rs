@@ -107,6 +107,7 @@ macro_rules! impl_pattern_execution {
 
 mod body_containment;
 mod doji;
+mod gap_continuation;
 mod engulfing;
 mod position_shadow;
 mod single_candle;
@@ -121,6 +122,15 @@ pub use body_containment::{
     CDLKICKINGBatchRunner, CDLKICKINGBYLENGTHBatchRunner, CDLKICKINGBYLENGTHConfig,
     CDLKICKINGBYLENGTHStream, CDLKICKINGConfig, CDLKICKINGStream, CDLMATCHINGLOWBatchRunner,
     CDLMATCHINGLOWConfig, CDLMATCHINGLOWStream,
+};
+pub use gap_continuation::{
+    CDL2CROWSBatchRunner, CDL2CROWSConfig, CDL2CROWSStream, CDL3LINESTRIKEBatchRunner,
+    CDL3LINESTRIKEConfig, CDL3LINESTRIKEStream, CDLGAPSIDESIDEWHITEBatchRunner,
+    CDLGAPSIDESIDEWHITEConfig, CDLGAPSIDESIDEWHITEStream, CDLSTICKSANDWICHBatchRunner,
+    CDLSTICKSANDWICHConfig, CDLSTICKSANDWICHStream, CDLTASUKIGAPBatchRunner, CDLTASUKIGAPConfig,
+    CDLTASUKIGAPStream, CDLTRISTARBatchRunner, CDLTRISTARConfig, CDLTRISTARStream,
+    CDLUPSIDEGAP2CROWSBatchRunner, CDLUPSIDEGAP2CROWSConfig, CDLUPSIDEGAP2CROWSStream,
+    CDLXSIDEGAP3METHODSBatchRunner, CDLXSIDEGAP3METHODSConfig, CDLXSIDEGAP3METHODSStream,
 };
 pub use doji::{CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream};
 pub use engulfing::{CDLENGULFINGBatchRunner, CDLENGULFINGConfig, CDLENGULFINGStream};
