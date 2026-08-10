@@ -106,10 +106,7 @@ macro_rules! impl_pattern_execution {
 }
 
 macro_rules! define_pattern_config {
-    (
-        $config:ident, $runner:ident, $stream:ident,
-        $span:expr, [$($setting:expr),* $(,)?]
-    ) => {
+    ($config:ident, $runner:ident, $stream:ident) => {
         #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
         #[derive(Debug, Clone, Copy, PartialEq)]
         pub struct $config {
@@ -126,19 +123,8 @@ macro_rules! define_pattern_config {
 
             /// Returns the owned immutable Candle Settings value.
             #[inline]
-            pub const fn candle_settings(
-                &self,
-            ) -> crate::pattern_recognition::CandleSettings {
+            pub const fn candle_settings(&self) -> crate::pattern_recognition::CandleSettings {
                 self.candle_settings
-            }
-
-            /// Returns the Warm-up tick count, identical to Lookback.
-            #[inline]
-            pub fn warm_up(&self) -> usize {
-                crate::pattern_recognition::engine::maximum_average_period(
-                    self.candle_settings,
-                    &[$($setting),*],
-                ) + $span
             }
         }
 

@@ -51,13 +51,18 @@ macro_rules! define_star_config {
     };
 }
 
-define_pattern_config!(
-    CDL3INSIDEConfig,
-    CDL3INSIDEBatchRunner,
-    CDL3INSIDEStream,
-    2,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
-);
+define_pattern_config!(CDL3INSIDEConfig, CDL3INSIDEBatchRunner, CDL3INSIDEStream);
+
+impl CDL3INSIDEConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyShort],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDL3INSIDEConfig {
     type State = ();
@@ -113,13 +118,15 @@ impl PatternDefinition for CDL3INSIDEConfig {
     }
 }
 
-define_pattern_config!(
-    CDL3OUTSIDEConfig,
-    CDL3OUTSIDEBatchRunner,
-    CDL3OUTSIDEStream,
-    3,
-    []
-);
+define_pattern_config!(CDL3OUTSIDEConfig, CDL3OUTSIDEBatchRunner, CDL3OUTSIDEStream);
+
+impl CDL3OUTSIDEConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[]) + 3
+    }
+}
 
 impl PatternDefinition for CDL3OUTSIDEConfig {
     type State = ();
@@ -488,10 +495,19 @@ impl PatternDefinition for CDLMORNINGSTARConfig {
 define_pattern_config!(
     CDLUNIQUE3RIVERConfig,
     CDLUNIQUE3RIVERBatchRunner,
-    CDLUNIQUE3RIVERStream,
-    2,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    CDLUNIQUE3RIVERStream
 );
+
+impl CDLUNIQUE3RIVERConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyShort],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDLUNIQUE3RIVERConfig {
     type State = ();

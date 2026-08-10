@@ -60,13 +60,15 @@ fn transition(
 }
 
 // Setting-free: Candle Settings are owned only to preserve the common configuration seam.
-define_pattern_config!(
-    CDLHIKKAKEConfig,
-    CDLHIKKAKEBatchRunner,
-    CDLHIKKAKEStream,
-    5,
-    []
-);
+define_pattern_config!(CDLHIKKAKEConfig, CDLHIKKAKEBatchRunner, CDLHIKKAKEStream);
+
+impl CDLHIKKAKEConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[]) + 5
+    }
+}
 
 impl PatternDefinition for CDLHIKKAKEConfig {
     type State = State;

@@ -20,16 +20,21 @@ const fn positive_signal() -> PatternSignal {
     }
 }
 
-define_pattern_config!(
-    CDLBELTHOLDConfig,
-    CDLBELTHOLDBatchRunner,
-    CDLBELTHOLDStream,
-    0,
-    [
-        CandleSettingType::BodyLong,
-        CandleSettingType::ShadowVeryShort,
-    ]
-);
+define_pattern_config!(CDLBELTHOLDConfig, CDLBELTHOLDBatchRunner, CDLBELTHOLDStream);
+
+impl CDLBELTHOLDConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyLong,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLBELTHOLDConfig {
     type State = ();
@@ -76,13 +81,22 @@ impl PatternDefinition for CDLBELTHOLDConfig {
 define_pattern_config!(
     CDLCLOSINGMARUBOZUConfig,
     CDLCLOSINGMARUBOZUBatchRunner,
-    CDLCLOSINGMARUBOZUStream,
-    0,
-    [
-        CandleSettingType::BodyLong,
-        CandleSettingType::ShadowVeryShort
-    ]
+    CDLCLOSINGMARUBOZUStream
 );
+
+impl CDLCLOSINGMARUBOZUConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyLong,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLCLOSINGMARUBOZUConfig {
     type State = ();
@@ -129,13 +143,22 @@ impl PatternDefinition for CDLCLOSINGMARUBOZUConfig {
 define_pattern_config!(
     CDLDRAGONFLYDOJIConfig,
     CDLDRAGONFLYDOJIBatchRunner,
-    CDLDRAGONFLYDOJIStream,
-    0,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::ShadowVeryShort
-    ]
+    CDLDRAGONFLYDOJIStream
 );
+
+impl CDLDRAGONFLYDOJIConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyDoji,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLDRAGONFLYDOJIConfig {
     type State = ();
@@ -180,13 +203,22 @@ impl PatternDefinition for CDLDRAGONFLYDOJIConfig {
 define_pattern_config!(
     CDLGRAVESTONEDOJIConfig,
     CDLGRAVESTONEDOJIBatchRunner,
-    CDLGRAVESTONEDOJIStream,
-    0,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::ShadowVeryShort
-    ]
+    CDLGRAVESTONEDOJIStream
 );
+
+impl CDLGRAVESTONEDOJIConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyDoji,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLGRAVESTONEDOJIConfig {
     type State = ();
@@ -228,16 +260,21 @@ impl PatternDefinition for CDLGRAVESTONEDOJIConfig {
     }
 }
 
-define_pattern_config!(
-    CDLHIGHWAVEConfig,
-    CDLHIGHWAVEBatchRunner,
-    CDLHIGHWAVEStream,
-    0,
-    [
-        CandleSettingType::BodyShort,
-        CandleSettingType::ShadowVeryLong
-    ]
-);
+define_pattern_config!(CDLHIGHWAVEConfig, CDLHIGHWAVEBatchRunner, CDLHIGHWAVEStream);
+
+impl CDLHIGHWAVEConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyShort,
+                CandleSettingType::ShadowVeryLong,
+            ],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLHIGHWAVEConfig {
     type State = ();
@@ -282,10 +319,19 @@ impl PatternDefinition for CDLHIGHWAVEConfig {
 define_pattern_config!(
     CDLLONGLEGGEDDOJIConfig,
     CDLLONGLEGGEDDOJIBatchRunner,
-    CDLLONGLEGGEDDOJIStream,
-    0,
-    [CandleSettingType::BodyDoji, CandleSettingType::ShadowLong]
+    CDLLONGLEGGEDDOJIStream
 );
+
+impl CDLLONGLEGGEDDOJIConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyDoji, CandleSettingType::ShadowLong],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLLONGLEGGEDDOJIConfig {
     type State = ();
@@ -323,13 +369,18 @@ impl PatternDefinition for CDLLONGLEGGEDDOJIConfig {
     }
 }
 
-define_pattern_config!(
-    CDLLONGLINEConfig,
-    CDLLONGLINEBatchRunner,
-    CDLLONGLINEStream,
-    0,
-    [CandleSettingType::BodyLong, CandleSettingType::ShadowShort]
-);
+define_pattern_config!(CDLLONGLINEConfig, CDLLONGLINEBatchRunner, CDLLONGLINEStream);
+
+impl CDLLONGLINEConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::ShadowShort],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLLONGLINEConfig {
     type State = ();
@@ -368,16 +419,21 @@ impl PatternDefinition for CDLLONGLINEConfig {
     }
 }
 
-define_pattern_config!(
-    CDLMARUBOZUConfig,
-    CDLMARUBOZUBatchRunner,
-    CDLMARUBOZUStream,
-    0,
-    [
-        CandleSettingType::BodyLong,
-        CandleSettingType::ShadowVeryShort
-    ]
-);
+define_pattern_config!(CDLMARUBOZUConfig, CDLMARUBOZUBatchRunner, CDLMARUBOZUStream);
+
+impl CDLMARUBOZUConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyLong,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLMARUBOZUConfig {
     type State = ();
@@ -422,14 +478,23 @@ impl PatternDefinition for CDLMARUBOZUConfig {
 define_pattern_config!(
     CDLRICKSHAWMANConfig,
     CDLRICKSHAWMANBatchRunner,
-    CDLRICKSHAWMANStream,
-    0,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::ShadowLong,
-        CandleSettingType::Near
-    ]
+    CDLRICKSHAWMANStream
 );
+
+impl CDLRICKSHAWMANConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyDoji,
+                CandleSettingType::ShadowLong,
+                CandleSettingType::Near,
+            ],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLRICKSHAWMANConfig {
     type State = ();
@@ -478,10 +543,19 @@ impl PatternDefinition for CDLRICKSHAWMANConfig {
 define_pattern_config!(
     CDLSHORTLINEConfig,
     CDLSHORTLINEBatchRunner,
-    CDLSHORTLINEStream,
-    0,
-    [CandleSettingType::BodyShort, CandleSettingType::ShadowShort]
+    CDLSHORTLINEStream
 );
+
+impl CDLSHORTLINEConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyShort, CandleSettingType::ShadowShort],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLSHORTLINEConfig {
     type State = ();
@@ -523,10 +597,17 @@ impl PatternDefinition for CDLSHORTLINEConfig {
 define_pattern_config!(
     CDLSPINNINGTOPConfig,
     CDLSPINNINGTOPBatchRunner,
-    CDLSPINNINGTOPStream,
-    0,
-    [CandleSettingType::BodyShort]
+    CDLSPINNINGTOPStream
 );
+
+impl CDLSPINNINGTOPConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::BodyShort])
+            + 0
+    }
+}
 
 impl PatternDefinition for CDLSPINNINGTOPConfig {
     type State = ();
@@ -565,17 +646,22 @@ impl PatternDefinition for CDLSPINNINGTOPConfig {
     }
 }
 
-define_pattern_config!(
-    CDLTAKURIConfig,
-    CDLTAKURIBatchRunner,
-    CDLTAKURIStream,
-    0,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::ShadowVeryShort,
-        CandleSettingType::ShadowVeryLong
-    ]
-);
+define_pattern_config!(CDLTAKURIConfig, CDLTAKURIBatchRunner, CDLTAKURIStream);
+
+impl CDLTAKURIConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyDoji,
+                CandleSettingType::ShadowVeryShort,
+                CandleSettingType::ShadowVeryLong,
+            ],
+        ) + 0
+    }
+}
 
 impl PatternDefinition for CDLTAKURIConfig {
     type State = ();

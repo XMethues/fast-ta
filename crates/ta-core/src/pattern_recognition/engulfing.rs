@@ -7,10 +7,16 @@ use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, 
 define_pattern_config!(
     CDLENGULFINGConfig,
     CDLENGULFINGBatchRunner,
-    CDLENGULFINGStream,
-    2,
-    []
+    CDLENGULFINGStream
 );
+
+impl CDLENGULFINGConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[]) + 2
+    }
+}
 
 impl PatternDefinition for CDLENGULFINGConfig {
     type State = ();

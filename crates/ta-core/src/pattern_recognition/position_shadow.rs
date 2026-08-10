@@ -3,18 +3,23 @@
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal};
 
-define_pattern_config!(
-    CDLHAMMERConfig,
-    CDLHAMMERBatchRunner,
-    CDLHAMMERStream,
-    1,
-    [
-        CandleSettingType::BodyShort,
-        CandleSettingType::ShadowLong,
-        CandleSettingType::ShadowVeryShort,
-        CandleSettingType::Near,
-    ]
-);
+define_pattern_config!(CDLHAMMERConfig, CDLHAMMERBatchRunner, CDLHAMMERStream);
+
+impl CDLHAMMERConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyShort,
+                CandleSettingType::ShadowLong,
+                CandleSettingType::ShadowVeryShort,
+                CandleSettingType::Near,
+            ],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLHAMMERConfig {
     type State = ();
@@ -67,15 +72,24 @@ impl PatternDefinition for CDLHAMMERConfig {
 define_pattern_config!(
     CDLHANGINGMANConfig,
     CDLHANGINGMANBatchRunner,
-    CDLHANGINGMANStream,
-    1,
-    [
-        CandleSettingType::BodyShort,
-        CandleSettingType::ShadowLong,
-        CandleSettingType::ShadowVeryShort,
-        CandleSettingType::Near,
-    ]
+    CDLHANGINGMANStream
 );
+
+impl CDLHANGINGMANConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyShort,
+                CandleSettingType::ShadowLong,
+                CandleSettingType::ShadowVeryShort,
+                CandleSettingType::Near,
+            ],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLHANGINGMANConfig {
     type State = ();
@@ -125,13 +139,18 @@ impl PatternDefinition for CDLHANGINGMANConfig {
     }
 }
 
-define_pattern_config!(
-    CDLINNECKConfig,
-    CDLINNECKBatchRunner,
-    CDLINNECKStream,
-    1,
-    [CandleSettingType::BodyLong, CandleSettingType::Equal]
-);
+define_pattern_config!(CDLINNECKConfig, CDLINNECKBatchRunner, CDLINNECKStream);
+
+impl CDLINNECKConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::Equal],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLINNECKConfig {
     type State = ();
@@ -183,14 +202,23 @@ impl PatternDefinition for CDLINNECKConfig {
 define_pattern_config!(
     CDLINVERTEDHAMMERConfig,
     CDLINVERTEDHAMMERBatchRunner,
-    CDLINVERTEDHAMMERStream,
-    1,
-    [
-        CandleSettingType::BodyShort,
-        CandleSettingType::ShadowLong,
-        CandleSettingType::ShadowVeryShort,
-    ]
+    CDLINVERTEDHAMMERStream
 );
+
+impl CDLINVERTEDHAMMERConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyShort,
+                CandleSettingType::ShadowLong,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLINVERTEDHAMMERConfig {
     type State = ();
@@ -238,13 +266,18 @@ impl PatternDefinition for CDLINVERTEDHAMMERConfig {
     }
 }
 
-define_pattern_config!(
-    CDLONNECKConfig,
-    CDLONNECKBatchRunner,
-    CDLONNECKStream,
-    1,
-    [CandleSettingType::BodyLong, CandleSettingType::Equal]
-);
+define_pattern_config!(CDLONNECKConfig, CDLONNECKBatchRunner, CDLONNECKStream);
+
+impl CDLONNECKConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::Equal],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLONNECKConfig {
     type State = ();
@@ -293,13 +326,16 @@ impl PatternDefinition for CDLONNECKConfig {
     }
 }
 
-define_pattern_config!(
-    CDLPIERCINGConfig,
-    CDLPIERCINGBatchRunner,
-    CDLPIERCINGStream,
-    1,
-    [CandleSettingType::BodyLong]
-);
+define_pattern_config!(CDLPIERCINGConfig, CDLPIERCINGBatchRunner, CDLPIERCINGStream);
+
+impl CDLPIERCINGConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::BodyLong])
+            + 1
+    }
+}
 
 impl PatternDefinition for CDLPIERCINGConfig {
     type State = ();
@@ -351,14 +387,23 @@ impl PatternDefinition for CDLPIERCINGConfig {
 define_pattern_config!(
     CDLSEPARATINGLINESConfig,
     CDLSEPARATINGLINESBatchRunner,
-    CDLSEPARATINGLINESStream,
-    1,
-    [
-        CandleSettingType::BodyLong,
-        CandleSettingType::Equal,
-        CandleSettingType::ShadowVeryShort,
-    ]
+    CDLSEPARATINGLINESStream
 );
+
+impl CDLSEPARATINGLINESConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyLong,
+                CandleSettingType::Equal,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLSEPARATINGLINESConfig {
     type State = ();
@@ -422,14 +467,23 @@ impl PatternDefinition for CDLSEPARATINGLINESConfig {
 define_pattern_config!(
     CDLSHOOTINGSTARConfig,
     CDLSHOOTINGSTARBatchRunner,
-    CDLSHOOTINGSTARStream,
-    1,
-    [
-        CandleSettingType::BodyShort,
-        CandleSettingType::ShadowLong,
-        CandleSettingType::ShadowVeryShort,
-    ]
+    CDLSHOOTINGSTARStream
 );
+
+impl CDLSHOOTINGSTARConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyShort,
+                CandleSettingType::ShadowLong,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLSHOOTINGSTARConfig {
     type State = ();
@@ -480,10 +534,19 @@ impl PatternDefinition for CDLSHOOTINGSTARConfig {
 define_pattern_config!(
     CDLTHRUSTINGConfig,
     CDLTHRUSTINGBatchRunner,
-    CDLTHRUSTINGStream,
-    1,
-    [CandleSettingType::BodyLong, CandleSettingType::Equal]
+    CDLTHRUSTINGStream
 );
+
+impl CDLTHRUSTINGConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::Equal],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLTHRUSTINGConfig {
     type State = ();

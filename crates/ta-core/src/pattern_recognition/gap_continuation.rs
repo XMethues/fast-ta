@@ -3,13 +3,16 @@
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal};
 
-define_pattern_config!(
-    CDL2CROWSConfig,
-    CDL2CROWSBatchRunner,
-    CDL2CROWSStream,
-    2,
-    [CandleSettingType::BodyLong]
-);
+define_pattern_config!(CDL2CROWSConfig, CDL2CROWSBatchRunner, CDL2CROWSStream);
+
+impl CDL2CROWSConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::BodyLong])
+            + 2
+    }
+}
 
 impl PatternDefinition for CDL2CROWSConfig {
     type State = ();
@@ -64,10 +67,16 @@ impl PatternDefinition for CDL2CROWSConfig {
 define_pattern_config!(
     CDL3LINESTRIKEConfig,
     CDL3LINESTRIKEBatchRunner,
-    CDL3LINESTRIKEStream,
-    3,
-    [CandleSettingType::Near]
+    CDL3LINESTRIKEStream
 );
+
+impl CDL3LINESTRIKEConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::Near]) + 3
+    }
+}
 
 impl PatternDefinition for CDL3LINESTRIKEConfig {
     type State = ();
@@ -143,10 +152,19 @@ impl PatternDefinition for CDL3LINESTRIKEConfig {
 define_pattern_config!(
     CDLGAPSIDESIDEWHITEConfig,
     CDLGAPSIDESIDEWHITEBatchRunner,
-    CDLGAPSIDESIDEWHITEStream,
-    2,
-    [CandleSettingType::Equal, CandleSettingType::Near]
+    CDLGAPSIDESIDEWHITEStream
 );
+
+impl CDLGAPSIDESIDEWHITEConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::Equal, CandleSettingType::Near],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDLGAPSIDESIDEWHITEConfig {
     type State = ();
@@ -206,10 +224,16 @@ impl PatternDefinition for CDLGAPSIDESIDEWHITEConfig {
 define_pattern_config!(
     CDLSTICKSANDWICHConfig,
     CDLSTICKSANDWICHBatchRunner,
-    CDLSTICKSANDWICHStream,
-    2,
-    [CandleSettingType::Equal]
+    CDLSTICKSANDWICHStream
 );
+
+impl CDLSTICKSANDWICHConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::Equal]) + 2
+    }
+}
 
 impl PatternDefinition for CDLSTICKSANDWICHConfig {
     type State = ();
@@ -262,10 +286,16 @@ impl PatternDefinition for CDLSTICKSANDWICHConfig {
 define_pattern_config!(
     CDLTASUKIGAPConfig,
     CDLTASUKIGAPBatchRunner,
-    CDLTASUKIGAPStream,
-    2,
-    [CandleSettingType::Near]
+    CDLTASUKIGAPStream
 );
+
+impl CDLTASUKIGAPConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::Near]) + 2
+    }
+}
 
 impl PatternDefinition for CDLTASUKIGAPConfig {
     type State = ();
@@ -325,13 +355,16 @@ impl PatternDefinition for CDLTASUKIGAPConfig {
     }
 }
 
-define_pattern_config!(
-    CDLTRISTARConfig,
-    CDLTRISTARBatchRunner,
-    CDLTRISTARStream,
-    2,
-    [CandleSettingType::BodyDoji]
-);
+define_pattern_config!(CDLTRISTARConfig, CDLTRISTARBatchRunner, CDLTRISTARStream);
+
+impl CDLTRISTARConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::BodyDoji])
+            + 2
+    }
+}
 
 impl PatternDefinition for CDLTRISTARConfig {
     type State = ();
@@ -386,10 +419,19 @@ impl PatternDefinition for CDLTRISTARConfig {
 define_pattern_config!(
     CDLUPSIDEGAP2CROWSConfig,
     CDLUPSIDEGAP2CROWSBatchRunner,
-    CDLUPSIDEGAP2CROWSStream,
-    2,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    CDLUPSIDEGAP2CROWSStream
 );
+
+impl CDLUPSIDEGAP2CROWSConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyShort],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDLUPSIDEGAP2CROWSConfig {
     type State = ();
@@ -444,10 +486,16 @@ impl PatternDefinition for CDLUPSIDEGAP2CROWSConfig {
 define_pattern_config!(
     CDLXSIDEGAP3METHODSConfig,
     CDLXSIDEGAP3METHODSBatchRunner,
-    CDLXSIDEGAP3METHODSStream,
-    2,
-    []
+    CDLXSIDEGAP3METHODSStream
 );
+
+impl CDLXSIDEGAP3METHODSConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[]) + 2
+    }
+}
 
 impl PatternDefinition for CDLXSIDEGAP3METHODSConfig {
     type State = ();

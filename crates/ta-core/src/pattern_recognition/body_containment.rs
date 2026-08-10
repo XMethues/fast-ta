@@ -10,10 +10,19 @@ use crate::{Float, Result};
 define_pattern_config!(
     CDLCOUNTERATTACKConfig,
     CDLCOUNTERATTACKBatchRunner,
-    CDLCOUNTERATTACKStream,
-    1,
-    [CandleSettingType::BodyLong, CandleSettingType::Equal]
+    CDLCOUNTERATTACKStream
 );
+
+impl CDLCOUNTERATTACKConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::Equal],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLCOUNTERATTACKConfig {
     type State = ();
@@ -143,13 +152,18 @@ impl_pattern_execution!(
     CDLDARKCLOUDCOVERStream
 );
 
-define_pattern_config!(
-    CDLDOJISTARConfig,
-    CDLDOJISTARBatchRunner,
-    CDLDOJISTARStream,
-    1,
-    [CandleSettingType::BodyDoji, CandleSettingType::BodyLong]
-);
+define_pattern_config!(CDLDOJISTARConfig, CDLDOJISTARBatchRunner, CDLDOJISTARStream);
+
+impl CDLDOJISTARConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyDoji, CandleSettingType::BodyLong],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLDOJISTARConfig {
     type State = ();
@@ -190,85 +204,154 @@ impl PatternDefinition for CDLDOJISTARConfig {
     }
 }
 
-macro_rules! impl_harami_definition {
-    ($config:ident, $short_setting:expr, $name:literal) => {
-        impl PatternDefinition for $config {
-            type State = ();
-            fn name(&self) -> &'static str {
-                $name
-            }
-            fn settings(&self) -> CandleSettings {
-                self.candle_settings
-            }
-            fn referenced_settings(&self) -> &'static [CandleSettingType] {
-                &[CandleSettingType::BodyLong, $short_setting]
-            }
-            fn lookback(&self) -> usize {
-                self.warm_up()
-            }
-            fn transition_start(&self) -> usize {
-                self.lookback()
-            }
-            fn initial_state(&self) -> Self::State {}
-            fn transition(
-                &self,
-                context: &RecognitionContext<'_>,
-                _state: &mut Self::State,
-            ) -> PatternSignal {
-                if context.real_body(1) <= context.average(CandleSettingType::BodyLong, 1)
-                    || context.real_body(0) > context.average($short_setting, 0)
-                {
-                    return PatternSignal::NoMatch;
-                }
-                let direction = context.color(1).opposite_direction();
-                if context.body_high(0) < context.body_high(1)
-                    && context.body_low(0) > context.body_low(1)
-                {
-                    PatternSignal::standard(direction)
-                } else if context.body_high(0) <= context.body_high(1)
-                    && context.body_low(0) >= context.body_low(1)
-                {
-                    PatternSignal::Match {
-                        direction,
-                        strength: PatternStrength::Partial,
-                    }
-                } else {
-                    PatternSignal::NoMatch
-                }
-            }
-        }
-    };
-}
+define_pattern_config!(CDLHARAMIConfig, CDLHARAMIBatchRunner, CDLHARAMIStream);
 
-define_pattern_config!(
-    CDLHARAMIConfig,
-    CDLHARAMIBatchRunner,
-    CDLHARAMIStream,
-    1,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
-);
-impl_harami_definition!(CDLHARAMIConfig, CandleSettingType::BodyShort, "CDLHARAMI");
+impl CDLHARAMIConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyShort],
+        ) + 1
+    }
+}
+impl PatternDefinition for CDLHARAMIConfig {
+    type State = ();
+
+    fn name(&self) -> &'static str {
+        "CDLHARAMI"
+    }
+
+    fn settings(&self) -> CandleSettings {
+        self.candle_settings
+    }
+
+    fn referenced_settings(&self) -> &'static [CandleSettingType] {
+        &[CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    }
+
+    fn lookback(&self) -> usize {
+        self.warm_up()
+    }
+
+    fn transition_start(&self) -> usize {
+        self.lookback()
+    }
+
+    fn initial_state(&self) -> Self::State {}
+
+    fn transition(
+        &self,
+        context: &RecognitionContext<'_>,
+        _state: &mut Self::State,
+    ) -> PatternSignal {
+        if context.real_body(1) <= context.average(CandleSettingType::BodyLong, 1)
+            || context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
+        {
+            return PatternSignal::NoMatch;
+        }
+        let direction = context.color(1).opposite_direction();
+        if context.body_high(0) < context.body_high(1) && context.body_low(0) > context.body_low(1)
+        {
+            PatternSignal::standard(direction)
+        } else if context.body_high(0) <= context.body_high(1)
+            && context.body_low(0) >= context.body_low(1)
+        {
+            PatternSignal::Match {
+                direction,
+                strength: PatternStrength::Partial,
+            }
+        } else {
+            PatternSignal::NoMatch
+        }
+    }
+}
 
 define_pattern_config!(
     CDLHARAMICROSSConfig,
     CDLHARAMICROSSBatchRunner,
-    CDLHARAMICROSSStream,
-    1,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyDoji]
+    CDLHARAMICROSSStream
 );
-impl_harami_definition!(
-    CDLHARAMICROSSConfig,
-    CandleSettingType::BodyDoji,
-    "CDLHARAMICROSS"
-);
+
+impl CDLHARAMICROSSConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyDoji],
+        ) + 1
+    }
+}
+impl PatternDefinition for CDLHARAMICROSSConfig {
+    type State = ();
+
+    fn name(&self) -> &'static str {
+        "CDLHARAMICROSS"
+    }
+
+    fn settings(&self) -> CandleSettings {
+        self.candle_settings
+    }
+
+    fn referenced_settings(&self) -> &'static [CandleSettingType] {
+        &[CandleSettingType::BodyLong, CandleSettingType::BodyDoji]
+    }
+
+    fn lookback(&self) -> usize {
+        self.warm_up()
+    }
+
+    fn transition_start(&self) -> usize {
+        self.lookback()
+    }
+
+    fn initial_state(&self) -> Self::State {}
+
+    fn transition(
+        &self,
+        context: &RecognitionContext<'_>,
+        _state: &mut Self::State,
+    ) -> PatternSignal {
+        if context.real_body(1) <= context.average(CandleSettingType::BodyLong, 1)
+            || context.real_body(0) > context.average(CandleSettingType::BodyDoji, 0)
+        {
+            return PatternSignal::NoMatch;
+        }
+        let direction = context.color(1).opposite_direction();
+        if context.body_high(0) < context.body_high(1) && context.body_low(0) > context.body_low(1)
+        {
+            PatternSignal::standard(direction)
+        } else if context.body_high(0) <= context.body_high(1)
+            && context.body_low(0) >= context.body_low(1)
+        {
+            PatternSignal::Match {
+                direction,
+                strength: PatternStrength::Partial,
+            }
+        } else {
+            PatternSignal::NoMatch
+        }
+    }
+}
 
 define_pattern_config!(
     CDLHOMINGPIGEONConfig,
     CDLHOMINGPIGEONBatchRunner,
-    CDLHOMINGPIGEONStream,
-    1,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    CDLHOMINGPIGEONStream
 );
+
+impl CDLHOMINGPIGEONConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyShort],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLHOMINGPIGEONConfig {
     type State = ();
@@ -326,16 +409,21 @@ fn is_kicking(context: &RecognitionContext<'_>) -> bool {
         && gap
 }
 
-define_pattern_config!(
-    CDLKICKINGConfig,
-    CDLKICKINGBatchRunner,
-    CDLKICKINGStream,
-    1,
-    [
-        CandleSettingType::BodyLong,
-        CandleSettingType::ShadowVeryShort
-    ]
-);
+define_pattern_config!(CDLKICKINGConfig, CDLKICKINGBatchRunner, CDLKICKINGStream);
+
+impl CDLKICKINGConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyLong,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLKICKINGConfig {
     type State = ();
@@ -381,13 +469,22 @@ impl PatternDefinition for CDLKICKINGConfig {
 define_pattern_config!(
     CDLKICKINGBYLENGTHConfig,
     CDLKICKINGBYLENGTHBatchRunner,
-    CDLKICKINGBYLENGTHStream,
-    1,
-    [
-        CandleSettingType::BodyLong,
-        CandleSettingType::ShadowVeryShort
-    ]
+    CDLKICKINGBYLENGTHStream
 );
+
+impl CDLKICKINGBYLENGTHConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyLong,
+                CandleSettingType::ShadowVeryShort,
+            ],
+        ) + 1
+    }
+}
 
 impl PatternDefinition for CDLKICKINGBYLENGTHConfig {
     type State = ();
@@ -437,10 +534,16 @@ impl PatternDefinition for CDLKICKINGBYLENGTHConfig {
 define_pattern_config!(
     CDLMATCHINGLOWConfig,
     CDLMATCHINGLOWBatchRunner,
-    CDLMATCHINGLOWStream,
-    1,
-    [CandleSettingType::Equal]
+    CDLMATCHINGLOWStream
 );
+
+impl CDLMATCHINGLOWConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::Equal]) + 1
+    }
+}
 
 impl PatternDefinition for CDLMATCHINGLOWConfig {
     type State = ();

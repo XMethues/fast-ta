@@ -21,10 +21,19 @@ macro_rules! definition {
 define_pattern_config!(
     CDL3BLACKCROWSConfig,
     CDL3BLACKCROWSBatchRunner,
-    CDL3BLACKCROWSStream,
-    3,
-    [CandleSettingType::ShadowVeryShort]
+    CDL3BLACKCROWSStream
 );
+
+impl CDL3BLACKCROWSConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::ShadowVeryShort],
+        ) + 3
+    }
+}
 definition!(
     CDL3BLACKCROWSConfig,
     "CDL3BLACKCROWS",
@@ -59,15 +68,24 @@ definition!(
 define_pattern_config!(
     CDL3STARSINSOUTHConfig,
     CDL3STARSINSOUTHBatchRunner,
-    CDL3STARSINSOUTHStream,
-    2,
-    [
-        CandleSettingType::BodyLong,
-        CandleSettingType::ShadowLong,
-        CandleSettingType::ShadowVeryShort,
-        CandleSettingType::BodyShort
-    ]
+    CDL3STARSINSOUTHStream
 );
+
+impl CDL3STARSINSOUTHConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyLong,
+                CandleSettingType::ShadowLong,
+                CandleSettingType::ShadowVeryShort,
+                CandleSettingType::BodyShort,
+            ],
+        ) + 2
+    }
+}
 definition!(
     CDL3STARSINSOUTHConfig,
     "CDL3STARSINSOUTH",
@@ -108,15 +126,24 @@ definition!(
 define_pattern_config!(
     CDL3WHITESOLDIERSConfig,
     CDL3WHITESOLDIERSBatchRunner,
-    CDL3WHITESOLDIERSStream,
-    2,
-    [
-        CandleSettingType::ShadowVeryShort,
-        CandleSettingType::BodyShort,
-        CandleSettingType::Far,
-        CandleSettingType::Near
-    ]
+    CDL3WHITESOLDIERSStream
 );
+
+impl CDL3WHITESOLDIERSConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::ShadowVeryShort,
+                CandleSettingType::BodyShort,
+                CandleSettingType::Far,
+                CandleSettingType::Near,
+            ],
+        ) + 2
+    }
+}
 definition!(
     CDL3WHITESOLDIERSConfig,
     "CDL3WHITESOLDIERS",
@@ -158,16 +185,25 @@ definition!(
 define_pattern_config!(
     CDLADVANCEBLOCKConfig,
     CDLADVANCEBLOCKBatchRunner,
-    CDLADVANCEBLOCKStream,
-    2,
-    [
-        CandleSettingType::ShadowLong,
-        CandleSettingType::ShadowShort,
-        CandleSettingType::Far,
-        CandleSettingType::Near,
-        CandleSettingType::BodyLong
-    ]
+    CDLADVANCEBLOCKStream
 );
+
+impl CDLADVANCEBLOCKConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::ShadowLong,
+                CandleSettingType::ShadowShort,
+                CandleSettingType::Far,
+                CandleSettingType::Near,
+                CandleSettingType::BodyLong,
+            ],
+        ) + 2
+    }
+}
 definition!(
     CDLADVANCEBLOCKConfig,
     "CDLADVANCEBLOCK",
@@ -218,10 +254,19 @@ definition!(
 define_pattern_config!(
     CDLCONCEALBABYSWALLConfig,
     CDLCONCEALBABYSWALLBatchRunner,
-    CDLCONCEALBABYSWALLStream,
-    3,
-    [CandleSettingType::ShadowVeryShort]
+    CDLCONCEALBABYSWALLStream
 );
+
+impl CDLCONCEALBABYSWALLConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::ShadowVeryShort],
+        ) + 3
+    }
+}
 definition!(
     CDLCONCEALBABYSWALLConfig,
     "CDLCONCEALBABYSWALL",
@@ -254,10 +299,19 @@ definition!(
 define_pattern_config!(
     CDLIDENTICAL3CROWSConfig,
     CDLIDENTICAL3CROWSBatchRunner,
-    CDLIDENTICAL3CROWSStream,
-    2,
-    [CandleSettingType::ShadowVeryShort, CandleSettingType::Equal]
+    CDLIDENTICAL3CROWSStream
 );
+
+impl CDLIDENTICAL3CROWSConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::ShadowVeryShort, CandleSettingType::Equal],
+        ) + 2
+    }
+}
 definition!(
     CDLIDENTICAL3CROWSConfig,
     "CDLIDENTICAL3CROWS",
@@ -291,15 +345,24 @@ definition!(
 define_pattern_config!(
     CDLSTALLEDPATTERNConfig,
     CDLSTALLEDPATTERNBatchRunner,
-    CDLSTALLEDPATTERNStream,
-    2,
-    [
-        CandleSettingType::BodyLong,
-        CandleSettingType::BodyShort,
-        CandleSettingType::ShadowVeryShort,
-        CandleSettingType::Near
-    ]
+    CDLSTALLEDPATTERNStream
 );
+
+impl CDLSTALLEDPATTERNConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyLong,
+                CandleSettingType::BodyShort,
+                CandleSettingType::ShadowVeryShort,
+                CandleSettingType::Near,
+            ],
+        ) + 2
+    }
+}
 definition!(
     CDLSTALLEDPATTERNConfig,
     "CDLSTALLEDPATTERN",

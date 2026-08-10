@@ -3,13 +3,16 @@
 use super::engine::{PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
 
-define_pattern_config!(
-    CDLDOJIConfig,
-    CDLDOJIBatchRunner,
-    CDLDOJIStream,
-    0,
-    [CandleSettingType::BodyDoji]
-);
+define_pattern_config!(CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream);
+
+impl CDLDOJIConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::BodyDoji])
+            + 0
+    }
+}
 
 impl PatternDefinition for CDLDOJIConfig {
     type State = ();

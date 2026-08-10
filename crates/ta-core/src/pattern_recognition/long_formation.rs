@@ -45,10 +45,17 @@ macro_rules! definition {
 define_pattern_config!(
     CDLBREAKAWAYConfig,
     CDLBREAKAWAYBatchRunner,
-    CDLBREAKAWAYStream,
-    4,
-    [CandleSettingType::BodyLong]
+    CDLBREAKAWAYStream
 );
+
+impl CDLBREAKAWAYConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::BodyLong])
+            + 4
+    }
+}
 
 definition!(
     CDLBREAKAWAYConfig,
@@ -100,10 +107,19 @@ definition!(
 define_pattern_config!(
     CDLLADDERBOTTOMConfig,
     CDLLADDERBOTTOMBatchRunner,
-    CDLLADDERBOTTOMStream,
-    4,
-    [CandleSettingType::ShadowVeryShort]
+    CDLLADDERBOTTOMStream
 );
+
+impl CDLLADDERBOTTOMConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::ShadowVeryShort],
+        ) + 4
+    }
+}
 
 definition!(
     CDLLADDERBOTTOMConfig,
@@ -250,10 +266,19 @@ impl PatternDefinition for CDLMATHOLDConfig {
 define_pattern_config!(
     CDLRISEFALL3METHODSConfig,
     CDLRISEFALL3METHODSBatchRunner,
-    CDLRISEFALL3METHODSStream,
-    4,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    CDLRISEFALL3METHODSStream
 );
+
+impl CDLRISEFALL3METHODSConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        super::engine::maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyShort],
+        ) + 4
+    }
+}
 
 impl PatternDefinition for CDLRISEFALL3METHODSConfig {
     type State = ();
