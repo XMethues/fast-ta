@@ -45,7 +45,7 @@ macro_rules! definition {
             fn lookback(&self) -> usize { self.warm_up() }
             fn transition_start(&self) -> usize { self.lookback() }
             fn initial_state(&self) -> Self::State {}
-            fn transition(&self, c: &RecognitionContext<'_>, _: &mut Self::State) -> PatternSignal { $body(c) }
+            fn transition(&self, context: &RecognitionContext<'_>, _: &mut Self::State) -> PatternSignal { $body(context) }
         }
     };
 }
@@ -61,25 +61,25 @@ definition!(
     CDL3BLACKCROWSConfig,
     "CDL3BLACKCROWS",
     [CandleSettingType::ShadowVeryShort],
-    |c: &RecognitionContext<'_>| {
-        let p = c.candle(3);
-        let a = c.candle(2);
-        let b = c.candle(1);
-        let d = c.candle(0);
-        if c.color(3) == CandleColor::White
-            && c.color(2) == CandleColor::Black
-            && c.color(1) == CandleColor::Black
-            && c.color(0) == CandleColor::Black
-            && b.open < a.open
-            && b.open > a.close
-            && d.open < b.open
-            && d.open > b.close
-            && p.high > a.close
-            && a.close > b.close
-            && b.close > d.close
-            && c.lower_shadow(2) < c.average(CandleSettingType::ShadowVeryShort, 2)
-            && c.lower_shadow(1) < c.average(CandleSettingType::ShadowVeryShort, 1)
-            && c.lower_shadow(0) < c.average(CandleSettingType::ShadowVeryShort, 0)
+    |context: &RecognitionContext<'_>| {
+        let prior = context.candle(3);
+        let first = context.candle(2);
+        let second = context.candle(1);
+        let current = context.candle(0);
+        if context.color(3) == CandleColor::White
+            && context.color(2) == CandleColor::Black
+            && context.color(1) == CandleColor::Black
+            && context.color(0) == CandleColor::Black
+            && second.open < first.open
+            && second.open > first.close
+            && current.open < second.open
+            && current.open > second.close
+            && prior.high > first.close
+            && first.close > second.close
+            && second.close > current.close
+            && context.lower_shadow(2) < context.average(CandleSettingType::ShadowVeryShort, 2)
+            && context.lower_shadow(1) < context.average(CandleSettingType::ShadowVeryShort, 1)
+            && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
         {
             signal(PatternDirection::Bearish)
         } else {
@@ -109,26 +109,26 @@ definition!(
         CandleSettingType::ShadowVeryShort,
         CandleSettingType::BodyShort
     ],
-    |c: &RecognitionContext<'_>| {
-        let a = c.candle(2);
-        let b = c.candle(1);
-        let d = c.candle(0);
-        if c.color(2) == CandleColor::Black
-            && c.color(1) == CandleColor::Black
-            && c.color(0) == CandleColor::Black
-            && c.real_body(2) > c.average(CandleSettingType::BodyLong, 2)
-            && c.lower_shadow(2) > c.average(CandleSettingType::ShadowLong, 2)
-            && c.real_body(1) < c.real_body(2)
-            && b.open > a.close
-            && b.open <= a.high
-            && b.low < a.close
-            && b.low >= a.low
-            && c.lower_shadow(1) > c.average(CandleSettingType::ShadowVeryShort, 1)
-            && c.real_body(0) < c.average(CandleSettingType::BodyShort, 0)
-            && c.lower_shadow(0) < c.average(CandleSettingType::ShadowVeryShort, 0)
-            && c.upper_shadow(0) < c.average(CandleSettingType::ShadowVeryShort, 0)
-            && d.low > b.low
-            && d.high < b.high
+    |context: &RecognitionContext<'_>| {
+        let first = context.candle(2);
+        let second = context.candle(1);
+        let current = context.candle(0);
+        if context.color(2) == CandleColor::Black
+            && context.color(1) == CandleColor::Black
+            && context.color(0) == CandleColor::Black
+            && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
+            && context.lower_shadow(2) > context.average(CandleSettingType::ShadowLong, 2)
+            && context.real_body(1) < context.real_body(2)
+            && second.open > first.close
+            && second.open <= first.high
+            && second.low < first.close
+            && second.low >= first.low
+            && context.lower_shadow(1) > context.average(CandleSettingType::ShadowVeryShort, 1)
+            && context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
+            && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
+            && context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
+            && current.low > second.low
+            && current.high < second.high
         {
             signal(PatternDirection::Bullish)
         } else {
@@ -158,25 +158,27 @@ definition!(
         CandleSettingType::Far,
         CandleSettingType::Near
     ],
-    |c: &RecognitionContext<'_>| {
-        let a = c.candle(2);
-        let b = c.candle(1);
-        let d = c.candle(0);
-        if c.color(2) == CandleColor::White
-            && c.color(1) == CandleColor::White
-            && c.color(0) == CandleColor::White
-            && c.upper_shadow(2) < c.average(CandleSettingType::ShadowVeryShort, 2)
-            && c.upper_shadow(1) < c.average(CandleSettingType::ShadowVeryShort, 1)
-            && c.upper_shadow(0) < c.average(CandleSettingType::ShadowVeryShort, 0)
-            && d.close > b.close
-            && b.close > a.close
-            && b.open > a.open
-            && b.open <= a.close + c.average(CandleSettingType::Near, 2)
-            && d.open > b.open
-            && d.open <= b.close + c.average(CandleSettingType::Near, 1)
-            && c.real_body(1) > c.real_body(2) - c.average(CandleSettingType::Far, 2)
-            && c.real_body(0) > c.real_body(1) - c.average(CandleSettingType::Far, 1)
-            && c.real_body(0) > c.average(CandleSettingType::BodyShort, 0)
+    |context: &RecognitionContext<'_>| {
+        let first = context.candle(2);
+        let second = context.candle(1);
+        let current = context.candle(0);
+        if context.color(2) == CandleColor::White
+            && context.color(1) == CandleColor::White
+            && context.color(0) == CandleColor::White
+            && context.upper_shadow(2) < context.average(CandleSettingType::ShadowVeryShort, 2)
+            && context.upper_shadow(1) < context.average(CandleSettingType::ShadowVeryShort, 1)
+            && context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
+            && current.close > second.close
+            && second.close > first.close
+            && second.open > first.open
+            && second.open <= first.close + context.average(CandleSettingType::Near, 2)
+            && current.open > second.open
+            && current.open <= second.close + context.average(CandleSettingType::Near, 1)
+            && context.real_body(1)
+                > context.real_body(2) - context.average(CandleSettingType::Far, 2)
+            && context.real_body(0)
+                > context.real_body(1) - context.average(CandleSettingType::Far, 1)
+            && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
         {
             signal(PatternDirection::Bullish)
         } else {
@@ -208,32 +210,34 @@ definition!(
         CandleSettingType::Near,
         CandleSettingType::BodyLong
     ],
-    |c: &RecognitionContext<'_>| {
-        let a = c.candle(2);
-        let b = c.candle(1);
-        let d = c.candle(0);
-        let ab = c.real_body(2);
-        let bb = c.real_body(1);
-        let db = c.real_body(0);
-        let weakening = (bb < ab - c.average(CandleSettingType::Far, 2)
-            && db < bb + c.average(CandleSettingType::Near, 1))
-            || db < bb - c.average(CandleSettingType::Far, 1)
-            || (db < bb
-                && bb < ab
-                && (c.upper_shadow(0) > c.average(CandleSettingType::ShadowShort, 0)
-                    || c.upper_shadow(1) > c.average(CandleSettingType::ShadowShort, 1)))
-            || (db < bb && c.upper_shadow(0) > c.average(CandleSettingType::ShadowLong, 0));
-        if c.color(2) == CandleColor::White
-            && c.color(1) == CandleColor::White
-            && c.color(0) == CandleColor::White
-            && d.close > b.close
-            && b.close > a.close
-            && b.open > a.open
-            && b.open <= a.close + c.average(CandleSettingType::Near, 2)
-            && d.open > b.open
-            && d.open <= b.close + c.average(CandleSettingType::Near, 1)
-            && ab > c.average(CandleSettingType::BodyLong, 2)
-            && c.upper_shadow(2) < c.average(CandleSettingType::ShadowShort, 2)
+    |context: &RecognitionContext<'_>| {
+        let first = context.candle(2);
+        let second = context.candle(1);
+        let current = context.candle(0);
+        let first_body = context.real_body(2);
+        let second_body = context.real_body(1);
+        let current_body = context.real_body(0);
+        let weakening = (second_body < first_body - context.average(CandleSettingType::Far, 2)
+            && current_body < second_body + context.average(CandleSettingType::Near, 1))
+            || current_body < second_body - context.average(CandleSettingType::Far, 1)
+            || (current_body < second_body
+                && second_body < first_body
+                && (context.upper_shadow(0) > context.average(CandleSettingType::ShadowShort, 0)
+                    || context.upper_shadow(1)
+                        > context.average(CandleSettingType::ShadowShort, 1)))
+            || (current_body < second_body
+                && context.upper_shadow(0) > context.average(CandleSettingType::ShadowLong, 0));
+        if context.color(2) == CandleColor::White
+            && context.color(1) == CandleColor::White
+            && context.color(0) == CandleColor::White
+            && current.close > second.close
+            && second.close > first.close
+            && second.open > first.open
+            && second.open <= first.close + context.average(CandleSettingType::Near, 2)
+            && current.open > second.open
+            && current.open <= second.close + context.average(CandleSettingType::Near, 1)
+            && first_body > context.average(CandleSettingType::BodyLong, 2)
+            && context.upper_shadow(2) < context.average(CandleSettingType::ShadowShort, 2)
             && weakening
         {
             signal(PatternDirection::Bearish)
@@ -254,23 +258,23 @@ definition!(
     CDLCONCEALBABYSWALLConfig,
     "CDLCONCEALBABYSWALL",
     [CandleSettingType::ShadowVeryShort],
-    |c: &RecognitionContext<'_>| {
-        let b = c.candle(2);
-        let d = c.candle(1);
-        let e = c.candle(0);
-        if c.color(3) == CandleColor::Black
-            && c.color(2) == CandleColor::Black
-            && c.color(1) == CandleColor::Black
-            && c.color(0) == CandleColor::Black
-            && c.lower_shadow(3) < c.average(CandleSettingType::ShadowVeryShort, 3)
-            && c.upper_shadow(3) < c.average(CandleSettingType::ShadowVeryShort, 3)
-            && c.lower_shadow(2) < c.average(CandleSettingType::ShadowVeryShort, 2)
-            && c.upper_shadow(2) < c.average(CandleSettingType::ShadowVeryShort, 2)
-            && c.real_body_gap_down(1, 2)
-            && c.upper_shadow(1) > c.average(CandleSettingType::ShadowVeryShort, 1)
-            && d.high > b.close
-            && e.high > d.high
-            && e.low < d.low
+    |context: &RecognitionContext<'_>| {
+        let second = context.candle(2);
+        let third = context.candle(1);
+        let current = context.candle(0);
+        if context.color(3) == CandleColor::Black
+            && context.color(2) == CandleColor::Black
+            && context.color(1) == CandleColor::Black
+            && context.color(0) == CandleColor::Black
+            && context.lower_shadow(3) < context.average(CandleSettingType::ShadowVeryShort, 3)
+            && context.upper_shadow(3) < context.average(CandleSettingType::ShadowVeryShort, 3)
+            && context.lower_shadow(2) < context.average(CandleSettingType::ShadowVeryShort, 2)
+            && context.upper_shadow(2) < context.average(CandleSettingType::ShadowVeryShort, 2)
+            && context.real_body_gap_down(1, 2)
+            && context.upper_shadow(1) > context.average(CandleSettingType::ShadowVeryShort, 1)
+            && third.high > second.close
+            && current.high > third.high
+            && current.low < third.low
         {
             signal(PatternDirection::Bullish)
         } else {
@@ -290,24 +294,24 @@ definition!(
     CDLIDENTICAL3CROWSConfig,
     "CDLIDENTICAL3CROWS",
     [CandleSettingType::ShadowVeryShort, CandleSettingType::Equal],
-    |c: &RecognitionContext<'_>| {
-        let a = c.candle(2);
-        let b = c.candle(1);
-        let d = c.candle(0);
-        let e2 = c.average(CandleSettingType::Equal, 2);
-        let e1 = c.average(CandleSettingType::Equal, 1);
-        if c.color(2) == CandleColor::Black
-            && c.color(1) == CandleColor::Black
-            && c.color(0) == CandleColor::Black
-            && c.lower_shadow(2) < c.average(CandleSettingType::ShadowVeryShort, 2)
-            && c.lower_shadow(1) < c.average(CandleSettingType::ShadowVeryShort, 1)
-            && c.lower_shadow(0) < c.average(CandleSettingType::ShadowVeryShort, 0)
-            && a.close > b.close
-            && b.close > d.close
-            && b.open <= a.close + e2
-            && b.open >= a.close - e2
-            && d.open <= b.close + e1
-            && d.open >= b.close - e1
+    |context: &RecognitionContext<'_>| {
+        let first = context.candle(2);
+        let second = context.candle(1);
+        let current = context.candle(0);
+        let first_equal = context.average(CandleSettingType::Equal, 2);
+        let second_equal = context.average(CandleSettingType::Equal, 1);
+        if context.color(2) == CandleColor::Black
+            && context.color(1) == CandleColor::Black
+            && context.color(0) == CandleColor::Black
+            && context.lower_shadow(2) < context.average(CandleSettingType::ShadowVeryShort, 2)
+            && context.lower_shadow(1) < context.average(CandleSettingType::ShadowVeryShort, 1)
+            && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
+            && first.close > second.close
+            && second.close > current.close
+            && second.open <= first.close + first_equal
+            && second.open >= first.close - first_equal
+            && current.open <= second.close + second_equal
+            && current.open >= second.close - second_equal
         {
             signal(PatternDirection::Bearish)
         } else {
@@ -337,22 +341,23 @@ definition!(
         CandleSettingType::ShadowVeryShort,
         CandleSettingType::Near
     ],
-    |c: &RecognitionContext<'_>| {
-        let a = c.candle(2);
-        let b = c.candle(1);
-        let d = c.candle(0);
-        if c.color(2) == CandleColor::White
-            && c.color(1) == CandleColor::White
-            && c.color(0) == CandleColor::White
-            && d.close > b.close
-            && b.close > a.close
-            && c.real_body(2) > c.average(CandleSettingType::BodyLong, 2)
-            && c.real_body(1) > c.average(CandleSettingType::BodyLong, 1)
-            && c.upper_shadow(1) < c.average(CandleSettingType::ShadowVeryShort, 1)
-            && b.open > a.open
-            && b.open <= a.close + c.average(CandleSettingType::Near, 2)
-            && c.real_body(0) < c.average(CandleSettingType::BodyShort, 0)
-            && d.open >= b.close - c.real_body(0) - c.average(CandleSettingType::Near, 1)
+    |context: &RecognitionContext<'_>| {
+        let first = context.candle(2);
+        let second = context.candle(1);
+        let current = context.candle(0);
+        if context.color(2) == CandleColor::White
+            && context.color(1) == CandleColor::White
+            && context.color(0) == CandleColor::White
+            && current.close > second.close
+            && second.close > first.close
+            && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
+            && context.real_body(1) > context.average(CandleSettingType::BodyLong, 1)
+            && context.upper_shadow(1) < context.average(CandleSettingType::ShadowVeryShort, 1)
+            && second.open > first.open
+            && second.open <= first.close + context.average(CandleSettingType::Near, 2)
+            && context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
+            && current.open
+                >= second.close - context.real_body(0) - context.average(CandleSettingType::Near, 1)
         {
             signal(PatternDirection::Bearish)
         } else {
