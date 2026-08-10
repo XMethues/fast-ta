@@ -10,7 +10,6 @@ impl CDLDOJIConfig {
     #[inline]
     pub fn warm_up(&self) -> usize {
         super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::BodyDoji])
-            + 0
     }
 }
 

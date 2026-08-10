@@ -32,7 +32,7 @@ impl CDLBELTHOLDConfig {
                 CandleSettingType::BodyLong,
                 CandleSettingType::ShadowVeryShort,
             ],
-        ) + 0
+        )
     }
 }
 
@@ -94,7 +94,7 @@ impl CDLCLOSINGMARUBOZUConfig {
                 CandleSettingType::BodyLong,
                 CandleSettingType::ShadowVeryShort,
             ],
-        ) + 0
+        )
     }
 }
 
@@ -156,7 +156,7 @@ impl CDLDRAGONFLYDOJIConfig {
                 CandleSettingType::BodyDoji,
                 CandleSettingType::ShadowVeryShort,
             ],
-        ) + 0
+        )
     }
 }
 
@@ -216,7 +216,7 @@ impl CDLGRAVESTONEDOJIConfig {
                 CandleSettingType::BodyDoji,
                 CandleSettingType::ShadowVeryShort,
             ],
-        ) + 0
+        )
     }
 }
 
@@ -272,7 +272,7 @@ impl CDLHIGHWAVEConfig {
                 CandleSettingType::BodyShort,
                 CandleSettingType::ShadowVeryLong,
             ],
-        ) + 0
+        )
     }
 }
 
@@ -329,7 +329,7 @@ impl CDLLONGLEGGEDDOJIConfig {
         super::engine::maximum_average_period(
             self.candle_settings,
             &[CandleSettingType::BodyDoji, CandleSettingType::ShadowLong],
-        ) + 0
+        )
     }
 }
 
@@ -378,7 +378,7 @@ impl CDLLONGLINEConfig {
         super::engine::maximum_average_period(
             self.candle_settings,
             &[CandleSettingType::BodyLong, CandleSettingType::ShadowShort],
-        ) + 0
+        )
     }
 }
 
@@ -431,7 +431,7 @@ impl CDLMARUBOZUConfig {
                 CandleSettingType::BodyLong,
                 CandleSettingType::ShadowVeryShort,
             ],
-        ) + 0
+        )
     }
 }
 
@@ -492,7 +492,7 @@ impl CDLRICKSHAWMANConfig {
                 CandleSettingType::ShadowLong,
                 CandleSettingType::Near,
             ],
-        ) + 0
+        )
     }
 }
 
@@ -553,7 +553,7 @@ impl CDLSHORTLINEConfig {
         super::engine::maximum_average_period(
             self.candle_settings,
             &[CandleSettingType::BodyShort, CandleSettingType::ShadowShort],
-        ) + 0
+        )
     }
 }
 
@@ -605,7 +605,6 @@ impl CDLSPINNINGTOPConfig {
     #[inline]
     pub fn warm_up(&self) -> usize {
         super::engine::maximum_average_period(self.candle_settings, &[CandleSettingType::BodyShort])
-            + 0
     }
 }
 
@@ -659,7 +658,7 @@ impl CDLTAKURIConfig {
                 CandleSettingType::ShadowVeryShort,
                 CandleSettingType::ShadowVeryLong,
             ],
-        ) + 0
+        )
     }
 }
 
