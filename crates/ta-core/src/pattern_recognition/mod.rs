@@ -108,6 +108,7 @@ macro_rules! impl_pattern_execution {
 mod body_containment;
 mod doji;
 mod engulfing;
+mod position_shadow;
 mod single_candle;
 
 pub use body_containment::{
@@ -122,6 +123,16 @@ pub use body_containment::{
 };
 pub use doji::{CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream};
 pub use engulfing::{CDLENGULFINGBatchRunner, CDLENGULFINGConfig, CDLENGULFINGStream};
+pub use position_shadow::{
+    CDLHAMMERBatchRunner, CDLHAMMERConfig, CDLHAMMERStream, CDLHANGINGMANBatchRunner,
+    CDLHANGINGMANConfig, CDLHANGINGMANStream, CDLINNECKBatchRunner, CDLINNECKConfig,
+    CDLINNECKStream, CDLINVERTEDHAMMERBatchRunner, CDLINVERTEDHAMMERConfig,
+    CDLINVERTEDHAMMERStream, CDLONNECKBatchRunner, CDLONNECKConfig, CDLONNECKStream,
+    CDLPIERCINGBatchRunner, CDLPIERCINGConfig, CDLPIERCINGStream, CDLSEPARATINGLINESBatchRunner,
+    CDLSEPARATINGLINESConfig, CDLSEPARATINGLINESStream, CDLSHOOTINGSTARBatchRunner,
+    CDLSHOOTINGSTARConfig, CDLSHOOTINGSTARStream, CDLTHRUSTINGBatchRunner, CDLTHRUSTINGConfig,
+    CDLTHRUSTINGStream,
+};
 pub use single_candle::{
     CDLBELTHOLDBatchRunner, CDLBELTHOLDConfig, CDLBELTHOLDStream,
     CDLCLOSINGMARUBOZUBatchRunner, CDLCLOSINGMARUBOZUConfig, CDLCLOSINGMARUBOZUStream,

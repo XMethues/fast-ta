@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 123;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 132;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -242,8 +242,8 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLEVENINGSTAR", PatternRecognition, Planned),
     function!("CDLGAPSIDESIDEWHITE", PatternRecognition, Planned),
     function!("CDLGRAVESTONEDOJI", PatternRecognition, Implemented),
-    function!("CDLHAMMER", PatternRecognition, Planned),
-    function!("CDLHANGINGMAN", PatternRecognition, Planned),
+    function!("CDLHAMMER", PatternRecognition, Implemented),
+    function!("CDLHANGINGMAN", PatternRecognition, Implemented),
     function!("CDLHARAMI", PatternRecognition, Implemented),
     function!("CDLHARAMICROSS", PatternRecognition, Implemented),
     function!("CDLHIGHWAVE", PatternRecognition, Implemented),
@@ -251,8 +251,8 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLHIKKAKEMOD", PatternRecognition, Planned),
     function!("CDLHOMINGPIGEON", PatternRecognition, Implemented),
     function!("CDLIDENTICAL3CROWS", PatternRecognition, Planned),
-    function!("CDLINNECK", PatternRecognition, Planned),
-    function!("CDLINVERTEDHAMMER", PatternRecognition, Planned),
+    function!("CDLINNECK", PatternRecognition, Implemented),
+    function!("CDLINVERTEDHAMMER", PatternRecognition, Implemented),
     function!("CDLKICKING", PatternRecognition, Implemented),
     function!("CDLKICKINGBYLENGTH", PatternRecognition, Implemented),
     function!("CDLLADDERBOTTOM", PatternRecognition, Planned),
@@ -263,19 +263,19 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLMATHOLD", PatternRecognition, Planned),
     function!("CDLMORNINGDOJISTAR", PatternRecognition, Planned),
     function!("CDLMORNINGSTAR", PatternRecognition, Planned),
-    function!("CDLONNECK", PatternRecognition, Planned),
-    function!("CDLPIERCING", PatternRecognition, Planned),
+    function!("CDLONNECK", PatternRecognition, Implemented),
+    function!("CDLPIERCING", PatternRecognition, Implemented),
     function!("CDLRICKSHAWMAN", PatternRecognition, Implemented),
     function!("CDLRISEFALL3METHODS", PatternRecognition, Planned),
-    function!("CDLSEPARATINGLINES", PatternRecognition, Planned),
-    function!("CDLSHOOTINGSTAR", PatternRecognition, Planned),
+    function!("CDLSEPARATINGLINES", PatternRecognition, Implemented),
+    function!("CDLSHOOTINGSTAR", PatternRecognition, Implemented),
     function!("CDLSHORTLINE", PatternRecognition, Implemented),
     function!("CDLSPINNINGTOP", PatternRecognition, Implemented),
     function!("CDLSTALLEDPATTERN", PatternRecognition, Planned),
     function!("CDLSTICKSANDWICH", PatternRecognition, Planned),
     function!("CDLTAKURI", PatternRecognition, Implemented),
     function!("CDLTASUKIGAP", PatternRecognition, Planned),
-    function!("CDLTHRUSTING", PatternRecognition, Planned),
+    function!("CDLTHRUSTING", PatternRecognition, Implemented),
     function!("CDLTRISTAR", PatternRecognition, Planned),
     function!("CDLUNIQUE3RIVER", PatternRecognition, Planned),
     function!("CDLUPSIDEGAP2CROWS", PatternRecognition, Planned),

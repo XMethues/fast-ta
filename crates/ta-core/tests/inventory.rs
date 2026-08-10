@@ -77,18 +77,25 @@ use ta_core::pattern_recognition::{
     CDLDOJISTARStream, CDLDOJIStream, CDLDRAGONFLYDOJIBatchRunner, CDLDRAGONFLYDOJIConfig,
     CDLDRAGONFLYDOJIStream, CDLENGULFINGBatchRunner, CDLENGULFINGConfig, CDLENGULFINGStream,
     CDLGRAVESTONEDOJIBatchRunner, CDLGRAVESTONEDOJIConfig, CDLGRAVESTONEDOJIStream,
-    CDLHARAMIBatchRunner, CDLHARAMIConfig, CDLHARAMICROSSBatchRunner, CDLHARAMICROSSConfig,
-    CDLHARAMICROSSStream, CDLHARAMIStream, CDLHIGHWAVEBatchRunner, CDLHIGHWAVEConfig,
-    CDLHIGHWAVEStream, CDLHOMINGPIGEONBatchRunner, CDLHOMINGPIGEONConfig,
-    CDLHOMINGPIGEONStream, CDLKICKINGBatchRunner, CDLKICKINGBYLENGTHBatchRunner,
+    CDLHAMMERBatchRunner, CDLHAMMERConfig, CDLHAMMERStream, CDLHANGINGMANBatchRunner,
+    CDLHANGINGMANConfig, CDLHANGINGMANStream, CDLHARAMIBatchRunner, CDLHARAMIConfig,
+    CDLHARAMICROSSBatchRunner, CDLHARAMICROSSConfig, CDLHARAMICROSSStream, CDLHARAMIStream,
+    CDLHIGHWAVEBatchRunner, CDLHIGHWAVEConfig, CDLHIGHWAVEStream, CDLHOMINGPIGEONBatchRunner,
+    CDLHOMINGPIGEONConfig, CDLHOMINGPIGEONStream, CDLINNECKBatchRunner, CDLINNECKConfig,
+    CDLINNECKStream, CDLINVERTEDHAMMERBatchRunner, CDLINVERTEDHAMMERConfig,
+    CDLINVERTEDHAMMERStream, CDLKICKINGBatchRunner, CDLKICKINGBYLENGTHBatchRunner,
     CDLKICKINGBYLENGTHConfig, CDLKICKINGBYLENGTHStream, CDLKICKINGConfig, CDLKICKINGStream,
     CDLLONGLEGGEDDOJIBatchRunner, CDLLONGLEGGEDDOJIConfig, CDLLONGLEGGEDDOJIStream,
     CDLLONGLINEBatchRunner, CDLLONGLINEConfig, CDLLONGLINEStream, CDLMARUBOZUBatchRunner,
     CDLMARUBOZUConfig, CDLMARUBOZUStream, CDLMATCHINGLOWBatchRunner, CDLMATCHINGLOWConfig,
-    CDLMATCHINGLOWStream, CDLRICKSHAWMANBatchRunner, CDLRICKSHAWMANConfig,
-    CDLRICKSHAWMANStream, CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig, CDLSHORTLINEStream,
-    CDLSPINNINGTOPBatchRunner, CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream,
-    CDLTAKURIBatchRunner, CDLTAKURIConfig, CDLTAKURIStream,
+    CDLMATCHINGLOWStream, CDLONNECKBatchRunner, CDLONNECKConfig, CDLONNECKStream,
+    CDLPIERCINGBatchRunner, CDLPIERCINGConfig, CDLPIERCINGStream, CDLRICKSHAWMANBatchRunner,
+    CDLRICKSHAWMANConfig, CDLRICKSHAWMANStream, CDLSEPARATINGLINESBatchRunner,
+    CDLSEPARATINGLINESConfig, CDLSEPARATINGLINESStream, CDLSHOOTINGSTARBatchRunner,
+    CDLSHOOTINGSTARConfig, CDLSHOOTINGSTARStream, CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig,
+    CDLSHORTLINEStream, CDLSPINNINGTOPBatchRunner, CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream,
+    CDLTAKURIBatchRunner, CDLTAKURIConfig, CDLTAKURIStream, CDLTHRUSTINGBatchRunner,
+    CDLTHRUSTINGConfig, CDLTHRUSTINGStream,
 };
 use ta_core::statistic::{
     BETABatchRunner, BETAConfig, BETAStream, CORRELBatchRunner, CORRELConfig, CORRELStream,
@@ -111,7 +118,7 @@ use ta_core::{IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
 fn assert_execution_types<C, R, S>()
 where
-    C: IndicatorConfig<BatchRunner = R, Stream = S>,
+    C: 'static + IndicatorConfig<BatchRunner = R, Stream = S>,
     R: PreparedBatchRunner<C>,
     S: StreamingComputation<C>,
 {
@@ -296,6 +303,15 @@ fn first_tranche_functions_are_marked_implemented() {
         "CDLKICKING",
         "CDLKICKINGBYLENGTH",
         "CDLMATCHINGLOW",
+        "CDLHAMMER",
+        "CDLHANGINGMAN",
+        "CDLINNECK",
+        "CDLINVERTEDHAMMER",
+        "CDLONNECK",
+        "CDLPIERCING",
+        "CDLSEPARATINGLINES",
+        "CDLSHOOTINGSTAR",
+        "CDLTHRUSTING",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -494,6 +510,31 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLMATCHINGLOWBatchRunner,
         CDLMATCHINGLOWStream,
     >();
+    assert_execution_types::<CDLHAMMERConfig, CDLHAMMERBatchRunner, CDLHAMMERStream>();
+    assert_execution_types::<
+        CDLHANGINGMANConfig,
+        CDLHANGINGMANBatchRunner,
+        CDLHANGINGMANStream,
+    >();
+    assert_execution_types::<CDLINNECKConfig, CDLINNECKBatchRunner, CDLINNECKStream>();
+    assert_execution_types::<
+        CDLINVERTEDHAMMERConfig,
+        CDLINVERTEDHAMMERBatchRunner,
+        CDLINVERTEDHAMMERStream,
+    >();
+    assert_execution_types::<CDLONNECKConfig, CDLONNECKBatchRunner, CDLONNECKStream>();
+    assert_execution_types::<CDLPIERCINGConfig, CDLPIERCINGBatchRunner, CDLPIERCINGStream>();
+    assert_execution_types::<
+        CDLSEPARATINGLINESConfig,
+        CDLSEPARATINGLINESBatchRunner,
+        CDLSEPARATINGLINESStream,
+    >();
+    assert_execution_types::<
+        CDLSHOOTINGSTARConfig,
+        CDLSHOOTINGSTARBatchRunner,
+        CDLSHOOTINGSTARStream,
+    >();
+    assert_execution_types::<CDLTHRUSTINGConfig, CDLTHRUSTINGBatchRunner, CDLTHRUSTINGStream>();
 
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
@@ -679,6 +720,15 @@ fn inventory_count_matches_execution_seam_coverage() {
         "CDLKICKING",
         "CDLKICKINGBYLENGTH",
         "CDLMATCHINGLOW",
+        "CDLHAMMER",
+        "CDLHANGINGMAN",
+        "CDLINNECK",
+        "CDLINVERTEDHAMMER",
+        "CDLONNECK",
+        "CDLPIERCING",
+        "CDLSEPARATINGLINES",
+        "CDLSHOOTINGSTAR",
+        "CDLTHRUSTING",
     ];
 
     assert_eq!(
@@ -698,7 +748,7 @@ fn inventory_count_matches_execution_seam_coverage() {
 
 #[test]
 fn remaining_pattern_recognition_functions_remain_planned() {
-    let info = function("CDLHAMMER").expect("missing CDLHAMMER");
+    let info = function("CDLIDENTICAL3CROWS").expect("missing CDLIDENTICAL3CROWS");
     assert_eq!(info.status, ImplementationStatus::Planned);
 }
 

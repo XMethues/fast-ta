@@ -11,10 +11,12 @@ use ta_core::pattern_recognition::{
     PatternDirection, PatternSignal, PatternStrength, Penetration, CDLBELTHOLDConfig,
     CDLCLOSINGMARUBOZUConfig, CDLCOUNTERATTACKConfig, CDLDARKCLOUDCOVERConfig, CDLDOJIConfig,
     CDLDOJISTARConfig, CDLDRAGONFLYDOJIConfig, CDLENGULFINGConfig, CDLGRAVESTONEDOJIConfig,
-    CDLHARAMIConfig, CDLHARAMICROSSConfig, CDLHIGHWAVEConfig, CDLHOMINGPIGEONConfig,
+    CDLHAMMERConfig, CDLHANGINGMANConfig, CDLHARAMIConfig, CDLHARAMICROSSConfig,
+    CDLHIGHWAVEConfig, CDLHOMINGPIGEONConfig, CDLINNECKConfig, CDLINVERTEDHAMMERConfig,
     CDLKICKINGBYLENGTHConfig, CDLKICKINGConfig, CDLLONGLEGGEDDOJIConfig, CDLLONGLINEConfig,
-    CDLMARUBOZUConfig, CDLMATCHINGLOWConfig, CDLRICKSHAWMANConfig, CDLSHORTLINEConfig,
-    CDLSPINNINGTOPConfig, CDLTAKURIConfig,
+    CDLMARUBOZUConfig, CDLMATCHINGLOWConfig, CDLONNECKConfig, CDLPIERCINGConfig,
+    CDLRICKSHAWMANConfig, CDLSEPARATINGLINESConfig, CDLSHOOTINGSTARConfig, CDLSHORTLINEConfig,
+    CDLSPINNINGTOPConfig, CDLTAKURIConfig, CDLTHRUSTINGConfig,
 };
 use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
@@ -737,12 +739,20 @@ fn custom_two_candle_settings() -> CandleSettings {
             CandleSetting::new(CandleRangeKind::RealBody, 3, 1.0 as Float).unwrap(),
         )
         .with_setting(
+            CandleSettingType::ShadowLong,
+            CandleSetting::new(CandleRangeKind::RealBody, 3, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
             CandleSettingType::BodyDoji,
             CandleSetting::new(CandleRangeKind::HighLow, 3, 0.1 as Float).unwrap(),
         )
         .with_setting(
             CandleSettingType::ShadowVeryShort,
             CandleSetting::new(CandleRangeKind::HighLow, 3, 0.1 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Near,
+            CandleSetting::new(CandleRangeKind::HighLow, 3, 0.2 as Float).unwrap(),
         )
         .with_setting(
             CandleSettingType::Equal,
@@ -840,6 +850,63 @@ fn pinned_two_candle_oracles_qualify_every_definition_through_the_public_seam() 
         MATCHINGLOW_DEFAULT_LOOKBACK, MATCHINGLOW_DEFAULT_F64_CODES, MATCHINGLOW_DEFAULT_F32_CODES,
         MATCHINGLOW_CUSTOM_LOOKBACK, MATCHINGLOW_CUSTOM_F64_CODES, MATCHINGLOW_CUSTOM_F32_CODES
     );
+    qualify_two_candle!(
+        CDLHAMMERConfig::default(), CDLHAMMERConfig::new(settings).unwrap(),
+        HAMMER_OPEN, HAMMER_HIGH, HAMMER_LOW, HAMMER_CLOSE,
+        HAMMER_DEFAULT_LOOKBACK, HAMMER_DEFAULT_F64_CODES, HAMMER_DEFAULT_F32_CODES,
+        HAMMER_CUSTOM_LOOKBACK, HAMMER_CUSTOM_F64_CODES, HAMMER_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLHANGINGMANConfig::default(), CDLHANGINGMANConfig::new(settings).unwrap(),
+        HANGINGMAN_OPEN, HANGINGMAN_HIGH, HANGINGMAN_LOW, HANGINGMAN_CLOSE,
+        HANGINGMAN_DEFAULT_LOOKBACK, HANGINGMAN_DEFAULT_F64_CODES, HANGINGMAN_DEFAULT_F32_CODES,
+        HANGINGMAN_CUSTOM_LOOKBACK, HANGINGMAN_CUSTOM_F64_CODES, HANGINGMAN_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLINNECKConfig::default(), CDLINNECKConfig::new(settings).unwrap(),
+        INNECK_OPEN, INNECK_HIGH, INNECK_LOW, INNECK_CLOSE,
+        INNECK_DEFAULT_LOOKBACK, INNECK_DEFAULT_F64_CODES, INNECK_DEFAULT_F32_CODES,
+        INNECK_CUSTOM_LOOKBACK, INNECK_CUSTOM_F64_CODES, INNECK_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLINVERTEDHAMMERConfig::default(), CDLINVERTEDHAMMERConfig::new(settings).unwrap(),
+        INVERTEDHAMMER_OPEN, INVERTEDHAMMER_HIGH, INVERTEDHAMMER_LOW, INVERTEDHAMMER_CLOSE,
+        INVERTEDHAMMER_DEFAULT_LOOKBACK, INVERTEDHAMMER_DEFAULT_F64_CODES,
+        INVERTEDHAMMER_DEFAULT_F32_CODES, INVERTEDHAMMER_CUSTOM_LOOKBACK,
+        INVERTEDHAMMER_CUSTOM_F64_CODES, INVERTEDHAMMER_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLONNECKConfig::default(), CDLONNECKConfig::new(settings).unwrap(),
+        ONNECK_OPEN, ONNECK_HIGH, ONNECK_LOW, ONNECK_CLOSE,
+        ONNECK_DEFAULT_LOOKBACK, ONNECK_DEFAULT_F64_CODES, ONNECK_DEFAULT_F32_CODES,
+        ONNECK_CUSTOM_LOOKBACK, ONNECK_CUSTOM_F64_CODES, ONNECK_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLPIERCINGConfig::default(), CDLPIERCINGConfig::new(settings).unwrap(),
+        PIERCING_OPEN, PIERCING_HIGH, PIERCING_LOW, PIERCING_CLOSE,
+        PIERCING_DEFAULT_LOOKBACK, PIERCING_DEFAULT_F64_CODES, PIERCING_DEFAULT_F32_CODES,
+        PIERCING_CUSTOM_LOOKBACK, PIERCING_CUSTOM_F64_CODES, PIERCING_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLSEPARATINGLINESConfig::default(), CDLSEPARATINGLINESConfig::new(settings).unwrap(),
+        SEPARATINGLINES_OPEN, SEPARATINGLINES_HIGH, SEPARATINGLINES_LOW, SEPARATINGLINES_CLOSE,
+        SEPARATINGLINES_DEFAULT_LOOKBACK, SEPARATINGLINES_DEFAULT_F64_CODES,
+        SEPARATINGLINES_DEFAULT_F32_CODES, SEPARATINGLINES_CUSTOM_LOOKBACK,
+        SEPARATINGLINES_CUSTOM_F64_CODES, SEPARATINGLINES_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLSHOOTINGSTARConfig::default(), CDLSHOOTINGSTARConfig::new(settings).unwrap(),
+        SHOOTINGSTAR_OPEN, SHOOTINGSTAR_HIGH, SHOOTINGSTAR_LOW, SHOOTINGSTAR_CLOSE,
+        SHOOTINGSTAR_DEFAULT_LOOKBACK, SHOOTINGSTAR_DEFAULT_F64_CODES,
+        SHOOTINGSTAR_DEFAULT_F32_CODES, SHOOTINGSTAR_CUSTOM_LOOKBACK,
+        SHOOTINGSTAR_CUSTOM_F64_CODES, SHOOTINGSTAR_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLTHRUSTINGConfig::default(), CDLTHRUSTINGConfig::new(settings).unwrap(),
+        THRUSTING_OPEN, THRUSTING_HIGH, THRUSTING_LOW, THRUSTING_CLOSE,
+        THRUSTING_DEFAULT_LOOKBACK, THRUSTING_DEFAULT_F64_CODES, THRUSTING_DEFAULT_F32_CODES,
+        THRUSTING_CUSTOM_LOOKBACK, THRUSTING_CUSTOM_F64_CODES, THRUSTING_CUSTOM_F32_CODES
+    );
 }
 
 fn boundary_settings() -> CandleSettings {
@@ -931,9 +998,128 @@ fn independently_reasoned_two_candle_boundaries_lock_exact_pinned_predicates() {
     assert_eq!(boundary_code(CDLKICKINGConfig::new(settings).unwrap(), &touching), 0);
 }
 
+fn position_shadow_boundary_settings() -> CandleSettings {
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::BodyLong,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 0.5 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 2.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowLong,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowVeryShort,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Near,
+            CandleSetting::new(CandleRangeKind::HighLow, 0, 0.5 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Equal,
+            CandleSetting::new(CandleRangeKind::HighLow, 0, 0.1 as Float).unwrap(),
+        )
+}
+
+#[test]
+fn position_shadow_boundaries_lock_strict_and_inclusive_pinned_predicates() {
+    let settings = position_shadow_boundary_settings();
+    let positioned_previous = candle(20.0, 30.0, 10.0, 10.0);
+
+    let hammer = CDLHAMMERConfig::new(settings).unwrap();
+    assert_eq!(
+        boundary_code(hammer, &[positioned_previous, candle(20.0, 23.0, 15.0, 22.0)]),
+        100
+    );
+    assert_eq!(
+        boundary_code(hammer, &[positioned_previous, candle(21.0, 24.0, 16.0, 23.0)]),
+        0
+    );
+
+    let hanging_man = CDLHANGINGMANConfig::new(settings).unwrap();
+    assert_eq!(
+        boundary_code(hanging_man, &[positioned_previous, candle(20.0, 23.0, 15.0, 22.0)]),
+        -100
+    );
+    assert_eq!(
+        boundary_code(hanging_man, &[positioned_previous, candle(19.0, 22.0, 14.0, 21.0)]),
+        0
+    );
+
+    let inverted_previous = candle(20.0, 30.0, 10.0, 30.0);
+    let inverted = CDLINVERTEDHAMMERConfig::new(settings).unwrap();
+    assert_eq!(
+        boundary_code(inverted, &[inverted_previous, candle(10.0, 16.0, 9.0, 12.0)]),
+        100
+    );
+    assert_eq!(
+        boundary_code(inverted, &[inverted_previous, candle(10.0, 14.0, 9.0, 12.0)]),
+        0
+    );
+
+    let shooting_previous = candle(20.0, 20.0, 10.0, 10.0);
+    let shooting = CDLSHOOTINGSTARConfig::new(settings).unwrap();
+    assert_eq!(
+        boundary_code(shooting, &[shooting_previous, candle(30.0, 36.0, 29.0, 32.0)]),
+        -100
+    );
+    assert_eq!(
+        boundary_code(shooting, &[shooting_previous, candle(30.0, 34.0, 29.0, 32.0)]),
+        0
+    );
+
+    let black = candle(30.0, 30.0, 10.0, 10.0);
+    let in_neck = CDLINNECKConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(in_neck, &[black, candle(9.0, 12.0, 9.0, 12.0)]), -100);
+    assert_eq!(boundary_code(in_neck, &[black, candle(9.0, 13.0, 9.0, 13.0)]), 0);
+
+    let on_neck = CDLONNECKConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(on_neck, &[black, candle(9.0, 12.0, 9.0, 12.0)]), -100);
+    assert_eq!(boundary_code(on_neck, &[black, candle(9.0, 13.0, 9.0, 13.0)]), 0);
+
+    let piercing = CDLPIERCINGConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(piercing, &[black, candle(9.0, 21.0, 9.0, 21.0)]), 100);
+    assert_eq!(boundary_code(piercing, &[black, candle(9.0, 20.0, 9.0, 20.0)]), 0);
+
+    let thrusting = CDLTHRUSTINGConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(thrusting, &[black, candle(9.0, 20.0, 9.0, 20.0)]), -100);
+    assert_eq!(boundary_code(thrusting, &[black, candle(9.0, 12.0, 9.0, 12.0)]), 0);
+
+    let separating = CDLSEPARATINGLINESConfig::new(settings).unwrap();
+    let separating_previous = candle(20.0, 30.0, 10.0, 10.0);
+    assert_eq!(
+        boundary_code(separating, &[separating_previous, candle(22.0, 32.0, 21.0, 32.0)]),
+        100
+    );
+    assert_eq!(
+        boundary_code(separating, &[separating_previous, candle(23.0, 33.0, 22.0, 33.0)]),
+        0
+    );
+    assert_eq!(
+        boundary_code(separating, &[separating_previous, candle(20.0, 30.0, 10.0, 30.0)]),
+        0
+    );
+    assert_eq!(
+        boundary_code(separating, &[separating_previous, candle(20.0, 30.0, 11.0, 30.0)]),
+        100
+    );
+    assert_eq!(
+        boundary_code(
+            separating,
+            &[candle(20.0, 30.0, 10.0, 30.0), candle(20.0, 21.0, 10.0, 10.0)]
+        ),
+        -100
+    );
+}
+
 #[test]
 fn two_candle_evidence_rows_cover_pinned_sources_and_qualification_scenarios() {
-    const ROWS: [(&str, &str, &str); 9] = [
+    const ROWS: [(&str, &str, &str); 18] = [
         ("CDLCOUNTERATTACK", "cdlcounterattack/cdlcounterattack.c", "exact equal closes"),
         ("CDLDARKCLOUDCOVER", "cdldarkcloudcover/cdldarkcloudcover.c", "Penetration"),
         ("CDLDOJISTAR", "cdldojistar/cdldojistar.c", "strict real-body gap"),
@@ -942,7 +1128,16 @@ fn two_candle_evidence_rows_cover_pinned_sources_and_qualification_scenarios() {
         ("CDLHOMINGPIGEON", "cdlhomingpigeon/cdlhomingpigeon.c", "strict containment"),
         ("CDLKICKING", "cdlkicking/cdlkicking.c", "strict Candle gap"),
         ("CDLKICKINGBYLENGTH", "cdlkickingbylength/cdlkickingbylength.c", "first-Candle tie"),
-        ("CDLMATCHINGLOW", "cdlmatchinglow/cdlmatchinglow.c", "exact equal closes"),
+        ("CDLMATCHINGLOW", "cdlmatchinglow/cdlmatchinglow.c", "inclusive Equal"),
+        ("CDLHAMMER", "cdlhammer/cdlhammer.c", "inclusive Near and strict shadows"),
+        ("CDLHANGINGMAN", "cdlhangingman/cdlhangingman.c", "inclusive Near"),
+        ("CDLINNECK", "cdlinneck/cdlinneck.c", "inclusive Equal upper bound"),
+        ("CDLINVERTEDHAMMER", "cdlinvertedhammer/cdlinvertedhammer.c", "strict upper shadow"),
+        ("CDLONNECK", "cdlonneck/cdlonneck.c", "inclusive Equal interval"),
+        ("CDLPIERCING", "cdlpiercing/cdlpiercing.c", "fixed strict fifty percent"),
+        ("CDLSEPARATINGLINES", "cdlseparatinglines/cdlseparatinglines.c", "inclusive Equal and strict leading shadow"),
+        ("CDLSHOOTINGSTAR", "cdlshootingstar/cdlshootingstar.c", "strict upper shadow"),
+        ("CDLTHRUSTING", "cdlthrusting/cdlthrusting.c", "strict Equal and inclusive midpoint"),
     ];
     assert_eq!(reference::TALIB_GIT_REVISION, "2247d599bddf37ed37e3a709371517e46efc66f6");
     assert!(ROWS.iter().all(|(_, source, scenario)| source.ends_with(".c") && !scenario.is_empty()));
