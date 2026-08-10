@@ -2,7 +2,7 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-use crate::{Float, Result};
+use crate::Result;
 
 fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
     referenced
@@ -104,13 +104,11 @@ impl PatternDefinition for CDLHAMMERConfig {
         context: &RecognitionContext<'_>,
         _state: &mut Self::State,
     ) -> PatternSignal {
-        let current = context.candle(0);
         let previous = context.candle(1);
         if context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
             && context.lower_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
             && context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
-            && current.open.min(current.close)
-                <= previous.low + context.average(CandleSettingType::Near, 1)
+            && context.body_low(0) <= previous.low + context.average(CandleSettingType::Near, 1)
         {
             standard(PatternDirection::Bullish)
         } else {
@@ -166,13 +164,11 @@ impl PatternDefinition for CDLHANGINGMANConfig {
         context: &RecognitionContext<'_>,
         _state: &mut Self::State,
     ) -> PatternSignal {
-        let current = context.candle(0);
         let previous = context.candle(1);
         if context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
             && context.lower_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
             && context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
-            && current.open.min(current.close)
-                >= previous.high - context.average(CandleSettingType::Near, 1)
+            && context.body_low(0) >= previous.high - context.average(CandleSettingType::Near, 1)
         {
             standard(PatternDirection::Bearish)
         } else {
@@ -391,7 +387,7 @@ impl PatternDefinition for CDLPIERCINGConfig {
             && context.real_body(0) > context.average(CandleSettingType::BodyLong, 0)
             && current.open < previous.low
             && current.close < previous.open
-            && current.close > previous.close + context.real_body(1) * (0.5 as Float)
+            && current.close > previous.close + context.real_body(1) * 0.5
         {
             standard(PatternDirection::Bullish)
         } else {
@@ -574,7 +570,7 @@ impl PatternDefinition for CDLTHRUSTINGConfig {
             && context.color(0) == CandleColor::White
             && current.open < previous.low
             && current.close > previous.close + context.average(CandleSettingType::Equal, 1)
-            && current.close <= previous.close + context.real_body(1) * (0.5 as Float)
+            && current.close <= previous.close + context.real_body(1) * 0.5
         {
             standard(PatternDirection::Bearish)
         } else {

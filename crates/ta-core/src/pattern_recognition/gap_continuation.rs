@@ -2,7 +2,7 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-use crate::{Float, Result};
+use crate::Result;
 
 fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
     referenced
@@ -29,15 +29,13 @@ const fn direction(color: CandleColor) -> PatternDirection {
 }
 
 #[inline]
-fn body_high(context: &RecognitionContext<'_>, offset: usize) -> Float {
-    let candle = context.candle(offset);
-    candle.open.max(candle.close)
+fn body_high(context: &RecognitionContext<'_>, offset: usize) -> f64 {
+    context.body_high(offset)
 }
 
 #[inline]
-fn body_low(context: &RecognitionContext<'_>, offset: usize) -> Float {
-    let candle = context.candle(offset);
-    candle.open.min(candle.close)
+fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
+    context.body_low(offset)
 }
 
 macro_rules! define_gap_config {
@@ -371,7 +369,6 @@ impl PatternDefinition for CDLTASUKIGAPConfig {
         context: &RecognitionContext<'_>,
         _state: &mut Self::State,
     ) -> PatternSignal {
-        let first = context.candle(2);
         let second = context.candle(1);
         let third = context.candle(0);
         let near = context.average(CandleSettingType::Near, 1);
@@ -382,7 +379,7 @@ impl PatternDefinition for CDLTASUKIGAPConfig {
             && third.open < second.close
             && third.open > second.open
             && third.close < second.open
-            && third.close > first.open.max(first.close)
+            && third.close > context.body_high(2)
             && near_size;
         let downside = context.real_body_gap_down(1, 2)
             && context.color(1) == CandleColor::Black
@@ -390,7 +387,7 @@ impl PatternDefinition for CDLTASUKIGAPConfig {
             && third.open < second.open
             && third.open > second.close
             && third.close > second.open
-            && third.close < first.open.min(first.close)
+            && third.close < context.body_low(2)
             && near_size;
         if upside || downside {
             standard(direction(context.color(1)))

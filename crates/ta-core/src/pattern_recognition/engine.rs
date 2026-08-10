@@ -14,45 +14,72 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
+/// Pinned C evaluates f32-rounded inputs in double-precision arithmetic.
+pub(crate) type PatternFloat = f64;
+
+#[inline]
+pub(crate) fn widen(value: Float) -> PatternFloat {
+    value as PatternFloat
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CandleColor {
     White,
     Black,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct WideCandle {
+    pub(crate) open: PatternFloat,
+    pub(crate) high: PatternFloat,
+    pub(crate) low: PatternFloat,
+    pub(crate) close: PatternFloat,
+}
+
+impl From<Candle> for WideCandle {
+    fn from(candle: Candle) -> Self {
+        Self {
+            open: widen(candle.open),
+            high: widen(candle.high),
+            low: widen(candle.low),
+            close: widen(candle.close),
+        }
+    }
+}
+
 impl Candle {
     #[inline]
-    fn real_body(self) -> Float {
-        (self.close - self.open).abs()
+    fn real_body(self) -> PatternFloat {
+        (widen(self.close) - widen(self.open)).abs()
     }
 
     #[inline]
-    fn high_low_range(self) -> Float {
-        self.high - self.low
+    fn high_low_range(self) -> PatternFloat {
+        widen(self.high) - widen(self.low)
     }
 
     #[inline]
-    fn upper_shadow(self) -> Float {
+    fn upper_shadow(self) -> PatternFloat {
         let body_high = if self.close >= self.open {
             self.close
         } else {
             self.open
         };
-        self.high - body_high
+        widen(self.high) - widen(body_high)
     }
 
     #[inline]
-    fn lower_shadow(self) -> Float {
+    fn lower_shadow(self) -> PatternFloat {
         let body_low = if self.close >= self.open {
             self.open
         } else {
             self.close
         };
-        body_low - self.low
+        widen(body_low) - widen(self.low)
     }
 
     #[inline]
-    fn shadows(self) -> Float {
+    fn shadows(self) -> PatternFloat {
         self.upper_shadow() + self.lower_shadow()
     }
 
@@ -66,7 +93,7 @@ impl Candle {
     }
 
     #[inline]
-    fn range(self, range_kind: CandleRangeKind) -> Float {
+    fn range(self, range_kind: CandleRangeKind) -> PatternFloat {
         match range_kind {
             CandleRangeKind::RealBody => self.real_body(),
             CandleRangeKind::HighLow => self.high_low_range(),
@@ -78,7 +105,7 @@ impl Candle {
 #[derive(Debug, Clone, Copy)]
 struct CandleFrame {
     candle: Candle,
-    averages: [Float; 11],
+    averages: [PatternFloat; 11],
 }
 
 #[derive(Debug, Clone)]
@@ -130,45 +157,90 @@ pub(crate) struct RecognitionContext<'a> {
 
 #[allow(dead_code)]
 impl RecognitionContext<'_> {
-    /// Returns a Candle, where offset zero is the current source position.
     #[inline]
-    pub(crate) fn candle(&self, offset: usize) -> Candle {
+    fn raw_candle(&self, offset: usize) -> Candle {
         self.history.frame(offset).candle
     }
 
+    /// Returns a widened Candle, where offset zero is the current source position.
     #[inline]
-    pub(crate) fn real_body(&self, offset: usize) -> Float {
-        self.candle(offset).real_body()
+    pub(crate) fn candle(&self, offset: usize) -> WideCandle {
+        self.raw_candle(offset).into()
     }
 
     #[inline]
-    pub(crate) fn high_low_range(&self, offset: usize) -> Float {
-        self.candle(offset).high_low_range()
+    pub(crate) fn open(&self, offset: usize) -> PatternFloat {
+        self.candle(offset).open
     }
 
     #[inline]
-    pub(crate) fn upper_shadow(&self, offset: usize) -> Float {
-        self.candle(offset).upper_shadow()
+    pub(crate) fn high(&self, offset: usize) -> PatternFloat {
+        self.candle(offset).high
     }
 
     #[inline]
-    pub(crate) fn lower_shadow(&self, offset: usize) -> Float {
-        self.candle(offset).lower_shadow()
+    pub(crate) fn low(&self, offset: usize) -> PatternFloat {
+        self.candle(offset).low
     }
 
     #[inline]
-    pub(crate) fn shadows(&self, offset: usize) -> Float {
-        self.candle(offset).shadows()
+    pub(crate) fn close(&self, offset: usize) -> PatternFloat {
+        self.candle(offset).close
+    }
+
+    #[inline]
+    pub(crate) fn body_high(&self, offset: usize) -> PatternFloat {
+        let candle = self.raw_candle(offset);
+        widen(if candle.close >= candle.open {
+            candle.close
+        } else {
+            candle.open
+        })
+    }
+
+    #[inline]
+    pub(crate) fn body_low(&self, offset: usize) -> PatternFloat {
+        let candle = self.raw_candle(offset);
+        widen(if candle.close >= candle.open {
+            candle.open
+        } else {
+            candle.close
+        })
+    }
+
+    #[inline]
+    pub(crate) fn real_body(&self, offset: usize) -> PatternFloat {
+        self.raw_candle(offset).real_body()
+    }
+
+    #[inline]
+    pub(crate) fn high_low_range(&self, offset: usize) -> PatternFloat {
+        self.raw_candle(offset).high_low_range()
+    }
+
+    #[inline]
+    pub(crate) fn upper_shadow(&self, offset: usize) -> PatternFloat {
+        self.raw_candle(offset).upper_shadow()
+    }
+
+    #[inline]
+    pub(crate) fn lower_shadow(&self, offset: usize) -> PatternFloat {
+        self.raw_candle(offset).lower_shadow()
+    }
+
+    #[inline]
+    pub(crate) fn shadows(&self, offset: usize) -> PatternFloat {
+        self.raw_candle(offset).shadows()
     }
 
     #[inline]
     pub(crate) fn color(&self, offset: usize) -> CandleColor {
-        self.candle(offset).color()
+        self.raw_candle(offset).color()
     }
 
     /// Returns the setting's already source-aligned Candle Average.
     #[inline]
-    pub(crate) fn average(&self, setting_type: CandleSettingType, offset: usize) -> Float {
+    pub(crate) fn average(&self, setting_type: CandleSettingType, offset: usize) -> PatternFloat {
         self.history.frame(offset).averages[setting_type.index()]
     }
 
@@ -240,7 +312,7 @@ pub(crate) struct RecognitionEngine<D: PatternDefinition> {
     definition: D,
     state: D::State,
     history: CandleHistory,
-    totals: [Float; 11],
+    totals: [PatternFloat; 11],
     position: usize,
 }
 
@@ -254,7 +326,7 @@ where
             definition,
             state: definition.initial_state(),
             history: CandleHistory::new(history_capacity),
-            totals: [0.0 as Float; 11],
+            totals: [0.0; 11],
             position: 0,
         }
     }
@@ -267,7 +339,7 @@ where
     pub(crate) fn reset(&mut self) {
         self.state = self.definition.initial_state();
         self.history.clear();
-        self.totals.fill(0.0 as Float);
+        self.totals.fill(0.0);
         self.position = 0;
     }
 
@@ -277,21 +349,21 @@ where
     }
 
     fn next_validated(&mut self, candle: Candle) -> Option<PatternSignal> {
-        let mut averages = [0.0 as Float; 11];
+        let mut averages = [0.0; 11];
         let settings = self.definition.settings();
         for &setting_type in self.definition.referenced_settings() {
             let setting = settings.setting(setting_type);
             let range = if setting.average_period() == 0 {
                 candle.range(setting.range_kind())
             } else {
-                self.totals[setting_type.index()] / setting.average_period() as Float
+                self.totals[setting_type.index()] / setting.average_period() as PatternFloat
             };
             let divisor = if setting.range_kind() == CandleRangeKind::Shadows {
-                2.0 as Float
+                2.0
             } else {
-                1.0 as Float
+                1.0
             };
-            averages[setting_type.index()] = setting.factor() * range / divisor;
+            averages[setting_type.index()] = widen(setting.factor()) * range / divisor;
         }
 
         self.history.push(CandleFrame { candle, averages });
@@ -318,7 +390,7 @@ where
                     .candle
                     .range(setting.range_kind())
             } else {
-                0.0 as Float
+                0.0
             };
             self.totals[setting_type.index()] += current_range - outgoing_range;
         }

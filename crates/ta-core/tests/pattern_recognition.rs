@@ -407,6 +407,32 @@ fn independently_reasoned_boundaries_lock_doji_and_engulfing_semantics() {
 }
 
 #[test]
+fn period_zero_doji_uses_f32_rounded_inputs_widened_to_double() {
+    let settings = CandleSettings::default().with_setting(
+        CandleSettingType::BodyDoji,
+        CandleSetting::new(CandleRangeKind::HighLow, 0, 0.1 as Float).unwrap(),
+    );
+    let open = [0.0 as Float];
+    let high = [Float::MAX];
+    let low = [-Float::MAX];
+    let close = [Float::MAX];
+    let output = CDLDOJIConfig::new(settings)
+        .unwrap()
+        .compute(CandleInput {
+            open: &open,
+            high: &high,
+            low: &low,
+            close: &close,
+        })
+        .unwrap();
+
+    #[cfg(feature = "f32")]
+    assert_eq!(output.values(), &[PatternSignal::NoMatch]);
+    #[cfg(not(feature = "f32"))]
+    assert_eq!(output.values()[0].to_talib_code(), 100);
+}
+
+#[test]
 fn validation_failures_precede_mutation_and_stream_retries_exactly() {
     let config = CDLDOJIConfig::default();
     let empty = config

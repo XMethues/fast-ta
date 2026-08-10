@@ -40,15 +40,13 @@ const fn opposite_direction(color: CandleColor) -> PatternDirection {
 }
 
 #[inline]
-fn body_high(context: &RecognitionContext<'_>, offset: usize) -> Float {
-    let candle = context.candle(offset);
-    candle.open.max(candle.close)
+fn body_high(context: &RecognitionContext<'_>, offset: usize) -> f64 {
+    context.body_high(offset)
 }
 
 #[inline]
-fn body_low(context: &RecognitionContext<'_>, offset: usize) -> Float {
-    let candle = context.candle(offset);
-    candle.open.min(candle.close)
+fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
+    context.body_low(offset)
 }
 
 macro_rules! define_two_candle_config {
@@ -198,7 +196,7 @@ impl PatternDefinition for CDLDARKCLOUDCOVERConfig {
             && context.color(0) == CandleColor::Black
             && current.open > previous.high
             && current.close > previous.open
-            && current.close < previous.close - context.real_body(1) * self.penetration.value()
+            && current.close < previous.close - context.real_body(1) * self.penetration.wide_value()
         {
             standard(PatternDirection::Bearish)
         } else {

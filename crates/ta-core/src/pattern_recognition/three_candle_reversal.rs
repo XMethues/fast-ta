@@ -32,15 +32,13 @@ const fn direction(color: CandleColor) -> PatternDirection {
 }
 
 #[inline]
-fn body_high(context: &RecognitionContext<'_>, offset: usize) -> Float {
-    let candle = context.candle(offset);
-    candle.open.max(candle.close)
+fn body_high(context: &RecognitionContext<'_>, offset: usize) -> f64 {
+    context.body_high(offset)
 }
 
 #[inline]
-fn body_low(context: &RecognitionContext<'_>, offset: usize) -> Float {
-    let candle = context.candle(offset);
-    candle.open.min(candle.close)
+fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
+    context.body_low(offset)
 }
 
 macro_rules! define_three_candle_config {
@@ -330,13 +328,15 @@ impl PatternDefinition for CDLABANDONEDBABYConfig {
         let reversal = match third_color {
             CandleColor::Black => {
                 context.color(2) == CandleColor::White
-                    && third.close < first.close - context.real_body(2) * self.penetration.value()
+                    && third.close
+                        < first.close - context.real_body(2) * self.penetration.wide_value()
                     && context.candle_gap_up(1, 2)
                     && context.candle_gap_down(0, 1)
             }
             CandleColor::White => {
                 context.color(2) == CandleColor::Black
-                    && third.close > first.close + context.real_body(2) * self.penetration.value()
+                    && third.close
+                        > first.close + context.real_body(2) * self.penetration.wide_value()
                     && context.candle_gap_down(1, 2)
                     && context.candle_gap_up(0, 1)
             }
@@ -403,7 +403,7 @@ impl PatternDefinition for CDLEVENINGDOJISTARConfig {
         if context.color(2) == CandleColor::White
             && context.color(0) == CandleColor::Black
             && context.real_body_gap_up(1, 2)
-            && third.close < first.close - context.real_body(2) * self.penetration.value()
+            && third.close < first.close - context.real_body(2) * self.penetration.wide_value()
             && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
             && context.real_body(1) <= context.average(CandleSettingType::BodyDoji, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
@@ -457,7 +457,7 @@ impl PatternDefinition for CDLEVENINGSTARConfig {
         if context.color(2) == CandleColor::White
             && context.color(0) == CandleColor::Black
             && context.real_body_gap_up(1, 2)
-            && third.close < first.close - context.real_body(2) * self.penetration.value()
+            && third.close < first.close - context.real_body(2) * self.penetration.wide_value()
             && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
             && context.real_body(1) <= context.average(CandleSettingType::BodyShort, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
@@ -519,7 +519,7 @@ impl PatternDefinition for CDLMORNINGDOJISTARConfig {
         if context.color(2) == CandleColor::Black
             && context.color(0) == CandleColor::White
             && context.real_body_gap_down(1, 2)
-            && third.close > first.close + context.real_body(2) * self.penetration.value()
+            && third.close > first.close + context.real_body(2) * self.penetration.wide_value()
             && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
             && context.real_body(1) <= context.average(CandleSettingType::BodyDoji, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
@@ -573,7 +573,7 @@ impl PatternDefinition for CDLMORNINGSTARConfig {
         if context.color(2) == CandleColor::Black
             && context.color(0) == CandleColor::White
             && context.real_body_gap_down(1, 2)
-            && third.close > first.close + context.real_body(2) * self.penetration.value()
+            && third.close > first.close + context.real_body(2) * self.penetration.wide_value()
             && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
             && context.real_body(1) <= context.average(CandleSettingType::BodyShort, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)

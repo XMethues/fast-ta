@@ -352,4 +352,9 @@ impl Penetration {
     pub const fn value(self) -> Float {
         self.0
     }
+
+    #[inline]
+    pub(crate) fn wide_value(self) -> f64 {
+        self.0 as f64
+    }
 }

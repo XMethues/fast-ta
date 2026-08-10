@@ -19,6 +19,20 @@ TALIB_SOURCE_ARCHIVE_SHA256 = (
     "c9cce2810eab127722c9a0f6c721fc2e955ac86e6e999563ed1176d29e22fc2d"
 )
 
+DEFAULT_CANDLE_SETTINGS = (
+    (0, 0, 10, 1.0),
+    (1, 0, 10, 3.0),
+    (2, 0, 10, 1.0),
+    (3, 1, 10, 0.1),
+    (4, 0, 0, 1.0),
+    (5, 0, 0, 2.0),
+    (6, 2, 10, 1.0),
+    (7, 1, 10, 0.1),
+    (8, 1, 5, 0.2),
+    (9, 1, 5, 0.6),
+    (10, 1, 5, 0.05),
+)
+
 DOJI_DEFAULT = (
     [10.0] * 16,
     [15.0] * 16,
@@ -495,6 +509,7 @@ class TalibReference:
         self.library.TA_SetCandleSettings.restype = ctypes.c_int
         self.library.TA_RestoreCandleDefaultSettings.argtypes = [ctypes.c_int]
         self.library.TA_RestoreCandleDefaultSettings.restype = ctypes.c_int
+        self.active_settings = list(DEFAULT_CANDLE_SETTINGS)
 
     @staticmethod
     def _check(code: int, operation: str) -> None:
@@ -503,12 +518,31 @@ class TalibReference:
 
     def restore_defaults(self) -> None:
         self._check(self.library.TA_RestoreCandleDefaultSettings(11), "restore defaults")
+        self.active_settings = list(DEFAULT_CANDLE_SETTINGS)
 
-    def set_setting(self, setting_type: int, range_type: int, period: int, factor: float) -> None:
+    @staticmethod
+    def represented(value: float, quantize_f32: bool) -> float:
+        return float(ctypes.c_float(value).value) if quantize_f32 else value
+
+    def apply_active_settings(self, quantize_f32: bool) -> None:
+        for setting_type, range_type, period, factor in self.active_settings:
+            represented_factor = self.represented(factor, quantize_f32)
+            self._check(
+                self.library.TA_SetCandleSettings(
+                    setting_type, range_type, period, represented_factor
+                ),
+                f"apply Candle Setting {setting_type}",
+            )
+
+    def set_setting(
+        self, setting_type: int, range_type: int, period: int, factor: float
+    ) -> None:
+        setting = (setting_type, range_type, period, factor)
         self._check(
-            self.library.TA_SetCandleSettings(setting_type, range_type, period, factor),
+            self.library.TA_SetCandleSettings(*setting),
             f"set Candle Setting {setting_type}",
         )
+        self.active_settings[setting_type] = setting
 
     def set_custom_doji(self) -> None:
         self.set_setting(3, 0, 3, 0.5)
@@ -550,34 +584,41 @@ class TalibReference:
         quantize_f32: bool,
         penetration: float | None = None,
     ) -> tuple[int, list[int]]:
-        columns = [
-            [float(ctypes.c_float(value).value) for value in column]
-            if quantize_f32
-            else list(column)
-            for column in observations
-        ]
-        length = len(columns[0])
-        arrays = [(ctypes.c_double * length)(*column) for column in columns]
-        output = (ctypes.c_int * length)()
-        begin = ctypes.c_int()
-        count = ctypes.c_int()
-        call_arguments = [0, length - 1, *arrays]
-        if penetration is not None:
-            call_arguments.append(penetration)
-        call_arguments.extend((ctypes.byref(begin), ctypes.byref(count), output))
-        self._check(
-            getattr(self.library, f"TA_{name}")(*call_arguments),
-            f"TA_{name}",
-        )
-        lookback_function = getattr(self.library, f"TA_{name}_Lookback")
-        lookback = (
-            lookback_function(penetration)
+        represented_penetration = (
+            self.represented(penetration, quantize_f32)
             if penetration is not None
-            else lookback_function()
+            else None
         )
-        if begin.value != lookback or count.value != length - lookback:
-            raise RuntimeError(f"{name}: unexpected output range {begin.value}+{count.value}")
-        return begin.value, list(output[: count.value])
+        self.apply_active_settings(quantize_f32)
+        try:
+            columns = [
+                [self.represented(value, quantize_f32) for value in column]
+                for column in observations
+            ]
+            length = len(columns[0])
+            arrays = [(ctypes.c_double * length)(*column) for column in columns]
+            output = (ctypes.c_int * length)()
+            begin = ctypes.c_int()
+            count = ctypes.c_int()
+            call_arguments = [0, length - 1, *arrays]
+            if represented_penetration is not None:
+                call_arguments.append(represented_penetration)
+            call_arguments.extend((ctypes.byref(begin), ctypes.byref(count), output))
+            self._check(
+                getattr(self.library, f"TA_{name}")(*call_arguments),
+                f"TA_{name}",
+            )
+            lookback_function = getattr(self.library, f"TA_{name}_Lookback")
+            lookback = (
+                lookback_function(represented_penetration)
+                if represented_penetration is not None
+                else lookback_function()
+            )
+            if begin.value != lookback or count.value != length - lookback:
+                raise RuntimeError(f"{name}: unexpected output range {begin.value}+{count.value}")
+            return begin.value, list(output[: count.value])
+        finally:
+            self.apply_active_settings(False)
 
     def close(self) -> None:
         self._check(self.library.TA_Shutdown(), "TA_Shutdown")

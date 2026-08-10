@@ -1,13 +1,13 @@
 //! Stateful local definitions for ordinary and modified Hikkake.
 
-use super::engine::{PatternDefinition, RecognitionContext};
+use super::engine::{PatternDefinition, PatternFloat, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
 use crate::Result;
 
 #[derive(Debug, Clone, Copy)]
 struct PendingConfirmation {
     direction: PatternDirection,
-    boundary: crate::Float,
+    boundary: PatternFloat,
     remaining_positions: u8,
 }
 
@@ -27,8 +27,8 @@ const fn signal(direction: PatternDirection, strength: PatternStrength) -> Patte
 #[inline]
 fn transition(
     state: &mut State,
-    formation: Option<(PatternDirection, crate::Float)>,
-    close: crate::Float,
+    formation: Option<(PatternDirection, PatternFloat)>,
+    close: PatternFloat,
 ) -> PatternSignal {
     if let Some((direction, boundary)) = formation {
         state.pending = Some(PendingConfirmation {

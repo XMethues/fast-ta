@@ -276,11 +276,11 @@ impl PatternDefinition for CDLMATHOLDConfig {
         let fourth = context.candle(1);
         let fifth = context.candle(0);
         let first_body = context.real_body(4);
-        let reaction_floor = first.close - first_body * self.penetration.value();
-        let third_body_low = third.open.min(third.close);
-        let third_body_high = third.open.max(third.close);
-        let fourth_body_low = fourth.open.min(fourth.close);
-        let fourth_body_high = fourth.open.max(fourth.close);
+        let reaction_floor = first.close - first_body * self.penetration.wide_value();
+        let third_body_low = context.body_low(2);
+        let third_body_high = context.body_high(2);
+        let fourth_body_low = context.body_low(1);
+        let fourth_body_high = context.body_high(1);
 
         if context.color(4) == CandleColor::White
             && context.color(3) == CandleColor::Black
@@ -359,8 +359,13 @@ impl PatternDefinition for CDLRISEFALL3METHODSConfig {
                     && fifth.close < first.close
             }
         };
-        let reaction_within_first_range = |candle: super::Candle| {
-            candle.open.min(candle.close) < first.high && candle.open.max(candle.close) > first.low
+        let reaction_within_first_range = |candle: super::engine::WideCandle| {
+            let (body_low, body_high) = if candle.close >= candle.open {
+                (candle.open, candle.close)
+            } else {
+                (candle.close, candle.open)
+            };
+            body_low < first.high && body_high > first.low
         };
 
         if first_color != context.color(3)

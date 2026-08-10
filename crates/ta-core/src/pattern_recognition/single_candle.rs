@@ -507,8 +507,8 @@ impl PatternDefinition for CDLRICKSHAWMANConfig {
         if context.real_body(0) <= context.average(CandleSettingType::BodyDoji, 0)
             && context.lower_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
             && context.upper_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
-            && context.open(0).min(context.close(0)) <= midpoint + near
-            && context.open(0).max(context.close(0)) >= midpoint - near
+            && context.body_low(0) <= midpoint + near
+            && context.body_high(0) >= midpoint - near
         {
             positive_signal()
         } else {
