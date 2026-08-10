@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 155;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 159;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -229,7 +229,7 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLABANDONEDBABY", PatternRecognition, Implemented),
     function!("CDLADVANCEBLOCK", PatternRecognition, Implemented),
     function!("CDLBELTHOLD", PatternRecognition, Implemented),
-    function!("CDLBREAKAWAY", PatternRecognition, Planned),
+    function!("CDLBREAKAWAY", PatternRecognition, Implemented),
     function!("CDLCLOSINGMARUBOZU", PatternRecognition, Implemented),
     function!("CDLCONCEALBABYSWALL", PatternRecognition, Implemented),
     function!("CDLCOUNTERATTACK", PatternRecognition, Implemented),
@@ -255,18 +255,18 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLINVERTEDHAMMER", PatternRecognition, Implemented),
     function!("CDLKICKING", PatternRecognition, Implemented),
     function!("CDLKICKINGBYLENGTH", PatternRecognition, Implemented),
-    function!("CDLLADDERBOTTOM", PatternRecognition, Planned),
+    function!("CDLLADDERBOTTOM", PatternRecognition, Implemented),
     function!("CDLLONGLEGGEDDOJI", PatternRecognition, Implemented),
     function!("CDLLONGLINE", PatternRecognition, Implemented),
     function!("CDLMARUBOZU", PatternRecognition, Implemented),
     function!("CDLMATCHINGLOW", PatternRecognition, Implemented),
-    function!("CDLMATHOLD", PatternRecognition, Planned),
+    function!("CDLMATHOLD", PatternRecognition, Implemented),
     function!("CDLMORNINGDOJISTAR", PatternRecognition, Implemented),
     function!("CDLMORNINGSTAR", PatternRecognition, Implemented),
     function!("CDLONNECK", PatternRecognition, Implemented),
     function!("CDLPIERCING", PatternRecognition, Implemented),
     function!("CDLRICKSHAWMAN", PatternRecognition, Implemented),
-    function!("CDLRISEFALL3METHODS", PatternRecognition, Planned),
+    function!("CDLRISEFALL3METHODS", PatternRecognition, Implemented),
     function!("CDLSEPARATINGLINES", PatternRecognition, Implemented),
     function!("CDLSHOOTINGSTAR", PatternRecognition, Implemented),
     function!("CDLSHORTLINE", PatternRecognition, Implemented),

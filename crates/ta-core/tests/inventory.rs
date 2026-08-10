@@ -83,6 +83,10 @@ use ta_core::pattern_recognition::{
     CDLCONCEALBABYSWALLBatchRunner, CDLCONCEALBABYSWALLConfig, CDLCONCEALBABYSWALLStream,
     CDLIDENTICAL3CROWSBatchRunner, CDLIDENTICAL3CROWSConfig, CDLIDENTICAL3CROWSStream,
     CDLSTALLEDPATTERNBatchRunner, CDLSTALLEDPATTERNConfig, CDLSTALLEDPATTERNStream,
+    CDLBREAKAWAYBatchRunner, CDLBREAKAWAYConfig, CDLBREAKAWAYStream,
+    CDLLADDERBOTTOMBatchRunner, CDLLADDERBOTTOMConfig, CDLLADDERBOTTOMStream,
+    CDLMATHOLDBatchRunner, CDLMATHOLDConfig, CDLMATHOLDStream,
+    CDLRISEFALL3METHODSBatchRunner, CDLRISEFALL3METHODSConfig, CDLRISEFALL3METHODSStream,
     CDL3INSIDEBatchRunner, CDL3INSIDEConfig, CDL3INSIDEStream, CDL3OUTSIDEBatchRunner,
     CDL3OUTSIDEConfig, CDL3OUTSIDEStream, CDLABANDONEDBABYBatchRunner, CDLABANDONEDBABYConfig,
     CDLABANDONEDBABYStream,
@@ -357,6 +361,10 @@ fn first_tranche_functions_are_marked_implemented() {
         "CDLCONCEALBABYSWALL",
         "CDLIDENTICAL3CROWS",
         "CDLSTALLEDPATTERN",
+        "CDLBREAKAWAY",
+        "CDLLADDERBOTTOM",
+        "CDLMATHOLD",
+        "CDLRISEFALL3METHODS",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -648,6 +656,22 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<CDLCONCEALBABYSWALLConfig, CDLCONCEALBABYSWALLBatchRunner, CDLCONCEALBABYSWALLStream>();
     assert_execution_types::<CDLIDENTICAL3CROWSConfig, CDLIDENTICAL3CROWSBatchRunner, CDLIDENTICAL3CROWSStream>();
     assert_execution_types::<CDLSTALLEDPATTERNConfig, CDLSTALLEDPATTERNBatchRunner, CDLSTALLEDPATTERNStream>();
+    assert_execution_types::<
+        CDLBREAKAWAYConfig,
+        CDLBREAKAWAYBatchRunner,
+        CDLBREAKAWAYStream,
+    >();
+    assert_execution_types::<
+        CDLLADDERBOTTOMConfig,
+        CDLLADDERBOTTOMBatchRunner,
+        CDLLADDERBOTTOMStream,
+    >();
+    assert_execution_types::<CDLMATHOLDConfig, CDLMATHOLDBatchRunner, CDLMATHOLDStream>();
+    assert_execution_types::<
+        CDLRISEFALL3METHODSConfig,
+        CDLRISEFALL3METHODSBatchRunner,
+        CDLRISEFALL3METHODSStream,
+    >();
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
     assert_execution_types::<CORRELConfig, CORRELBatchRunner, CORRELStream>();
@@ -864,6 +888,10 @@ fn inventory_count_matches_execution_seam_coverage() {
         "CDLCONCEALBABYSWALL",
         "CDLIDENTICAL3CROWS",
         "CDLSTALLEDPATTERN",
+        "CDLBREAKAWAY",
+        "CDLLADDERBOTTOM",
+        "CDLMATHOLD",
+        "CDLRISEFALL3METHODS",
     ];
 
     assert_eq!(
@@ -883,7 +911,7 @@ fn inventory_count_matches_execution_seam_coverage() {
 
 #[test]
 fn remaining_pattern_recognition_functions_remain_planned() {
-    for name in ["CDLBREAKAWAY", "CDLHIKKAKE", "CDLLADDERBOTTOM"] {
+    for name in ["CDLHIKKAKE", "CDLHIKKAKEMOD"] {
         let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
         assert_eq!(info.status, ImplementationStatus::Planned, "{name}");
     }

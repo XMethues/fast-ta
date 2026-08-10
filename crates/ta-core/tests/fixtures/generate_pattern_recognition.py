@@ -316,6 +316,57 @@ CROW_SOLDIER_FIXTURES = {
     ),
 }
 
+LONG_FORMATION_FIXTURES = {
+    "CDLBREAKAWAY": (
+        [10.0] * 10
+        + [20.0, 8.0, 7.0, 6.0, 4.0]
+        + [10.0] * 10
+        + [10.0, 22.0, 23.0, 24.0, 26.0],
+        [12.0] * 10
+        + [21.0, 9.0, 8.0, 7.0, 10.0]
+        + [12.0] * 10
+        + [21.0, 25.0, 26.0, 27.0, 26.5],
+        [9.0] * 10
+        + [9.0, 5.0, 4.0, 3.0, 3.5]
+        + [9.0] * 10
+        + [9.0, 21.0, 22.0, 23.0, 20.0],
+        [11.0] * 10
+        + [10.0, 6.0, 5.0, 4.0, 9.0]
+        + [11.0] * 10
+        + [20.0, 24.0, 25.0, 26.0, 21.0],
+    ),
+    "CDLLADDERBOTTOM": (
+        [10.0] * 10 + [20.0, 19.0, 18.0, 17.0, 18.0],
+        [12.0] * 10 + [20.5, 19.5, 18.5, 19.0, 20.5],
+        [9.0] * 10 + [17.5, 16.5, 15.5, 14.5, 17.5],
+        [11.0] * 10 + [18.0, 17.0, 16.0, 15.0, 20.0],
+    ),
+    "CDLMATHOLD": (
+        [10.0] * 10 + [10.0, 23.0, 20.0, 19.5, 19.5],
+        [12.0] * 10 + [21.0, 23.5, 20.5, 20.0, 24.5],
+        [9.0] * 10 + [9.0, 22.0, 19.0, 18.5, 19.0],
+        [11.0] * 10 + [20.0, 22.5, 19.5, 19.0, 24.0],
+    ),
+    "CDLRISEFALL3METHODS": (
+        [10.0] * 10
+        + [10.0, 19.0, 18.5, 18.0, 18.0]
+        + [10.0] * 10
+        + [20.0, 11.0, 11.5, 12.0, 12.0],
+        [12.0] * 10
+        + [21.0, 19.5, 19.0, 18.5, 21.5]
+        + [12.0] * 10
+        + [21.0, 12.0, 12.5, 13.0, 12.5],
+        [9.0] * 10
+        + [9.0, 18.0, 17.5, 17.0, 17.5]
+        + [9.0] * 10
+        + [9.0, 10.5, 11.0, 11.5, 8.5],
+        [11.0] * 10
+        + [20.0, 18.5, 18.0, 17.5, 21.0]
+        + [11.0] * 10
+        + [10.0, 11.5, 12.0, 12.5, 9.0],
+    ),
+}
+
 STAR_NAMES = {
     "CDLABANDONEDBABY",
     "CDLEVENINGDOJISTAR",
@@ -398,6 +449,7 @@ class TalibReference:
             *(name for name in THREE_CANDLE_FIXTURES if name not in STAR_NAMES),
             *GAP_CONTINUATION_FIXTURES,
             *CROW_SOLDIER_FIXTURES,
+            *(name for name in LONG_FORMATION_FIXTURES if name != "CDLMATHOLD"),
         )
         for name in standard_names:
             function = getattr(self.library, f"TA_{name}")
@@ -406,7 +458,7 @@ class TalibReference:
             lookback = getattr(self.library, f"TA_{name}_Lookback")
             lookback.argtypes = []
             lookback.restype = ctypes.c_int
-        for name in ("CDLDARKCLOUDCOVER", *STAR_NAMES):
+        for name in ("CDLDARKCLOUDCOVER", *STAR_NAMES, "CDLMATHOLD"):
             function = getattr(self.library, f"TA_{name}")
             function.argtypes = [*arguments[:6], ctypes.c_double, *arguments[6:]]
             function.restype = ctypes.c_int
@@ -701,6 +753,30 @@ def render(reference: TalibReference) -> str:
             prefix,
             reference.compute(name, observations, False),
             reference.compute(name, observations, True),
+        )
+    lines.append("")
+    reference.restore_defaults()
+    for name, observations in LONG_FORMATION_FIXTURES.items():
+        prefix = fixture_prefix(name)
+        append_columns(lines, prefix, observations)
+        penetration = 0.5 if name == "CDLMATHOLD" else None
+        append_result(
+            lines,
+            prefix + "_DEFAULT",
+            reference.compute(name, observations, False, penetration),
+            reference.compute(name, observations, True, penetration),
+        )
+    lines.append("")
+
+    reference.set_custom_two_candle()
+    for name, observations in LONG_FORMATION_FIXTURES.items():
+        prefix = fixture_prefix(name) + "_CUSTOM"
+        penetration = 1.5 if name == "CDLMATHOLD" else None
+        append_result(
+            lines,
+            prefix,
+            reference.compute(name, observations, False, penetration),
+            reference.compute(name, observations, True, penetration),
         )
     lines.append("")
     return "\n".join(lines)

@@ -110,6 +110,7 @@ mod crows_soldiers;
 mod doji;
 mod gap_continuation;
 mod engulfing;
+mod long_formation;
 mod position_shadow;
 mod single_candle;
 mod three_candle_reversal;
@@ -141,6 +142,12 @@ pub use gap_continuation::{
     CDLTASUKIGAPStream, CDLTRISTARBatchRunner, CDLTRISTARConfig, CDLTRISTARStream,
     CDLUPSIDEGAP2CROWSBatchRunner, CDLUPSIDEGAP2CROWSConfig, CDLUPSIDEGAP2CROWSStream,
     CDLXSIDEGAP3METHODSBatchRunner, CDLXSIDEGAP3METHODSConfig, CDLXSIDEGAP3METHODSStream,
+};
+pub use long_formation::{
+    CDLBREAKAWAYBatchRunner, CDLBREAKAWAYConfig, CDLBREAKAWAYStream, CDLLADDERBOTTOMBatchRunner,
+    CDLLADDERBOTTOMConfig, CDLLADDERBOTTOMStream, CDLMATHOLDBatchRunner, CDLMATHOLDConfig,
+    CDLMATHOLDStream, CDLRISEFALL3METHODSBatchRunner, CDLRISEFALL3METHODSConfig,
+    CDLRISEFALL3METHODSStream,
 };
 pub use doji::{CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream};
 pub use engulfing::{CDLENGULFINGBatchRunner, CDLENGULFINGConfig, CDLENGULFINGStream};

@@ -577,3 +577,47 @@ pub const STALLED_PATTERN_DEFAULT_F32_CODES: &[i32] = &[-100];
 pub const STALLED_PATTERN_CUSTOM_LOOKBACK: usize = 5;
 pub const STALLED_PATTERN_CUSTOM_F64_CODES: &[i32] = &[0,0,0,0,0,0,0,-100];
 pub const STALLED_PATTERN_CUSTOM_F32_CODES: &[i32] = &[0,0,0,0,0,0,0,-100];
+
+pub const BREAKAWAY_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 8.0, 7.0, 6.0, 4.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 22.0, 23.0, 24.0, 26.0];
+pub const BREAKAWAY_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 9.0, 8.0, 7.0, 10.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 25.0, 26.0, 27.0, 26.5];
+pub const BREAKAWAY_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 5.0, 4.0, 3.0, 3.5, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 21.0, 22.0, 23.0, 20.0];
+pub const BREAKAWAY_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.0, 6.0, 5.0, 4.0, 9.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 20.0, 24.0, 25.0, 26.0, 21.0];
+pub const BREAKAWAY_DEFAULT_LOOKBACK: usize = 14;
+pub const BREAKAWAY_DEFAULT_F64_CODES: &[i32] = &[100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+pub const BREAKAWAY_DEFAULT_F32_CODES: &[i32] = &[100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+pub const BREAKAWAY_CUSTOM_LOOKBACK: usize = 7;
+pub const BREAKAWAY_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+pub const BREAKAWAY_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+
+pub const LADDERBOTTOM_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 19.0, 18.0, 17.0, 18.0];
+pub const LADDERBOTTOM_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 20.5, 19.5, 18.5, 19.0, 20.5];
+pub const LADDERBOTTOM_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 17.5, 16.5, 15.5, 14.5, 17.5];
+pub const LADDERBOTTOM_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 18.0, 17.0, 16.0, 15.0, 20.0];
+pub const LADDERBOTTOM_DEFAULT_LOOKBACK: usize = 14;
+pub const LADDERBOTTOM_DEFAULT_F64_CODES: &[i32] = &[100];
+pub const LADDERBOTTOM_DEFAULT_F32_CODES: &[i32] = &[100];
+pub const LADDERBOTTOM_CUSTOM_LOOKBACK: usize = 7;
+pub const LADDERBOTTOM_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+pub const LADDERBOTTOM_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+
+pub const MATHOLD_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 23.0, 20.0, 19.5, 19.5];
+pub const MATHOLD_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 23.5, 20.5, 20.0, 24.5];
+pub const MATHOLD_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 22.0, 19.0, 18.5, 19.0];
+pub const MATHOLD_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 20.0, 22.5, 19.5, 19.0, 24.0];
+pub const MATHOLD_DEFAULT_LOOKBACK: usize = 14;
+pub const MATHOLD_DEFAULT_F64_CODES: &[i32] = &[100];
+pub const MATHOLD_DEFAULT_F32_CODES: &[i32] = &[100];
+pub const MATHOLD_CUSTOM_LOOKBACK: usize = 7;
+pub const MATHOLD_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+pub const MATHOLD_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+
+pub const RISEFALL3METHODS_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 19.0, 18.5, 18.0, 18.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 11.0, 11.5, 12.0, 12.0];
+pub const RISEFALL3METHODS_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 19.5, 19.0, 18.5, 21.5, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 12.0, 12.5, 13.0, 12.5];
+pub const RISEFALL3METHODS_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 18.0, 17.5, 17.0, 17.5, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 10.5, 11.0, 11.5, 8.5];
+pub const RISEFALL3METHODS_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 20.0, 18.5, 18.0, 17.5, 21.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.0, 11.5, 12.0, 12.5, 9.0];
+pub const RISEFALL3METHODS_DEFAULT_LOOKBACK: usize = 14;
+pub const RISEFALL3METHODS_DEFAULT_F64_CODES: &[i32] = &[100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+pub const RISEFALL3METHODS_DEFAULT_F32_CODES: &[i32] = &[100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+pub const RISEFALL3METHODS_CUSTOM_LOOKBACK: usize = 7;
+pub const RISEFALL3METHODS_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+pub const RISEFALL3METHODS_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];

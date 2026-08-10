@@ -27,6 +27,8 @@ use ta_core::pattern_recognition::{
     CDLTASUKIGAPConfig,
     CDLTHRUSTINGConfig, CDLTRISTARConfig, CDLUNIQUE3RIVERConfig, CDLUPSIDEGAP2CROWSConfig,
     CDLXSIDEGAP3METHODSConfig,
+    CDLBREAKAWAYConfig, CDLLADDERBOTTOMConfig, CDLMATHOLDConfig,
+    CDLRISEFALL3METHODSConfig,
 };
 use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
@@ -158,6 +160,17 @@ fn qualify_pattern_fixture<C>(
         direction: PatternDirection::Bearish,
         strength: PatternStrength::Confirmed,
     };
+    let misaligned = CandleInput {
+        open: &series.open,
+        high: &series.high[..series.high.len() - 1],
+        low: &series.low,
+        close: &series.close,
+    };
+    let mut validation_output = vec![sentinel; expected.len() + 1];
+    assert!(config
+        .compute_into(misaligned, &mut validation_output)
+        .is_err());
+    assert!(validation_output.iter().all(|&value| value == sentinel));
     let mut caller_output = vec![sentinel; expected.len() + 2];
     let range = config
         .compute_into(series.input(), &mut caller_output)
@@ -167,6 +180,10 @@ fn qualify_pattern_fixture<C>(
     assert_eq!(&caller_output[expected.len()..], &[sentinel, sentinel]);
 
     let mut prepared = config.prepare_batch(series.open.len()).unwrap();
+    assert!(prepared
+        .compute_into(misaligned, &mut validation_output)
+        .is_err());
+    assert!(validation_output.iter().all(|&value| value == sentinel));
     let mut prepared_output = vec![sentinel; expected.len() + 1];
     let prepared_range = prepared
         .compute_into(series.input(), &mut prepared_output)
@@ -1899,4 +1916,281 @@ fn gap_continuation_evidence_rows_cover_pinned_spans_settings_and_boundaries() {
     assert!(ROWS.iter().all(|(_, source, span, settings, lookback)| {
         source.ends_with(".c") && !span.is_empty() && !settings.is_empty() && *lookback >= 2
     }));
+}
+
+#[test]
+fn pinned_long_formation_oracles_qualify_every_definition_through_the_public_seam() {
+    let settings = custom_two_candle_settings();
+    let custom_penetration = Penetration::new(1.5 as Float).unwrap();
+
+    qualify_two_candle!(
+        CDLBREAKAWAYConfig::default(),
+        CDLBREAKAWAYConfig::new(settings).unwrap(),
+        BREAKAWAY_OPEN,
+        BREAKAWAY_HIGH,
+        BREAKAWAY_LOW,
+        BREAKAWAY_CLOSE,
+        BREAKAWAY_DEFAULT_LOOKBACK,
+        BREAKAWAY_DEFAULT_F64_CODES,
+        BREAKAWAY_DEFAULT_F32_CODES,
+        BREAKAWAY_CUSTOM_LOOKBACK,
+        BREAKAWAY_CUSTOM_F64_CODES,
+        BREAKAWAY_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLLADDERBOTTOMConfig::default(),
+        CDLLADDERBOTTOMConfig::new(settings).unwrap(),
+        LADDERBOTTOM_OPEN,
+        LADDERBOTTOM_HIGH,
+        LADDERBOTTOM_LOW,
+        LADDERBOTTOM_CLOSE,
+        LADDERBOTTOM_DEFAULT_LOOKBACK,
+        LADDERBOTTOM_DEFAULT_F64_CODES,
+        LADDERBOTTOM_DEFAULT_F32_CODES,
+        LADDERBOTTOM_CUSTOM_LOOKBACK,
+        LADDERBOTTOM_CUSTOM_F64_CODES,
+        LADDERBOTTOM_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLMATHOLDConfig::default(),
+        CDLMATHOLDConfig::new(settings, custom_penetration).unwrap(),
+        MATHOLD_OPEN,
+        MATHOLD_HIGH,
+        MATHOLD_LOW,
+        MATHOLD_CLOSE,
+        MATHOLD_DEFAULT_LOOKBACK,
+        MATHOLD_DEFAULT_F64_CODES,
+        MATHOLD_DEFAULT_F32_CODES,
+        MATHOLD_CUSTOM_LOOKBACK,
+        MATHOLD_CUSTOM_F64_CODES,
+        MATHOLD_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLRISEFALL3METHODSConfig::default(),
+        CDLRISEFALL3METHODSConfig::new(settings).unwrap(),
+        RISEFALL3METHODS_OPEN,
+        RISEFALL3METHODS_HIGH,
+        RISEFALL3METHODS_LOW,
+        RISEFALL3METHODS_CLOSE,
+        RISEFALL3METHODS_DEFAULT_LOOKBACK,
+        RISEFALL3METHODS_DEFAULT_F64_CODES,
+        RISEFALL3METHODS_DEFAULT_F32_CODES,
+        RISEFALL3METHODS_CUSTOM_LOOKBACK,
+        RISEFALL3METHODS_CUSTOM_F64_CODES,
+        RISEFALL3METHODS_CUSTOM_F32_CODES
+    );
+
+    for (f64_codes, f32_codes) in [
+        (
+            reference::BREAKAWAY_DEFAULT_F64_CODES,
+            reference::BREAKAWAY_DEFAULT_F32_CODES,
+        ),
+        (
+            reference::BREAKAWAY_CUSTOM_F64_CODES,
+            reference::BREAKAWAY_CUSTOM_F32_CODES,
+        ),
+        (
+            reference::LADDERBOTTOM_DEFAULT_F64_CODES,
+            reference::LADDERBOTTOM_DEFAULT_F32_CODES,
+        ),
+        (
+            reference::LADDERBOTTOM_CUSTOM_F64_CODES,
+            reference::LADDERBOTTOM_CUSTOM_F32_CODES,
+        ),
+        (
+            reference::MATHOLD_DEFAULT_F64_CODES,
+            reference::MATHOLD_DEFAULT_F32_CODES,
+        ),
+        (
+            reference::MATHOLD_CUSTOM_F64_CODES,
+            reference::MATHOLD_CUSTOM_F32_CODES,
+        ),
+        (
+            reference::RISEFALL3METHODS_DEFAULT_F64_CODES,
+            reference::RISEFALL3METHODS_DEFAULT_F32_CODES,
+        ),
+        (
+            reference::RISEFALL3METHODS_CUSTOM_F64_CODES,
+            reference::RISEFALL3METHODS_CUSTOM_F32_CODES,
+        ),
+    ] {
+        assert_eq!(f64_codes, f32_codes);
+        assert!(f64_codes.iter().any(|&code| code != 0));
+    }
+    assert!(reference::BREAKAWAY_DEFAULT_F64_CODES.contains(&100));
+    assert!(reference::BREAKAWAY_DEFAULT_F64_CODES.contains(&-100));
+    assert!(reference::RISEFALL3METHODS_DEFAULT_F64_CODES.contains(&100));
+    assert!(reference::RISEFALL3METHODS_DEFAULT_F64_CODES.contains(&-100));
+}
+
+fn long_formation_boundary_settings() -> CandleSettings {
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::BodyLong,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 0.5 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 2.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowVeryShort,
+            CandleSetting::new(CandleRangeKind::HighLow, 0, 0.1 as Float).unwrap(),
+        )
+}
+
+#[test]
+fn long_formation_scenarios_isolate_first_middle_final_and_strict_boundaries() {
+    let settings = long_formation_boundary_settings();
+
+    let breakaway = CDLBREAKAWAYConfig::new(settings).unwrap();
+    let breakaway_match = [
+        candle(20.0, 21.0, 9.0, 10.0),
+        candle(8.0, 9.0, 5.0, 6.0),
+        candle(5.0, 8.0, 4.0, 7.0),
+        candle(6.0, 7.0, 3.0, 4.0),
+        candle(4.0, 10.0, 3.5, 9.0),
+    ];
+    assert_eq!(boundary_code(breakaway, &breakaway_match), 100);
+    let mut first_miss = breakaway_match;
+    first_miss[0].close = first_miss[0].open;
+    assert_eq!(boundary_code(breakaway, &first_miss), 0);
+    let mut middle_miss = breakaway_match;
+    middle_miss[2].high = middle_miss[1].high;
+    assert_eq!(boundary_code(breakaway, &middle_miss), 0);
+    let mut final_boundary = breakaway_match;
+    final_boundary[4].close = final_boundary[1].open;
+    assert_eq!(boundary_code(breakaway, &final_boundary), 0);
+
+    let ladder = CDLLADDERBOTTOMConfig::new(settings).unwrap();
+    let ladder_match = [
+        candle(20.0, 20.5, 17.5, 18.0),
+        candle(19.0, 19.5, 16.5, 17.0),
+        candle(18.0, 18.5, 15.5, 16.0),
+        candle(17.0, 19.0, 14.5, 15.0),
+        candle(18.0, 20.5, 17.5, 20.0),
+    ];
+    assert_eq!(boundary_code(ladder, &ladder_match), 100);
+    let mut first_miss = ladder_match;
+    first_miss[0].close = first_miss[0].open;
+    assert_eq!(boundary_code(ladder, &first_miss), 0);
+    let mut middle_boundary = ladder_match;
+    middle_boundary[2].open = middle_boundary[1].open;
+    middle_boundary[2].high = middle_boundary[1].high;
+    assert_eq!(boundary_code(ladder, &middle_boundary), 0);
+    let mut final_boundary = ladder_match;
+    final_boundary[4].close = final_boundary[3].high;
+    assert_eq!(boundary_code(ladder, &final_boundary), 0);
+
+    let mathold = CDLMATHOLDConfig::new(settings, Penetration::new(0.5 as Float).unwrap()).unwrap();
+    let mathold_match = [
+        candle(10.0, 21.0, 9.0, 20.0),
+        candle(23.0, 23.5, 22.0, 22.5),
+        candle(20.0, 20.5, 19.0, 19.5),
+        candle(19.5, 20.0, 18.5, 19.0),
+        candle(19.5, 24.5, 19.0, 24.0),
+    ];
+    assert_eq!(boundary_code(mathold, &mathold_match), 100);
+    let mut first_miss = mathold_match;
+    first_miss[0].close = first_miss[0].open;
+    assert_eq!(boundary_code(mathold, &first_miss), 0);
+    let mut middle_boundary = mathold_match;
+    middle_boundary[3].open = middle_boundary[2].open;
+    assert_eq!(boundary_code(mathold, &middle_boundary), 0);
+    let mut final_boundary = mathold_match;
+    final_boundary[4].close = final_boundary[1].high;
+    assert_eq!(boundary_code(mathold, &final_boundary), 0);
+
+    let rise_fall = CDLRISEFALL3METHODSConfig::new(settings).unwrap();
+    let rise_fall_match = [
+        candle(10.0, 21.0, 9.0, 20.0),
+        candle(19.0, 19.5, 18.0, 18.5),
+        candle(18.5, 19.0, 17.5, 18.0),
+        candle(18.0, 18.5, 17.0, 17.5),
+        candle(18.0, 21.5, 17.5, 21.0),
+    ];
+    assert_eq!(boundary_code(rise_fall, &rise_fall_match), 100);
+    let mut first_miss = rise_fall_match;
+    first_miss[0].close = first_miss[0].open;
+    assert_eq!(boundary_code(rise_fall, &first_miss), 0);
+    let mut middle_boundary = rise_fall_match;
+    middle_boundary[2].open = 19.0 as Float;
+    middle_boundary[2].close = middle_boundary[1].close;
+    assert_eq!(boundary_code(rise_fall, &middle_boundary), 0);
+    let mut final_boundary = rise_fall_match;
+    final_boundary[4].close = final_boundary[0].close;
+    assert_eq!(boundary_code(rise_fall, &final_boundary), 0);
+}
+
+#[test]
+fn mathold_owns_pinned_penetration_and_accepts_nondefault_values_above_one() {
+    let settings = CandleSettings::default();
+    let above_one = Penetration::new(4.0 as Float).unwrap();
+    assert_eq!(
+        CDLMATHOLDConfig::default().penetration().value(),
+        0.5 as Float
+    );
+    assert_eq!(
+        CDLMATHOLDConfig::new(settings, above_one)
+            .unwrap()
+            .penetration(),
+        above_one
+    );
+}
+
+#[test]
+fn long_formation_evidence_rows_cover_pinned_offsets_settings_signs_and_lookbacks() {
+    const ROWS: [(&str, &str, &str, &str, &str, &str, usize); 4] = [
+        (
+            "CDLBREAKAWAY",
+            "cdlbreakaway/cdlbreakaway.c",
+            "five-Candle do-loop at i-4..i",
+            "BodyLong at i-4; exact real-body gap and strict high/low staircase",
+            "branch from i-4 color; sign from i",
+            "BodyLong average period + 4",
+            14,
+        ),
+        (
+            "CDLLADDERBOTTOM",
+            "cdlladderbottom/cdlladderbottom.c",
+            "five-Candle do-loop at i-4..i",
+            "ShadowVeryShort at i-1; strict descending opens/closes and final breakout",
+            "fixed bullish sign",
+            "ShadowVeryShort average period + 4",
+            14,
+        ),
+        (
+            "CDLMATHOLD",
+            "cdlmathold/cdlmathold.c",
+            "five-Candle do-loop at i-4..i",
+            "BodyLong at i-4; BodyShort at i-3..i-1; Penetration default 0.5",
+            "fixed bullish sign",
+            "max(BodyLong, BodyShort) average period + 4",
+            14,
+        ),
+        (
+            "CDLRISEFALL3METHODS",
+            "cdlrisefall3methods/cdlrisefall3methods.c",
+            "five-Candle do-loop at i-4..i",
+            "BodyLong at i-4/i; BodyShort at i-3..i-1; strict range intersections",
+            "comparisons and sign from i-4 color",
+            "max(BodyLong, BodyShort) average period + 4",
+            14,
+        ),
+    ];
+    assert_eq!(
+        reference::TALIB_GIT_REVISION,
+        "2247d599bddf37ed37e3a709371517e46efc66f6"
+    );
+    assert!(ROWS.iter().all(
+        |(name, source, span, predicate, direction, lookback_formula, default_lookback)| {
+            name.starts_with("CDL")
+                && source.ends_with(".c")
+                && span.contains("five-Candle")
+                && !predicate.is_empty()
+                && !direction.is_empty()
+                && lookback_formula.ends_with("+ 4")
+                && *default_lookback == 14
+        }
+    ));
 }
