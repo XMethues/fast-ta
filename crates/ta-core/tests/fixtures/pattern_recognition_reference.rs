@@ -621,3 +621,26 @@ pub const RISEFALL3METHODS_DEFAULT_F32_CODES: &[i32] = &[100, 0, 0, 0, 0, 0, 0, 
 pub const RISEFALL3METHODS_CUSTOM_LOOKBACK: usize = 7;
 pub const RISEFALL3METHODS_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
 pub const RISEFALL3METHODS_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+
+pub const HIKKAKE_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 9.0, 14.0, 10.0, 10.0, 10.0, 11.0, 6.0, 10.0];
+pub const HIKKAKE_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 15.0, 14.0, 13.0, 16.0, 12.0, 15.0, 14.0, 16.0, 13.0, 12.0];
+pub const HIKKAKE_LOW: &[f64] = &[8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 5.0, 6.0, 4.0, 7.0, 8.0, 5.0, 6.0, 7.0, 4.0, 8.0];
+pub const HIKKAKE_CLOSE: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 8.0, 15.0, 10.0, 10.0, 10.0, 12.0, 5.0, 10.0];
+pub const HIKKAKE_DEFAULT_LOOKBACK: usize = 5;
+pub const HIKKAKE_DEFAULT_F64_CODES: &[i32] = &[0, 0, 0, 100, 200, 0, 0, 0, -100, -200, 0];
+pub const HIKKAKE_DEFAULT_F32_CODES: &[i32] = &[0, 0, 0, 100, 200, 0, 0, 0, -100, -200, 0];
+
+pub const HIKKAKEMOD_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 9.0, 14.0, 10.0, 10.0, 10.0, 10.0, 10.0, 11.0, 6.0, 10.0];
+pub const HIKKAKEMOD_HIGH: &[f64] = &[15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0, 16.0, 15.0, 14.0, 13.0, 16.0, 15.0, 15.0, 16.0, 15.0, 14.0, 15.0, 13.0, 15.0];
+pub const HIKKAKEMOD_LOW: &[f64] = &[5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 4.0, 5.0, 6.0, 5.0, 7.0, 5.0, 5.0, 4.0, 5.0, 6.0, 7.0, 5.0, 5.0];
+pub const HIKKAKEMOD_CLOSE: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 6.0, 10.0, 8.0, 15.0, 10.0, 10.0, 10.0, 14.0, 10.0, 12.0, 5.0, 10.0];
+pub const HIKKAKEMOD_DEFAULT_LOOKBACK: usize = 10;
+pub const HIKKAKEMOD_DEFAULT_F64_CODES: &[i32] = &[0, 0, 0, 100, 200, 0, 0, 0, 0, 0, -100, -200, 0];
+pub const HIKKAKEMOD_DEFAULT_F32_CODES: &[i32] = &[0, 0, 0, 100, 200, 0, 0, 0, 0, 0, -100, -200, 0];
+
+pub const HIKKAKE_CUSTOM_LOOKBACK: usize = 5;
+pub const HIKKAKE_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 100, 200, 0, 0, 0, -100, -200, 0];
+pub const HIKKAKE_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 100, 200, 0, 0, 0, -100, -200, 0];
+pub const HIKKAKEMOD_CUSTOM_LOOKBACK: usize = 8;
+pub const HIKKAKEMOD_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 100, 200, 0, 0, 0, 0, 0, -100, -200, 0];
+pub const HIKKAKEMOD_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 100, 200, 0, 0, 0, 0, 0, -100, -200, 0];

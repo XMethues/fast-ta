@@ -102,6 +102,8 @@ use ta_core::pattern_recognition::{
     CDLHANGINGMANConfig, CDLHANGINGMANStream, CDLHARAMIBatchRunner, CDLHARAMIConfig,
     CDLHARAMICROSSBatchRunner, CDLHARAMICROSSConfig, CDLHARAMICROSSStream, CDLHARAMIStream,
     CDLHIGHWAVEBatchRunner, CDLHIGHWAVEConfig, CDLHIGHWAVEStream, CDLHOMINGPIGEONBatchRunner,
+    CDLHIKKAKEBatchRunner, CDLHIKKAKEConfig, CDLHIKKAKEStream, CDLHIKKAKEMODBatchRunner,
+    CDLHIKKAKEMODConfig, CDLHIKKAKEMODStream,
     CDLHOMINGPIGEONConfig, CDLHOMINGPIGEONStream, CDLINNECKBatchRunner, CDLINNECKConfig,
     CDLINNECKStream, CDLINVERTEDHAMMERBatchRunner, CDLINVERTEDHAMMERConfig,
     CDLINVERTEDHAMMERStream, CDLKICKINGBatchRunner, CDLKICKINGBYLENGTHBatchRunner,
@@ -365,6 +367,8 @@ fn first_tranche_functions_are_marked_implemented() {
         "CDLLADDERBOTTOM",
         "CDLMATHOLD",
         "CDLRISEFALL3METHODS",
+        "CDLHIKKAKE",
+        "CDLHIKKAKEMOD",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -487,7 +491,7 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<NATRConfig, NATRBatchRunner, NATRStream>();
     assert_execution_types::<TRANGEConfig, TRANGEBatchRunner, TRANGEStream>();
 
-    // Pattern Recognition (48 implemented indicators).
+    // Pattern Recognition (50 implemented indicators).
     assert_execution_types::<CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream>();
     assert_execution_types::<
         CDLENGULFINGConfig,
@@ -671,6 +675,12 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLRISEFALL3METHODSConfig,
         CDLRISEFALL3METHODSBatchRunner,
         CDLRISEFALL3METHODSStream,
+    >();
+    assert_execution_types::<CDLHIKKAKEConfig, CDLHIKKAKEBatchRunner, CDLHIKKAKEStream>();
+    assert_execution_types::<
+        CDLHIKKAKEMODConfig,
+        CDLHIKKAKEMODBatchRunner,
+        CDLHIKKAKEMODStream,
     >();
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
@@ -892,6 +902,8 @@ fn inventory_count_matches_execution_seam_coverage() {
         "CDLLADDERBOTTOM",
         "CDLMATHOLD",
         "CDLRISEFALL3METHODS",
+        "CDLHIKKAKE",
+        "CDLHIKKAKEMOD",
     ];
 
     assert_eq!(
@@ -910,11 +922,11 @@ fn inventory_count_matches_execution_seam_coverage() {
 }
 
 #[test]
-fn remaining_pattern_recognition_functions_remain_planned() {
-    for name in ["CDLHIKKAKE", "CDLHIKKAKEMOD"] {
-        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
-        assert_eq!(info.status, ImplementationStatus::Planned, "{name}");
-    }
+fn pattern_recognition_catalogue_has_no_remaining_planned_functions() {
+    assert!(TALIB_FUNCTIONS.iter().all(|info| {
+        info.group != FunctionGroup::PatternRecognition
+            || info.status == ImplementationStatus::Implemented
+    }));
 }
 
 #[test]

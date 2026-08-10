@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 159;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 161;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -247,8 +247,8 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLHARAMI", PatternRecognition, Implemented),
     function!("CDLHARAMICROSS", PatternRecognition, Implemented),
     function!("CDLHIGHWAVE", PatternRecognition, Implemented),
-    function!("CDLHIKKAKE", PatternRecognition, Planned),
-    function!("CDLHIKKAKEMOD", PatternRecognition, Planned),
+    function!("CDLHIKKAKE", PatternRecognition, Implemented),
+    function!("CDLHIKKAKEMOD", PatternRecognition, Implemented),
     function!("CDLHOMINGPIGEON", PatternRecognition, Implemented),
     function!("CDLIDENTICAL3CROWS", PatternRecognition, Implemented),
     function!("CDLINNECK", PatternRecognition, Implemented),

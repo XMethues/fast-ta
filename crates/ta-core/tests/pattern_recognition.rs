@@ -26,9 +26,8 @@ use ta_core::pattern_recognition::{
     CDLSPINNINGTOPConfig, CDLSTALLEDPATTERNConfig, CDLSTICKSANDWICHConfig, CDLTAKURIConfig,
     CDLTASUKIGAPConfig,
     CDLTHRUSTINGConfig, CDLTRISTARConfig, CDLUNIQUE3RIVERConfig, CDLUPSIDEGAP2CROWSConfig,
-    CDLXSIDEGAP3METHODSConfig,
-    CDLBREAKAWAYConfig, CDLLADDERBOTTOMConfig, CDLMATHOLDConfig,
-    CDLRISEFALL3METHODSConfig,
+    CDLXSIDEGAP3METHODSConfig, CDLBREAKAWAYConfig, CDLHIKKAKEConfig, CDLHIKKAKEMODConfig,
+    CDLLADDERBOTTOMConfig, CDLMATHOLDConfig, CDLRISEFALL3METHODSConfig,
 };
 use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
@@ -2191,6 +2190,534 @@ fn long_formation_evidence_rows_cover_pinned_offsets_settings_signs_and_lookback
                 && !direction.is_empty()
                 && lookback_formula.ends_with("+ 4")
                 && *default_lookback == 14
+        }
+    ));
+}
+
+fn hikkake_series(candles: &[Candle]) -> Series {
+    Series {
+        open: candles.iter().map(|candle| candle.open).collect(),
+        high: candles.iter().map(|candle| candle.high).collect(),
+        low: candles.iter().map(|candle| candle.low).collect(),
+        close: candles.iter().map(|candle| candle.close).collect(),
+    }
+}
+
+fn hikkake_codes<C>(config: C, candles: &[Candle]) -> Vec<i32>
+where
+    C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    for<'a> C: IndicatorConfig<Input<'a> = CandleInput<'a>>,
+{
+    let series = hikkake_series(candles);
+    config
+        .compute(series.input())
+        .unwrap()
+        .values()
+        .iter()
+        .map(|signal| signal.to_talib_code())
+        .collect()
+}
+
+fn ordinary_formation(direction: PatternDirection) -> Vec<Candle> {
+    let mut candles = vec![candle(10.0, 12.0, 8.0, 10.0); 6];
+    candles.extend(match direction {
+        PatternDirection::Bullish => [
+            candle(10.0, 15.0, 5.0, 10.0),
+            candle(10.0, 14.0, 6.0, 10.0),
+            candle(9.0, 13.0, 4.0, 8.0),
+        ],
+        PatternDirection::Bearish => [
+            candle(10.0, 15.0, 5.0, 10.0),
+            candle(10.0, 14.0, 6.0, 10.0),
+            candle(11.0, 16.0, 7.0, 12.0),
+        ],
+    });
+    candles
+}
+
+fn modified_formation(direction: PatternDirection) -> Vec<Candle> {
+    let mut candles = vec![candle(10.0, 15.0, 5.0, 10.0); 10];
+    candles.extend(match direction {
+        PatternDirection::Bullish => [
+            candle(10.0, 16.0, 4.0, 10.0),
+            candle(10.0, 15.0, 5.0, 6.0),
+            candle(10.0, 14.0, 6.0, 10.0),
+            candle(9.0, 13.0, 5.0, 8.0),
+        ],
+        PatternDirection::Bearish => [
+            candle(10.0, 16.0, 4.0, 10.0),
+            candle(10.0, 15.0, 5.0, 14.0),
+            candle(10.0, 14.0, 6.0, 10.0),
+            candle(11.0, 15.0, 7.0, 12.0),
+        ],
+    });
+    candles
+}
+
+fn hikkake_filler() -> Candle {
+    candle(10.0, 17.0, 4.0, 10.0)
+}
+
+fn ordinary_confirmation(direction: PatternDirection) -> Candle {
+    match direction {
+        PatternDirection::Bullish => candle(14.0, 17.0, 4.0, 15.0),
+        PatternDirection::Bearish => candle(6.0, 17.0, 4.0, 5.0),
+    }
+}
+
+fn modified_confirmation(direction: PatternDirection) -> Candle {
+    match direction {
+        PatternDirection::Bullish => candle(14.0, 17.0, 4.0, 15.0),
+        PatternDirection::Bearish => candle(6.0, 17.0, 4.0, 5.0),
+    }
+}
+
+fn with_confirmation_age(
+    mut candles: Vec<Candle>,
+    direction: PatternDirection,
+    age: usize,
+    confirmation: fn(PatternDirection) -> Candle,
+) -> Vec<Candle> {
+    candles.extend((1..age).map(|_| hikkake_filler()));
+    candles.push(confirmation(direction));
+    candles
+}
+
+#[test]
+fn pinned_hikkake_fixtures_qualify_default_and_custom_f64_f32_in_all_four_modes() {
+    assert_eq!(reference::TALIB_VERSION, "0.7.1");
+    assert_eq!(
+        reference::TALIB_GIT_REVISION,
+        "2247d599bddf37ed37e3a709371517e46efc66f6"
+    );
+
+    let ordinary = Series::from_fixture(
+        reference::HIKKAKE_OPEN,
+        reference::HIKKAKE_HIGH,
+        reference::HIKKAKE_LOW,
+        reference::HIKKAKE_CLOSE,
+    );
+    let ordinary_default = expected_codes(
+        reference::HIKKAKE_DEFAULT_F64_CODES,
+        reference::HIKKAKE_DEFAULT_F32_CODES,
+    );
+    qualify_pattern_fixture(
+        CDLHIKKAKEConfig::default(),
+        &ordinary,
+        reference::HIKKAKE_DEFAULT_LOOKBACK,
+        &ordinary_default,
+    );
+
+    let custom_settings = CandleSettings::default().with_setting(
+        CandleSettingType::Near,
+        CandleSetting::new(CandleRangeKind::HighLow, 3, 0.125 as Float).unwrap(),
+    );
+    let ordinary_custom = expected_codes(
+        reference::HIKKAKE_CUSTOM_F64_CODES,
+        reference::HIKKAKE_CUSTOM_F32_CODES,
+    );
+    qualify_pattern_fixture(
+        CDLHIKKAKEConfig::new(custom_settings).unwrap(),
+        &ordinary,
+        reference::HIKKAKE_CUSTOM_LOOKBACK,
+        &ordinary_custom,
+    );
+
+    let modified = Series::from_fixture(
+        reference::HIKKAKEMOD_OPEN,
+        reference::HIKKAKEMOD_HIGH,
+        reference::HIKKAKEMOD_LOW,
+        reference::HIKKAKEMOD_CLOSE,
+    );
+    let modified_default = expected_codes(
+        reference::HIKKAKEMOD_DEFAULT_F64_CODES,
+        reference::HIKKAKEMOD_DEFAULT_F32_CODES,
+    );
+    qualify_pattern_fixture(
+        CDLHIKKAKEMODConfig::default(),
+        &modified,
+        reference::HIKKAKEMOD_DEFAULT_LOOKBACK,
+        &modified_default,
+    );
+    let modified_custom = expected_codes(
+        reference::HIKKAKEMOD_CUSTOM_F64_CODES,
+        reference::HIKKAKEMOD_CUSTOM_F32_CODES,
+    );
+    qualify_pattern_fixture(
+        CDLHIKKAKEMODConfig::new(custom_settings).unwrap(),
+        &modified,
+        reference::HIKKAKEMOD_CUSTOM_LOOKBACK,
+        &modified_custom,
+    );
+}
+
+#[test]
+fn independent_hikkake_scenarios_cover_both_directions_and_confirmation_ages_one_to_three() {
+    for direction in [PatternDirection::Bullish, PatternDirection::Bearish] {
+        let standard = match direction {
+            PatternDirection::Bullish => 100,
+            PatternDirection::Bearish => -100,
+        };
+        let confirmed = standard * 2;
+        for age in 1..=3 {
+            let ordinary = with_confirmation_age(
+                ordinary_formation(direction),
+                direction,
+                age,
+                ordinary_confirmation,
+            );
+            let ordinary_codes = hikkake_codes(CDLHIKKAKEConfig::default(), &ordinary);
+            assert_eq!(ordinary_codes[3], standard, "{direction:?} age {age}");
+            assert_eq!(ordinary_codes[3 + age], confirmed, "{direction:?} age {age}");
+            assert_eq!(
+                ordinary_codes
+                    .iter()
+                    .filter(|&&code| code == confirmed)
+                    .count(),
+                1
+            );
+
+            let modified = with_confirmation_age(
+                modified_formation(direction),
+                direction,
+                age,
+                modified_confirmation,
+            );
+            let modified_codes = hikkake_codes(CDLHIKKAKEMODConfig::default(), &modified);
+            assert_eq!(modified_codes[3], standard, "{direction:?} age {age}");
+            assert_eq!(modified_codes[3 + age], confirmed, "{direction:?} age {age}");
+            assert_eq!(
+                modified_codes
+                    .iter()
+                    .filter(|&&code| code == confirmed)
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
+fn hikkake_confirmation_is_strict_uses_the_pinned_boundary_and_expires_after_age_three() {
+    for direction in [PatternDirection::Bullish, PatternDirection::Bearish] {
+        let mut ordinary = ordinary_formation(direction);
+        ordinary.push(match direction {
+            PatternDirection::Bullish => candle(13.0, 17.0, 4.0, 14.0),
+            PatternDirection::Bearish => candle(7.0, 17.0, 4.0, 6.0),
+        });
+        ordinary.push(ordinary_confirmation(direction));
+        let ordinary_codes = hikkake_codes(CDLHIKKAKEConfig::default(), &ordinary);
+        assert_eq!(ordinary_codes[4], 0, "ordinary boundary contact");
+        assert_eq!(
+            ordinary_codes[5],
+            if direction == PatternDirection::Bullish { 200 } else { -200 }
+        );
+
+        let mut modified = modified_formation(direction);
+        modified.push(match direction {
+            PatternDirection::Bullish => candle(13.0, 17.0, 4.0, 13.5),
+            PatternDirection::Bearish => candle(7.0, 17.0, 4.0, 6.5),
+        });
+        modified.push(match direction {
+            PatternDirection::Bullish => candle(13.0, 17.0, 4.0, 14.0),
+            PatternDirection::Bearish => candle(7.0, 17.0, 4.0, 6.0),
+        });
+        modified.push(modified_confirmation(direction));
+        let modified_codes = hikkake_codes(CDLHIKKAKEMODConfig::default(), &modified);
+        assert_eq!(&modified_codes[4..=5], &[0, 0]);
+        assert_eq!(
+            modified_codes[6],
+            if direction == PatternDirection::Bullish { 200 } else { -200 }
+        );
+
+        let mut ordinary_expired = ordinary_formation(direction);
+        ordinary_expired.extend([hikkake_filler(); 3]);
+        ordinary_expired.push(ordinary_confirmation(direction));
+        assert_eq!(
+            hikkake_codes(CDLHIKKAKEConfig::default(), &ordinary_expired)
+                .last()
+                .copied(),
+            Some(0)
+        );
+
+        let mut modified_expired = modified_formation(direction);
+        modified_expired.extend([hikkake_filler(); 3]);
+        modified_expired.push(modified_confirmation(direction));
+        assert_eq!(
+            hikkake_codes(CDLHIKKAKEMODConfig::default(), &modified_expired)
+                .last()
+                .copied(),
+            Some(0)
+        );
+    }
+}
+
+#[test]
+fn newer_hikkake_formation_replaces_pending_and_wins_same_position_precedence() {
+    let mut ordinary = vec![candle(10.0, 12.0, 8.0, 10.0); 6];
+    ordinary.extend([
+        candle(10.0, 20.0, 0.0, 10.0),
+        candle(10.0, 18.0, 2.0, 10.0),
+        candle(9.0, 16.0, 1.0, 8.0),
+        candle(10.0, 15.0, 2.0, 10.0),
+        candle(10.0, 20.0, 3.0, 19.0),
+        candle(5.0, 17.0, 1.0, 1.0),
+    ]);
+    let ordinary_codes = hikkake_codes(CDLHIKKAKEConfig::default(), &ordinary);
+    assert_eq!(&ordinary_codes[3..=6], &[100, 0, -100, -200]);
+    assert!(!ordinary_codes.contains(&200));
+
+    let mut modified = vec![candle(10.0, 15.0, 5.0, 10.0); 10];
+    modified.extend([
+        candle(10.0, 20.0, 0.0, 10.0),
+        candle(10.0, 18.0, 2.0, 3.0),
+        candle(10.0, 16.0, 4.0, 10.0),
+        candle(9.0, 15.0, 3.0, 8.0),
+        candle(10.0, 14.0, 4.0, 13.0),
+        candle(10.0, 13.0, 5.0, 10.0),
+        candle(10.0, 18.0, 6.0, 17.0),
+        candle(5.0, 17.0, 4.0, 4.0),
+    ]);
+    let modified_codes = hikkake_codes(CDLHIKKAKEMODConfig::default(), &modified);
+    assert_eq!(&modified_codes[3..=7], &[100, 0, 0, -100, -200]);
+    assert!(!modified_codes.contains(&200));
+}
+
+#[test]
+fn modified_hikkake_owns_near_average_and_its_exact_non_strict_formation_boundary() {
+    let settings = CandleSettings::default().with_setting(
+        CandleSettingType::Near,
+        CandleSetting::new(CandleRangeKind::HighLow, 0, 0.2 as Float).unwrap(),
+    );
+    let config = CDLHIKKAKEMODConfig::new(settings).unwrap();
+    assert_eq!(config.warm_up(), 6);
+    assert_eq!(CDLHIKKAKEMODConfig::default().warm_up(), 10);
+
+    let mut bullish = vec![candle(10.0, 15.0, 5.0, 10.0); 6];
+    bullish.extend([
+        candle(10.0, 16.0, 4.0, 10.0),
+        candle(10.0, 15.0, 5.0, 7.0),
+        candle(10.0, 14.0, 6.0, 10.0),
+        candle(9.0, 13.0, 5.0, 8.0),
+    ]);
+    assert_eq!(hikkake_codes(config, &bullish).last().copied(), Some(100));
+    bullish[7].close = 7.01 as Float;
+    assert_eq!(hikkake_codes(config, &bullish).last().copied(), Some(0));
+
+    let mut bearish = vec![candle(10.0, 15.0, 5.0, 10.0); 6];
+    bearish.extend([
+        candle(10.0, 16.0, 4.0, 10.0),
+        candle(10.0, 15.0, 5.0, 13.0),
+        candle(10.0, 14.0, 6.0, 10.0),
+        candle(11.0, 15.0, 7.0, 12.0),
+    ]);
+    assert_eq!(hikkake_codes(config, &bearish).last().copied(), Some(-100));
+    bearish[7].close = 12.99 as Float;
+    assert_eq!(hikkake_codes(config, &bearish).last().copied(), Some(0));
+}
+
+#[test]
+fn silent_hikkake_transitions_reconstruct_and_consume_pending_before_lookback() {
+    let ordinary_reconstructed = [
+        candle(10.0, 15.0, 5.0, 10.0),
+        candle(10.0, 14.0, 6.0, 10.0),
+        candle(9.0, 13.0, 4.0, 8.0),
+        hikkake_filler(),
+        hikkake_filler(),
+        ordinary_confirmation(PatternDirection::Bullish),
+    ];
+    assert_eq!(
+        hikkake_codes(CDLHIKKAKEConfig::default(), &ordinary_reconstructed),
+        [200]
+    );
+
+    let ordinary_consumed = [
+        candle(10.0, 15.0, 5.0, 10.0),
+        candle(10.0, 14.0, 6.0, 10.0),
+        candle(9.0, 13.0, 4.0, 8.0),
+        ordinary_confirmation(PatternDirection::Bullish),
+        hikkake_filler(),
+        hikkake_filler(),
+    ];
+    assert_eq!(
+        hikkake_codes(CDLHIKKAKEConfig::default(), &ordinary_consumed),
+        [0]
+    );
+
+    let modified_reconstructed = [
+        candle(10.0, 15.0, 5.0, 10.0),
+        candle(10.0, 15.0, 5.0, 10.0),
+        candle(10.0, 15.0, 5.0, 10.0),
+        candle(10.0, 15.0, 5.0, 10.0),
+        candle(10.0, 16.0, 4.0, 10.0),
+        candle(10.0, 15.0, 5.0, 6.0),
+        candle(10.0, 14.0, 6.0, 10.0),
+        candle(9.0, 13.0, 5.0, 8.0),
+        hikkake_filler(),
+        hikkake_filler(),
+        modified_confirmation(PatternDirection::Bullish),
+    ];
+    assert_eq!(
+        hikkake_codes(CDLHIKKAKEMODConfig::default(), &modified_reconstructed),
+        [200]
+    );
+}
+
+fn assert_prepared_hikkake_isolation<C>(config: C, pending: &[Candle])
+where
+    C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    for<'a> C: IndicatorConfig<
+        Input<'a> = CandleInput<'a>,
+        OutputMut<'a> = &'a mut [PatternSignal],
+    >,
+    C::BatchRunner: PreparedBatchRunner<C>,
+{
+    let pending = hikkake_series(pending);
+    let neutral_candles = vec![candle(10.0, 15.0, 5.0, 10.0); pending.open.len()];
+    let neutral = hikkake_series(&neutral_candles);
+    let output_len = pending.open.len() - config.lookback();
+    let mut runner = config.prepare_batch(pending.open.len()).unwrap();
+    let mut output = vec![PatternSignal::NoMatch; output_len];
+    runner.compute_into(pending.input(), &mut output).unwrap();
+    output.fill(PatternSignal::Match {
+        direction: PatternDirection::Bearish,
+        strength: PatternStrength::Confirmed,
+    });
+    runner.compute_into(neutral.input(), &mut output).unwrap();
+    assert!(output.iter().all(|signal| *signal == PatternSignal::NoMatch));
+}
+
+fn assert_streaming_hikkake_lifecycle<C>(
+    config: C,
+    candles: &[Candle],
+    formation_index: usize,
+    expected_confirmation: i32,
+) where
+    C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    for<'a> C: IndicatorConfig<Input<'a> = CandleInput<'a>>,
+    C::Stream: StreamingComputation<C, Tick = Candle, TickOutput = PatternSignal>,
+{
+    let expected = hikkake_codes(config, candles);
+    for split in (formation_index + 1)..candles.len() {
+        let mut stream = config.stream().unwrap();
+        let mut actual = Vec::new();
+        for candle in &candles[..split] {
+            if let Some(signal) = stream.next(*candle).unwrap() {
+                actual.push(signal.to_talib_code());
+            }
+        }
+        for candle in &candles[split..] {
+            if let Some(signal) = stream.next(*candle).unwrap() {
+                actual.push(signal.to_talib_code());
+            }
+        }
+        assert_eq!(actual, expected, "split after source position {}", split - 1);
+    }
+
+    let mut stream = config.stream().unwrap();
+    for candle in &candles[..=formation_index] {
+        stream.next(*candle).unwrap();
+    }
+    let invalid = Candle {
+        close: Float::NAN,
+        ..hikkake_filler()
+    };
+    assert!(stream.next(invalid).is_err());
+    let mut last = PatternSignal::NoMatch;
+    for candle in &candles[formation_index + 1..] {
+        if let Some(signal) = stream.next(*candle).unwrap() {
+            last = signal;
+        }
+    }
+    assert_eq!(last.to_talib_code(), expected_confirmation);
+
+    let mut reset = config.stream().unwrap();
+    for candle in &candles[..=formation_index] {
+        reset.next(*candle).unwrap();
+    }
+    reset.reset();
+    for _ in 0..config.lookback() {
+        assert_eq!(reset.next(hikkake_filler()).unwrap(), None);
+    }
+    assert_eq!(
+        reset.next(*candles.last().unwrap()).unwrap(),
+        Some(PatternSignal::NoMatch)
+    );
+}
+
+#[test]
+fn prepared_and_streaming_hikkake_state_is_isolated_retained_reset_and_retry_safe() {
+    let ordinary_pending = ordinary_formation(PatternDirection::Bullish);
+    assert_prepared_hikkake_isolation(CDLHIKKAKEConfig::default(), &ordinary_pending);
+    let ordinary_age_three = with_confirmation_age(
+        ordinary_pending,
+        PatternDirection::Bullish,
+        3,
+        ordinary_confirmation,
+    );
+    assert_streaming_hikkake_lifecycle(
+        CDLHIKKAKEConfig::default(),
+        &ordinary_age_three,
+        8,
+        200,
+    );
+
+    let modified_pending = modified_formation(PatternDirection::Bearish);
+    assert_prepared_hikkake_isolation(CDLHIKKAKEMODConfig::default(), &modified_pending);
+    let modified_age_three = with_confirmation_age(
+        modified_pending,
+        PatternDirection::Bearish,
+        3,
+        modified_confirmation,
+    );
+    assert_streaming_hikkake_lifecycle(
+        CDLHIKKAKEMODConfig::default(),
+        &modified_age_three,
+        13,
+        -200,
+    );
+}
+
+#[test]
+fn hikkake_evidence_rows_cover_pinned_state_predicates_boundaries_and_transitions() {
+    const ROWS: [(&str, &str, &str, &str, &str, &str, usize, usize); 2] = [
+        (
+            "CDLHIKKAKE",
+            "cdlhikkake/cdlhikkake.c",
+            "inside i-1 within i-2; i lower/lower or higher/higher",
+            "no Candle Average",
+            "strict close beyond the high/low of i-1 at formation",
+            "fixed Lookback 5; transition starts at Lookback - 3",
+            2,
+            5,
+        ),
+        (
+            "CDLHIKKAKEMOD",
+            "cdlhikkakemod/cdlhikkakemod.c",
+            "nested inside i-2/i-3 and i-1/i-2; i lower/lower or higher/higher",
+            "Near at i-2 with non-strict close boundary",
+            "strict close beyond the high/low of i-1 at formation",
+            "Lookback max(1, Near period) + 5; transition starts three earlier",
+            7,
+            10,
+        ),
+    ];
+    assert_eq!(
+        reference::TALIB_GIT_REVISION,
+        "2247d599bddf37ed37e3a709371517e46efc66f6"
+    );
+    assert_eq!(ROWS[0].6, CDLHIKKAKEConfig::default().warm_up() - 3);
+    assert_eq!(ROWS[0].7, CDLHIKKAKEConfig::default().warm_up());
+    assert_eq!(ROWS[1].6, CDLHIKKAKEMODConfig::default().warm_up() - 3);
+    assert_eq!(ROWS[1].7, CDLHIKKAKEMODConfig::default().warm_up());
+    assert!(ROWS.iter().all(
+        |(name, source, formation, average, confirmation, formula, _, _)| {
+            name.starts_with("CDLHIKKAKE")
+                && source.ends_with(".c")
+                && formation.contains("inside")
+                && !average.is_empty()
+                && confirmation.contains("strict")
+                && formula.contains("transition starts")
         }
     ));
 }

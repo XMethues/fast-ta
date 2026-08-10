@@ -110,6 +110,7 @@ mod crows_soldiers;
 mod doji;
 mod gap_continuation;
 mod engulfing;
+mod hikkake;
 mod long_formation;
 mod position_shadow;
 mod single_candle;
@@ -142,6 +143,10 @@ pub use gap_continuation::{
     CDLTASUKIGAPStream, CDLTRISTARBatchRunner, CDLTRISTARConfig, CDLTRISTARStream,
     CDLUPSIDEGAP2CROWSBatchRunner, CDLUPSIDEGAP2CROWSConfig, CDLUPSIDEGAP2CROWSStream,
     CDLXSIDEGAP3METHODSBatchRunner, CDLXSIDEGAP3METHODSConfig, CDLXSIDEGAP3METHODSStream,
+};
+pub use hikkake::{
+    CDLHIKKAKEBatchRunner, CDLHIKKAKEConfig, CDLHIKKAKEStream, CDLHIKKAKEMODBatchRunner,
+    CDLHIKKAKEMODConfig, CDLHIKKAKEMODStream,
 };
 pub use long_formation::{
     CDLBREAKAWAYBatchRunner, CDLBREAKAWAYConfig, CDLBREAKAWAYStream, CDLLADDERBOTTOMBatchRunner,

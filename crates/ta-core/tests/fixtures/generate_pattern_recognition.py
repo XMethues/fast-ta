@@ -367,6 +367,25 @@ LONG_FORMATION_FIXTURES = {
     ),
 }
 
+HIKKAKE_FIXTURES = {
+    "CDLHIKKAKE": (
+        [10.0] * 6 + [10.0, 10.0, 9.0, 14.0, 10.0, 10.0, 10.0, 11.0, 6.0, 10.0],
+        [12.0] * 6 + [15.0, 14.0, 13.0, 16.0, 12.0, 15.0, 14.0, 16.0, 13.0, 12.0],
+        [8.0] * 6 + [5.0, 6.0, 4.0, 7.0, 8.0, 5.0, 6.0, 7.0, 4.0, 8.0],
+        [10.0] * 6 + [10.0, 10.0, 8.0, 15.0, 10.0, 10.0, 10.0, 12.0, 5.0, 10.0],
+    ),
+    "CDLHIKKAKEMOD": (
+        [10.0] * 10
+        + [10.0, 10.0, 10.0, 9.0, 14.0, 10.0, 10.0, 10.0, 10.0, 10.0, 11.0, 6.0, 10.0],
+        [15.0] * 10
+        + [16.0, 15.0, 14.0, 13.0, 16.0, 15.0, 15.0, 16.0, 15.0, 14.0, 15.0, 13.0, 15.0],
+        [5.0] * 10
+        + [4.0, 5.0, 6.0, 5.0, 7.0, 5.0, 5.0, 4.0, 5.0, 6.0, 7.0, 5.0, 5.0],
+        [10.0] * 10
+        + [10.0, 6.0, 10.0, 8.0, 15.0, 10.0, 10.0, 10.0, 14.0, 10.0, 12.0, 5.0, 10.0],
+    ),
+}
+
 STAR_NAMES = {
     "CDLABANDONEDBABY",
     "CDLEVENINGDOJISTAR",
@@ -450,6 +469,7 @@ class TalibReference:
             *GAP_CONTINUATION_FIXTURES,
             *CROW_SOLDIER_FIXTURES,
             *(name for name in LONG_FORMATION_FIXTURES if name != "CDLMATHOLD"),
+            *HIKKAKE_FIXTURES,
         )
         for name in standard_names:
             function = getattr(self.library, f"TA_{name}")
@@ -519,6 +539,9 @@ class TalibReference:
             (10, 1, 3, 0.05),
         ):
             self.set_setting(*setting)
+
+    def set_custom_hikkake(self) -> None:
+        self.set_setting(8, 1, 3, 0.125)
 
     def compute(
         self,
@@ -777,6 +800,28 @@ def render(reference: TalibReference) -> str:
             prefix,
             reference.compute(name, observations, False, penetration),
             reference.compute(name, observations, True, penetration),
+        )
+    lines.append("")
+    reference.restore_defaults()
+    for name, observations in HIKKAKE_FIXTURES.items():
+        prefix = fixture_prefix(name)
+        append_columns(lines, prefix, observations)
+        append_result(
+            lines,
+            prefix + "_DEFAULT",
+            reference.compute(name, observations, False),
+            reference.compute(name, observations, True),
+        )
+    lines.append("")
+
+    reference.set_custom_hikkake()
+    for name, observations in HIKKAKE_FIXTURES.items():
+        prefix = fixture_prefix(name) + "_CUSTOM"
+        append_result(
+            lines,
+            prefix,
+            reference.compute(name, observations, False),
+            reference.compute(name, observations, True),
         )
     lines.append("")
     return "\n".join(lines)
