@@ -5,7 +5,7 @@ use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, 
 use crate::{Float, Result};
 
 macro_rules! define_star_config {
-    ($config:ident, $runner:ident, $stream:ident, [$($setting:expr),+ $(,)?]) => {
+    ($config:ident, $runner:ident, $stream:ident) => {
         #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
         #[derive(Debug, Clone, Copy, PartialEq)]
         pub struct $config {
@@ -16,7 +16,10 @@ macro_rules! define_star_config {
         impl $config {
             /// Creates the configuration with immutable Candle Settings and Penetration.
             pub fn new(candle_settings: CandleSettings, penetration: Penetration) -> Result<Self> {
-                Ok(Self { candle_settings, penetration })
+                Ok(Self {
+                    candle_settings,
+                    penetration,
+                })
             }
 
             /// Returns the owned immutable Candle Settings value.
@@ -29,12 +32,6 @@ macro_rules! define_star_config {
             #[inline]
             pub const fn penetration(&self) -> Penetration {
                 self.penetration
-            }
-
-            /// Returns the Warm-up tick count, identical to Lookback.
-            #[inline]
-            pub fn warm_up(&self) -> usize {
-                maximum_average_period(self.candle_settings, &[$($setting),+]) + 2
             }
         }
 
@@ -187,13 +184,23 @@ impl PatternDefinition for CDL3OUTSIDEConfig {
 define_star_config!(
     CDLABANDONEDBABYConfig,
     CDLABANDONEDBABYBatchRunner,
-    CDLABANDONEDBABYStream,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::BodyLong,
-        CandleSettingType::BodyShort,
-    ]
+    CDLABANDONEDBABYStream
 );
+
+impl CDLABANDONEDBABYConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyDoji,
+                CandleSettingType::BodyLong,
+                CandleSettingType::BodyShort,
+            ],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDLABANDONEDBABYConfig {
     type State = ();
@@ -263,13 +270,23 @@ impl PatternDefinition for CDLABANDONEDBABYConfig {
 define_star_config!(
     CDLEVENINGDOJISTARConfig,
     CDLEVENINGDOJISTARBatchRunner,
-    CDLEVENINGDOJISTARStream,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::BodyLong,
-        CandleSettingType::BodyShort,
-    ]
+    CDLEVENINGDOJISTARStream
 );
+
+impl CDLEVENINGDOJISTARConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyDoji,
+                CandleSettingType::BodyLong,
+                CandleSettingType::BodyShort,
+            ],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDLEVENINGDOJISTARConfig {
     type State = ();
@@ -325,9 +342,19 @@ impl PatternDefinition for CDLEVENINGDOJISTARConfig {
 define_star_config!(
     CDLEVENINGSTARConfig,
     CDLEVENINGSTARBatchRunner,
-    CDLEVENINGSTARStream,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    CDLEVENINGSTARStream
 );
+
+impl CDLEVENINGSTARConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyShort],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDLEVENINGSTARConfig {
     type State = ();
@@ -379,13 +406,23 @@ impl PatternDefinition for CDLEVENINGSTARConfig {
 define_star_config!(
     CDLMORNINGDOJISTARConfig,
     CDLMORNINGDOJISTARBatchRunner,
-    CDLMORNINGDOJISTARStream,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::BodyLong,
-        CandleSettingType::BodyShort,
-    ]
+    CDLMORNINGDOJISTARStream
 );
+
+impl CDLMORNINGDOJISTARConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        maximum_average_period(
+            self.candle_settings,
+            &[
+                CandleSettingType::BodyDoji,
+                CandleSettingType::BodyLong,
+                CandleSettingType::BodyShort,
+            ],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDLMORNINGDOJISTARConfig {
     type State = ();
@@ -441,9 +478,19 @@ impl PatternDefinition for CDLMORNINGDOJISTARConfig {
 define_star_config!(
     CDLMORNINGSTARConfig,
     CDLMORNINGSTARBatchRunner,
-    CDLMORNINGSTARStream,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    CDLMORNINGSTARStream
 );
+
+impl CDLMORNINGSTARConfig {
+    /// Returns the Warm-up tick count, identical to Lookback.
+    #[inline]
+    pub fn warm_up(&self) -> usize {
+        maximum_average_period(
+            self.candle_settings,
+            &[CandleSettingType::BodyLong, CandleSettingType::BodyShort],
+        ) + 2
+    }
+}
 
 impl PatternDefinition for CDLMORNINGSTARConfig {
     type State = ();
