@@ -42,6 +42,28 @@ fn git_dirty_state() -> &'static str {
         _ => "unavailable",
     }
 }
+#[cfg(target_os = "macos")]
+fn cpu_model() -> String {
+    command_output("sysctl", &["-n", "machdep.cpu.brand_string"])
+}
+
+#[cfg(target_os = "linux")]
+fn cpu_model() -> String {
+    std::fs::read_to_string("/proc/cpuinfo")
+        .ok()
+        .and_then(|contents| {
+            contents.lines().find_map(|line| {
+                let (key, value) = line.split_once(':')?;
+                matches!(key.trim(), "model name" | "Hardware").then(|| value.trim().to_owned())
+            })
+        })
+        .unwrap_or_else(|| "unavailable".to_owned())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn cpu_model() -> String {
+    "unavailable".to_owned()
+}
 
 fn record_environment_provenance() {
     static ONCE: Once = Once::new();
@@ -49,12 +71,13 @@ fn record_environment_provenance() {
         let commit = command_output("git", &["rev-parse", "HEAD"]);
         let dirty = git_dirty_state();
         let rustc = command_output("rustc", &["--version", "--verbose"]);
+        let cpu_model = cpu_model();
         let host = command_output("uname", &["-a"]);
         let parallelism = std::thread::available_parallelism()
             .map(|value| value.get().to_string())
             .unwrap_or_else(|_| "unavailable".to_owned());
         let provenance = format!(
-            "suite=pattern_recognition\ncommit={commit}\ndirty={}\nrustc={rustc}\nhost={host}\nos={}\narch={}\nparallelism={parallelism}\nfloat_bits={}\ncriterion=0.8.2\nprofile=bench\nsizes=256,4096,65536\nlarge_average_period={LARGE_AVERAGE_PERIOD}\n",
+            "suite=pattern_recognition\ncommit={commit}\ndirty={}\nrustc={rustc}\nhost={host}\ncpu_model={cpu_model}\nos={}\narch={}\nparallelism={parallelism}\nta_core_features=default(f64,std)\nfloat_bits={}\ncriterion=0.8.2\nprofile=bench\nsizes=256,4096,65536\nlarge_average_period={LARGE_AVERAGE_PERIOD}\n",
             dirty,
             std::env::consts::OS,
             std::env::consts::ARCH,
