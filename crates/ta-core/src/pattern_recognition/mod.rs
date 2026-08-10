@@ -105,10 +105,21 @@ macro_rules! impl_pattern_execution {
     };
 }
 
+mod body_containment;
 mod doji;
 mod engulfing;
 mod single_candle;
 
+pub use body_containment::{
+    CDLCOUNTERATTACKBatchRunner, CDLCOUNTERATTACKConfig, CDLCOUNTERATTACKStream,
+    CDLDARKCLOUDCOVERBatchRunner, CDLDARKCLOUDCOVERConfig, CDLDARKCLOUDCOVERStream,
+    CDLDOJISTARBatchRunner, CDLDOJISTARConfig, CDLDOJISTARStream, CDLHARAMIBatchRunner,
+    CDLHARAMIConfig, CDLHARAMICROSSBatchRunner, CDLHARAMICROSSConfig, CDLHARAMICROSSStream,
+    CDLHARAMIStream, CDLHOMINGPIGEONBatchRunner, CDLHOMINGPIGEONConfig, CDLHOMINGPIGEONStream,
+    CDLKICKINGBatchRunner, CDLKICKINGBYLENGTHBatchRunner, CDLKICKINGBYLENGTHConfig,
+    CDLKICKINGBYLENGTHStream, CDLKICKINGConfig, CDLKICKINGStream, CDLMATCHINGLOWBatchRunner,
+    CDLMATCHINGLOWConfig, CDLMATCHINGLOWStream,
+};
 pub use doji::{CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream};
 pub use engulfing::{CDLENGULFINGBatchRunner, CDLENGULFINGConfig, CDLENGULFINGStream};
 pub use single_candle::{

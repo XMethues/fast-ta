@@ -58,6 +58,63 @@ SINGLE_CANDLE_NAMES = (
     "CDLTAKURI",
 )
 
+TWO_CANDLE_FIXTURES = {
+    "CDLCOUNTERATTACK": (
+        [10.0] * 10 + [20.0, 0.0, 10.0],
+        [12.0] * 10 + [21.0, 11.0, 12.0],
+        [9.0] * 10 + [9.0, -1.0, 9.0],
+        [11.0] * 10 + [10.0, 10.0, 11.0],
+    ),
+    "CDLDARKCLOUDCOVER": (
+        [10.0] * 10 + [10.0, 22.0, 10.0],
+        [12.0] * 10 + [21.0, 23.0, 12.0],
+        [9.0] * 10 + [9.0, 13.0, 9.0],
+        [11.0] * 10 + [20.0, 14.0, 11.0],
+    ),
+    "CDLDOJISTAR": (
+        [10.0] * 10 + [10.0, 21.0, 10.0],
+        [12.0] * 10 + [21.0, 22.0, 12.0],
+        [9.0] * 10 + [9.0, 20.0, 9.0],
+        [11.0] * 10 + [20.0, 21.0, 11.0],
+    ),
+    "CDLHARAMI": (
+        [10.0] * 10 + [10.0, 15.5, 10.0],
+        [12.0] * 10 + [21.0, 16.0, 12.0],
+        [9.0] * 10 + [9.0, 14.0, 9.0],
+        [11.0] * 10 + [20.0, 14.5, 11.0],
+    ),
+    "CDLHARAMICROSS": (
+        [10.0] * 10 + [10.0, 15.0, 10.0],
+        [12.0] * 10 + [21.0, 16.0, 12.0],
+        [9.0] * 10 + [9.0, 14.0, 9.0],
+        [11.0] * 10 + [20.0, 15.0, 11.0],
+    ),
+    "CDLHOMINGPIGEON": (
+        [10.0] * 10 + [20.0, 17.0, 10.0],
+        [12.0] * 10 + [21.0, 18.0, 12.0],
+        [9.0] * 10 + [9.0, 15.0, 9.0],
+        [11.0] * 10 + [10.0, 16.0, 11.0],
+    ),
+    "CDLKICKING": (
+        [10.0] * 10 + [20.0, 22.0, 10.0],
+        [12.0] * 10 + [20.0, 32.0, 12.0],
+        [9.0] * 10 + [10.0, 22.0, 9.0],
+        [11.0] * 10 + [10.0, 32.0, 11.0],
+    ),
+    "CDLKICKINGBYLENGTH": (
+        [10.0] * 10 + [20.0, 22.0, 10.0],
+        [12.0] * 10 + [20.0, 32.0, 12.0],
+        [9.0] * 10 + [10.0, 22.0, 9.0],
+        [11.0] * 10 + [10.0, 32.0, 11.0],
+    ),
+    "CDLMATCHINGLOW": (
+        [10.0] * 10 + [20.0, 18.0, 10.0],
+        [12.0] * 10 + [21.0, 19.0, 12.0],
+        [9.0] * 10 + [9.0, 10.0, 9.0],
+        [11.0] * 10 + [10.0, 10.0, 11.0],
+    ),
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -124,13 +181,25 @@ class TalibReference:
             ctypes.POINTER(ctypes.c_int),
             ctypes.POINTER(ctypes.c_int),
         ]
-        for name in ("CDLDOJI", "CDLENGULFING", *SINGLE_CANDLE_NAMES):
+        standard_names = (
+            "CDLDOJI",
+            "CDLENGULFING",
+            *SINGLE_CANDLE_NAMES,
+            *(name for name in TWO_CANDLE_FIXTURES if name != "CDLDARKCLOUDCOVER"),
+        )
+        for name in standard_names:
             function = getattr(self.library, f"TA_{name}")
             function.argtypes = arguments
             function.restype = ctypes.c_int
             lookback = getattr(self.library, f"TA_{name}_Lookback")
             lookback.argtypes = []
             lookback.restype = ctypes.c_int
+        dark_cloud = self.library.TA_CDLDARKCLOUDCOVER
+        dark_cloud.argtypes = [*arguments[:6], ctypes.c_double, *arguments[6:]]
+        dark_cloud.restype = ctypes.c_int
+        dark_cloud_lookback = self.library.TA_CDLDARKCLOUDCOVER_Lookback
+        dark_cloud_lookback.argtypes = [ctypes.c_double]
+        dark_cloud_lookback.restype = ctypes.c_int
 
         self.library.TA_SetCandleSettings.argtypes = [
             ctypes.c_int,
@@ -173,11 +242,23 @@ class TalibReference:
         ):
             self.set_setting(*setting)
 
+    def set_custom_two_candle(self) -> None:
+        # Referenced settings with shorter periods; enum/range numbers are pinned C values.
+        for setting in (
+            (0, 0, 3, 1.0),
+            (2, 0, 3, 1.0),
+            (3, 1, 3, 0.1),
+            (7, 1, 3, 0.1),
+            (10, 1, 3, 0.05),
+        ):
+            self.set_setting(*setting)
+
     def compute(
         self,
         name: str,
         observations: tuple[Sequence[float], Sequence[float], Sequence[float], Sequence[float]],
         quantize_f32: bool,
+        penetration: float | None = None,
     ) -> tuple[int, list[int]]:
         columns = [
             [float(ctypes.c_float(value).value) for value in column]
@@ -190,18 +271,20 @@ class TalibReference:
         output = (ctypes.c_int * length)()
         begin = ctypes.c_int()
         count = ctypes.c_int()
+        call_arguments = [0, length - 1, *arrays]
+        if penetration is not None:
+            call_arguments.append(penetration)
+        call_arguments.extend((ctypes.byref(begin), ctypes.byref(count), output))
         self._check(
-            getattr(self.library, f"TA_{name}")(
-                0,
-                length - 1,
-                *arrays,
-                ctypes.byref(begin),
-                ctypes.byref(count),
-                output,
-            ),
+            getattr(self.library, f"TA_{name}")(*call_arguments),
             f"TA_{name}",
         )
-        lookback = getattr(self.library, f"TA_{name}_Lookback")()
+        lookback_function = getattr(self.library, f"TA_{name}_Lookback")
+        lookback = (
+            lookback_function(penetration)
+            if penetration is not None
+            else lookback_function()
+        )
         if begin.value != lookback or count.value != length - lookback:
             raise RuntimeError(f"{name}: unexpected output range {begin.value}+{count.value}")
         return begin.value, list(output[: count.value])
@@ -296,6 +379,31 @@ def render(reference: TalibReference) -> str:
             prefix,
             reference.compute(name, SINGLE_CANDLE, False),
             reference.compute(name, SINGLE_CANDLE, True),
+        )
+    lines.append("")
+
+    reference.restore_defaults()
+    for name, observations in TWO_CANDLE_FIXTURES.items():
+        prefix = name.removeprefix("CDL")
+        append_columns(lines, prefix, observations)
+        penetration = 0.5 if name == "CDLDARKCLOUDCOVER" else None
+        append_result(
+            lines,
+            prefix + "_DEFAULT",
+            reference.compute(name, observations, False, penetration),
+            reference.compute(name, observations, True, penetration),
+        )
+    lines.append("")
+
+    reference.set_custom_two_candle()
+    for name, observations in TWO_CANDLE_FIXTURES.items():
+        prefix = name.removeprefix("CDL") + "_CUSTOM"
+        penetration = 0.25 if name == "CDLDARKCLOUDCOVER" else None
+        append_result(
+            lines,
+            prefix,
+            reference.compute(name, observations, False, penetration),
+            reference.compute(name, observations, True, penetration),
         )
     lines.append("")
     return "\n".join(lines)

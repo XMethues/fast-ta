@@ -71,17 +71,24 @@ use ta_core::price_transform::{
 use ta_core::pattern_recognition::{
     CDLBELTHOLDBatchRunner, CDLBELTHOLDConfig, CDLBELTHOLDStream,
     CDLCLOSINGMARUBOZUBatchRunner, CDLCLOSINGMARUBOZUConfig, CDLCLOSINGMARUBOZUStream,
-    CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream, CDLDRAGONFLYDOJIBatchRunner,
-    CDLDRAGONFLYDOJIConfig, CDLDRAGONFLYDOJIStream, CDLENGULFINGBatchRunner,
-    CDLENGULFINGConfig, CDLENGULFINGStream, CDLGRAVESTONEDOJIBatchRunner,
-    CDLGRAVESTONEDOJIConfig, CDLGRAVESTONEDOJIStream, CDLHIGHWAVEBatchRunner,
-    CDLHIGHWAVEConfig, CDLHIGHWAVEStream, CDLLONGLEGGEDDOJIBatchRunner,
-    CDLLONGLEGGEDDOJIConfig, CDLLONGLEGGEDDOJIStream, CDLLONGLINEBatchRunner,
-    CDLLONGLINEConfig, CDLLONGLINEStream, CDLMARUBOZUBatchRunner, CDLMARUBOZUConfig,
-    CDLMARUBOZUStream, CDLRICKSHAWMANBatchRunner, CDLRICKSHAWMANConfig, CDLRICKSHAWMANStream,
-    CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig, CDLSHORTLINEStream, CDLSPINNINGTOPBatchRunner,
-    CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream, CDLTAKURIBatchRunner, CDLTAKURIConfig,
-    CDLTAKURIStream,
+    CDLCOUNTERATTACKBatchRunner, CDLCOUNTERATTACKConfig, CDLCOUNTERATTACKStream,
+    CDLDARKCLOUDCOVERBatchRunner, CDLDARKCLOUDCOVERConfig, CDLDARKCLOUDCOVERStream,
+    CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJISTARBatchRunner, CDLDOJISTARConfig,
+    CDLDOJISTARStream, CDLDOJIStream, CDLDRAGONFLYDOJIBatchRunner, CDLDRAGONFLYDOJIConfig,
+    CDLDRAGONFLYDOJIStream, CDLENGULFINGBatchRunner, CDLENGULFINGConfig, CDLENGULFINGStream,
+    CDLGRAVESTONEDOJIBatchRunner, CDLGRAVESTONEDOJIConfig, CDLGRAVESTONEDOJIStream,
+    CDLHARAMIBatchRunner, CDLHARAMIConfig, CDLHARAMICROSSBatchRunner, CDLHARAMICROSSConfig,
+    CDLHARAMICROSSStream, CDLHARAMIStream, CDLHIGHWAVEBatchRunner, CDLHIGHWAVEConfig,
+    CDLHIGHWAVEStream, CDLHOMINGPIGEONBatchRunner, CDLHOMINGPIGEONConfig,
+    CDLHOMINGPIGEONStream, CDLKICKINGBatchRunner, CDLKICKINGBYLENGTHBatchRunner,
+    CDLKICKINGBYLENGTHConfig, CDLKICKINGBYLENGTHStream, CDLKICKINGConfig, CDLKICKINGStream,
+    CDLLONGLEGGEDDOJIBatchRunner, CDLLONGLEGGEDDOJIConfig, CDLLONGLEGGEDDOJIStream,
+    CDLLONGLINEBatchRunner, CDLLONGLINEConfig, CDLLONGLINEStream, CDLMARUBOZUBatchRunner,
+    CDLMARUBOZUConfig, CDLMARUBOZUStream, CDLMATCHINGLOWBatchRunner, CDLMATCHINGLOWConfig,
+    CDLMATCHINGLOWStream, CDLRICKSHAWMANBatchRunner, CDLRICKSHAWMANConfig,
+    CDLRICKSHAWMANStream, CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig, CDLSHORTLINEStream,
+    CDLSPINNINGTOPBatchRunner, CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream,
+    CDLTAKURIBatchRunner, CDLTAKURIConfig, CDLTAKURIStream,
 };
 use ta_core::statistic::{
     BETABatchRunner, BETAConfig, BETAStream, CORRELBatchRunner, CORRELConfig, CORRELStream,
@@ -280,6 +287,15 @@ fn first_tranche_functions_are_marked_implemented() {
         "CDLSHORTLINE",
         "CDLSPINNINGTOP",
         "CDLTAKURI",
+        "CDLCOUNTERATTACK",
+        "CDLDARKCLOUDCOVER",
+        "CDLDOJISTAR",
+        "CDLHARAMI",
+        "CDLHARAMICROSS",
+        "CDLHOMINGPIGEON",
+        "CDLKICKING",
+        "CDLKICKINGBYLENGTH",
+        "CDLMATCHINGLOW",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -402,7 +418,7 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<NATRConfig, NATRBatchRunner, NATRStream>();
     assert_execution_types::<TRANGEConfig, TRANGEBatchRunner, TRANGEStream>();
 
-    // Pattern Recognition (14 implemented indicators).
+    // Pattern Recognition (23 implemented indicators).
     assert_execution_types::<CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream>();
     assert_execution_types::<
         CDLENGULFINGConfig,
@@ -445,6 +461,39 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
         CDLSPINNINGTOPStream,
     >();
     assert_execution_types::<CDLTAKURIConfig, CDLTAKURIBatchRunner, CDLTAKURIStream>();
+    assert_execution_types::<
+        CDLCOUNTERATTACKConfig,
+        CDLCOUNTERATTACKBatchRunner,
+        CDLCOUNTERATTACKStream,
+    >();
+    assert_execution_types::<
+        CDLDARKCLOUDCOVERConfig,
+        CDLDARKCLOUDCOVERBatchRunner,
+        CDLDARKCLOUDCOVERStream,
+    >();
+    assert_execution_types::<CDLDOJISTARConfig, CDLDOJISTARBatchRunner, CDLDOJISTARStream>();
+    assert_execution_types::<CDLHARAMIConfig, CDLHARAMIBatchRunner, CDLHARAMIStream>();
+    assert_execution_types::<
+        CDLHARAMICROSSConfig,
+        CDLHARAMICROSSBatchRunner,
+        CDLHARAMICROSSStream,
+    >();
+    assert_execution_types::<
+        CDLHOMINGPIGEONConfig,
+        CDLHOMINGPIGEONBatchRunner,
+        CDLHOMINGPIGEONStream,
+    >();
+    assert_execution_types::<CDLKICKINGConfig, CDLKICKINGBatchRunner, CDLKICKINGStream>();
+    assert_execution_types::<
+        CDLKICKINGBYLENGTHConfig,
+        CDLKICKINGBYLENGTHBatchRunner,
+        CDLKICKINGBYLENGTHStream,
+    >();
+    assert_execution_types::<
+        CDLMATCHINGLOWConfig,
+        CDLMATCHINGLOWBatchRunner,
+        CDLMATCHINGLOWStream,
+    >();
 
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
@@ -621,6 +670,15 @@ fn inventory_count_matches_execution_seam_coverage() {
         "CDLSHORTLINE",
         "CDLSPINNINGTOP",
         "CDLTAKURI",
+        "CDLCOUNTERATTACK",
+        "CDLDARKCLOUDCOVER",
+        "CDLDOJISTAR",
+        "CDLHARAMI",
+        "CDLHARAMICROSS",
+        "CDLHOMINGPIGEON",
+        "CDLKICKING",
+        "CDLKICKINGBYLENGTH",
+        "CDLMATCHINGLOW",
     ];
 
     assert_eq!(

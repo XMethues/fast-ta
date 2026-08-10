@@ -9,10 +9,12 @@ use std::cell::Cell;
 use ta_core::pattern_recognition::{
     Candle, CandleInput, CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings,
     PatternDirection, PatternSignal, PatternStrength, Penetration, CDLBELTHOLDConfig,
-    CDLCLOSINGMARUBOZUConfig, CDLDOJIConfig, CDLDRAGONFLYDOJIConfig, CDLENGULFINGConfig,
-    CDLGRAVESTONEDOJIConfig, CDLHIGHWAVEConfig, CDLLONGLEGGEDDOJIConfig, CDLLONGLINEConfig,
-    CDLMARUBOZUConfig, CDLRICKSHAWMANConfig, CDLSHORTLINEConfig, CDLSPINNINGTOPConfig,
-    CDLTAKURIConfig,
+    CDLCLOSINGMARUBOZUConfig, CDLCOUNTERATTACKConfig, CDLDARKCLOUDCOVERConfig, CDLDOJIConfig,
+    CDLDOJISTARConfig, CDLDRAGONFLYDOJIConfig, CDLENGULFINGConfig, CDLGRAVESTONEDOJIConfig,
+    CDLHARAMIConfig, CDLHARAMICROSSConfig, CDLHIGHWAVEConfig, CDLHOMINGPIGEONConfig,
+    CDLKICKINGBYLENGTHConfig, CDLKICKINGConfig, CDLLONGLEGGEDDOJIConfig, CDLLONGLINEConfig,
+    CDLMARUBOZUConfig, CDLMATCHINGLOWConfig, CDLRICKSHAWMANConfig, CDLSHORTLINEConfig,
+    CDLSPINNINGTOPConfig, CDLTAKURIConfig,
 };
 use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
@@ -722,4 +724,226 @@ fn single_candle_evidence_rows_cover_pinned_sources_and_canonical_near_misses() 
     ];
     assert_eq!(ROWS.len(), 12);
     assert!(ROWS.iter().all(|(_, source)| source.ends_with(".c")));
+}
+
+fn custom_two_candle_settings() -> CandleSettings {
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::BodyLong,
+            CandleSetting::new(CandleRangeKind::RealBody, 3, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(CandleRangeKind::RealBody, 3, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyDoji,
+            CandleSetting::new(CandleRangeKind::HighLow, 3, 0.1 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowVeryShort,
+            CandleSetting::new(CandleRangeKind::HighLow, 3, 0.1 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Equal,
+            CandleSetting::new(CandleRangeKind::HighLow, 3, 0.05 as Float).unwrap(),
+        )
+}
+
+macro_rules! qualify_two_candle {
+    (
+        $default:expr, $custom:expr,
+        $open:ident, $high:ident, $low:ident, $close:ident,
+        $default_lookback:ident, $default_f64:ident, $default_f32:ident,
+        $custom_lookback:ident, $custom_f64:ident, $custom_f32:ident
+    ) => {{
+        let series = Series::from_fixture(
+            reference::$open,
+            reference::$high,
+            reference::$low,
+            reference::$close,
+        );
+        qualify_pattern_fixture(
+            $default,
+            &series,
+            reference::$default_lookback,
+            &expected_codes(reference::$default_f64, reference::$default_f32),
+        );
+        qualify_pattern_fixture(
+            $custom,
+            &series,
+            reference::$custom_lookback,
+            &expected_codes(reference::$custom_f64, reference::$custom_f32),
+        );
+    }};
+}
+
+#[test]
+fn pinned_two_candle_oracles_qualify_every_definition_through_the_public_seam() {
+    let settings = custom_two_candle_settings();
+    assert_eq!(
+        CDLDARKCLOUDCOVERConfig::default().penetration().value(),
+        0.5 as Float
+    );
+    qualify_two_candle!(
+        CDLCOUNTERATTACKConfig::default(), CDLCOUNTERATTACKConfig::new(settings).unwrap(),
+        COUNTERATTACK_OPEN, COUNTERATTACK_HIGH, COUNTERATTACK_LOW, COUNTERATTACK_CLOSE,
+        COUNTERATTACK_DEFAULT_LOOKBACK, COUNTERATTACK_DEFAULT_F64_CODES, COUNTERATTACK_DEFAULT_F32_CODES,
+        COUNTERATTACK_CUSTOM_LOOKBACK, COUNTERATTACK_CUSTOM_F64_CODES, COUNTERATTACK_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLDARKCLOUDCOVERConfig::default(),
+        CDLDARKCLOUDCOVERConfig::new(settings, Penetration::new(0.25 as Float).unwrap()).unwrap(),
+        DARKCLOUDCOVER_OPEN, DARKCLOUDCOVER_HIGH, DARKCLOUDCOVER_LOW, DARKCLOUDCOVER_CLOSE,
+        DARKCLOUDCOVER_DEFAULT_LOOKBACK, DARKCLOUDCOVER_DEFAULT_F64_CODES, DARKCLOUDCOVER_DEFAULT_F32_CODES,
+        DARKCLOUDCOVER_CUSTOM_LOOKBACK, DARKCLOUDCOVER_CUSTOM_F64_CODES, DARKCLOUDCOVER_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLDOJISTARConfig::default(), CDLDOJISTARConfig::new(settings).unwrap(),
+        DOJISTAR_OPEN, DOJISTAR_HIGH, DOJISTAR_LOW, DOJISTAR_CLOSE,
+        DOJISTAR_DEFAULT_LOOKBACK, DOJISTAR_DEFAULT_F64_CODES, DOJISTAR_DEFAULT_F32_CODES,
+        DOJISTAR_CUSTOM_LOOKBACK, DOJISTAR_CUSTOM_F64_CODES, DOJISTAR_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLHARAMIConfig::default(), CDLHARAMIConfig::new(settings).unwrap(),
+        HARAMI_OPEN, HARAMI_HIGH, HARAMI_LOW, HARAMI_CLOSE,
+        HARAMI_DEFAULT_LOOKBACK, HARAMI_DEFAULT_F64_CODES, HARAMI_DEFAULT_F32_CODES,
+        HARAMI_CUSTOM_LOOKBACK, HARAMI_CUSTOM_F64_CODES, HARAMI_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLHARAMICROSSConfig::default(), CDLHARAMICROSSConfig::new(settings).unwrap(),
+        HARAMICROSS_OPEN, HARAMICROSS_HIGH, HARAMICROSS_LOW, HARAMICROSS_CLOSE,
+        HARAMICROSS_DEFAULT_LOOKBACK, HARAMICROSS_DEFAULT_F64_CODES, HARAMICROSS_DEFAULT_F32_CODES,
+        HARAMICROSS_CUSTOM_LOOKBACK, HARAMICROSS_CUSTOM_F64_CODES, HARAMICROSS_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLHOMINGPIGEONConfig::default(), CDLHOMINGPIGEONConfig::new(settings).unwrap(),
+        HOMINGPIGEON_OPEN, HOMINGPIGEON_HIGH, HOMINGPIGEON_LOW, HOMINGPIGEON_CLOSE,
+        HOMINGPIGEON_DEFAULT_LOOKBACK, HOMINGPIGEON_DEFAULT_F64_CODES, HOMINGPIGEON_DEFAULT_F32_CODES,
+        HOMINGPIGEON_CUSTOM_LOOKBACK, HOMINGPIGEON_CUSTOM_F64_CODES, HOMINGPIGEON_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLKICKINGConfig::default(), CDLKICKINGConfig::new(settings).unwrap(),
+        KICKING_OPEN, KICKING_HIGH, KICKING_LOW, KICKING_CLOSE,
+        KICKING_DEFAULT_LOOKBACK, KICKING_DEFAULT_F64_CODES, KICKING_DEFAULT_F32_CODES,
+        KICKING_CUSTOM_LOOKBACK, KICKING_CUSTOM_F64_CODES, KICKING_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLKICKINGBYLENGTHConfig::default(), CDLKICKINGBYLENGTHConfig::new(settings).unwrap(),
+        KICKINGBYLENGTH_OPEN, KICKINGBYLENGTH_HIGH, KICKINGBYLENGTH_LOW, KICKINGBYLENGTH_CLOSE,
+        KICKINGBYLENGTH_DEFAULT_LOOKBACK, KICKINGBYLENGTH_DEFAULT_F64_CODES, KICKINGBYLENGTH_DEFAULT_F32_CODES,
+        KICKINGBYLENGTH_CUSTOM_LOOKBACK, KICKINGBYLENGTH_CUSTOM_F64_CODES, KICKINGBYLENGTH_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLMATCHINGLOWConfig::default(), CDLMATCHINGLOWConfig::new(settings).unwrap(),
+        MATCHINGLOW_OPEN, MATCHINGLOW_HIGH, MATCHINGLOW_LOW, MATCHINGLOW_CLOSE,
+        MATCHINGLOW_DEFAULT_LOOKBACK, MATCHINGLOW_DEFAULT_F64_CODES, MATCHINGLOW_DEFAULT_F32_CODES,
+        MATCHINGLOW_CUSTOM_LOOKBACK, MATCHINGLOW_CUSTOM_F64_CODES, MATCHINGLOW_CUSTOM_F32_CODES
+    );
+}
+
+fn boundary_settings() -> CandleSettings {
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::BodyLong,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 0.5 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyDoji,
+            CandleSetting::new(CandleRangeKind::RealBody, 0, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowVeryShort,
+            CandleSetting::new(CandleRangeKind::HighLow, 0, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Equal,
+            CandleSetting::new(CandleRangeKind::HighLow, 0, 0.0 as Float).unwrap(),
+        )
+}
+
+fn boundary_code<C>(config: C, candles: &[Candle]) -> i32
+where
+    C: 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    for<'a> C: IndicatorConfig<Input<'a> = CandleInput<'a>>,
+{
+    let series = Series {
+        open: candles.iter().map(|candle| candle.open).collect(),
+        high: candles.iter().map(|candle| candle.high).collect(),
+        low: candles.iter().map(|candle| candle.low).collect(),
+        close: candles.iter().map(|candle| candle.close).collect(),
+    };
+    config.compute(series.input()).unwrap().values().last().unwrap().to_talib_code()
+}
+
+const fn candle(open: Float, high: Float, low: Float, close: Float) -> Candle {
+    Candle { open, high, low, close }
+}
+
+#[test]
+fn independently_reasoned_two_candle_boundaries_lock_exact_pinned_predicates() {
+    let settings = boundary_settings();
+    let white = candle(10.0, 20.0, 10.0, 20.0);
+    let black = candle(20.0, 20.0, 10.0, 10.0);
+
+    let harami = CDLHARAMIConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(harami, &[white, candle(16.0, 16.0, 14.0, 14.0)]), -100);
+    assert_eq!(boundary_code(harami, &[white, candle(20.0, 20.0, 18.0, 18.0)]), -80);
+    assert_eq!(boundary_code(harami, &[black, candle(14.0, 16.0, 14.0, 16.0)]), 100);
+    assert_eq!(boundary_code(harami, &[black, candle(10.0, 12.0, 10.0, 12.0)]), 80);
+
+    let cross = CDLHARAMICROSSConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(cross, &[white, candle(15.0, 16.0, 14.0, 15.0)]), -100);
+    assert_eq!(boundary_code(cross, &[white, candle(20.0, 20.0, 20.0, 20.0)]), -80);
+    assert_eq!(boundary_code(cross, &[black, candle(15.0, 16.0, 14.0, 15.0)]), 100);
+    assert_eq!(boundary_code(cross, &[black, candle(10.0, 10.0, 10.0, 10.0)]), 80);
+
+    let counter = CDLCOUNTERATTACKConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(counter, &[black, candle(0.0, 10.0, 0.0, 10.0)]), 100);
+    assert_eq!(boundary_code(counter, &[black, candle(0.0, 11.0, 0.0, 11.0)]), 0);
+
+    let matching = CDLMATCHINGLOWConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(matching, &[black, candle(18.0, 18.0, 10.0, 10.0)]), 100);
+    assert_eq!(boundary_code(matching, &[black, candle(18.0, 18.0, 9.0, 9.0)]), 0);
+
+    let doji_star = CDLDOJISTARConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(doji_star, &[white, candle(21.0, 21.0, 21.0, 21.0)]), -100);
+    assert_eq!(boundary_code(doji_star, &[white, candle(20.0, 20.0, 20.0, 20.0)]), 0);
+
+    let dark = CDLDARKCLOUDCOVERConfig::new(settings, Penetration::new(0.5 as Float).unwrap()).unwrap();
+    assert_eq!(boundary_code(dark, &[white, candle(22.0, 22.0, 14.0, 14.0)]), -100);
+    assert_eq!(boundary_code(dark, &[white, candle(22.0, 22.0, 15.0, 15.0)]), 0);
+    let above_one = CDLDARKCLOUDCOVERConfig::new(settings, Penetration::new(4.0 as Float).unwrap()).unwrap();
+    assert_eq!(above_one.penetration().value(), 4.0 as Float);
+
+    let homing = CDLHOMINGPIGEONConfig::new(settings).unwrap();
+    assert_eq!(boundary_code(homing, &[black, candle(17.0, 17.0, 16.0, 16.0)]), 100);
+    assert_eq!(boundary_code(homing, &[black, candle(20.0, 20.0, 16.0, 16.0)]), 0);
+
+    let kicking_pair = [black, candle(22.0, 32.0, 22.0, 32.0)];
+    assert_eq!(boundary_code(CDLKICKINGConfig::new(settings).unwrap(), &kicking_pair), 100);
+    assert_eq!(boundary_code(CDLKICKINGBYLENGTHConfig::new(settings).unwrap(), &kicking_pair), -100);
+    let touching = [black, candle(20.0, 30.0, 20.0, 30.0)];
+    assert_eq!(boundary_code(CDLKICKINGConfig::new(settings).unwrap(), &touching), 0);
+}
+
+#[test]
+fn two_candle_evidence_rows_cover_pinned_sources_and_qualification_scenarios() {
+    const ROWS: [(&str, &str, &str); 9] = [
+        ("CDLCOUNTERATTACK", "cdlcounterattack/cdlcounterattack.c", "exact equal closes"),
+        ("CDLDARKCLOUDCOVER", "cdldarkcloudcover/cdldarkcloudcover.c", "Penetration"),
+        ("CDLDOJISTAR", "cdldojistar/cdldojistar.c", "strict real-body gap"),
+        ("CDLHARAMI", "cdlharami/cdlharami.c", "Standard and Partial"),
+        ("CDLHARAMICROSS", "cdlharamicross/cdlharamicross.c", "Standard and Partial"),
+        ("CDLHOMINGPIGEON", "cdlhomingpigeon/cdlhomingpigeon.c", "strict containment"),
+        ("CDLKICKING", "cdlkicking/cdlkicking.c", "strict Candle gap"),
+        ("CDLKICKINGBYLENGTH", "cdlkickingbylength/cdlkickingbylength.c", "first-Candle tie"),
+        ("CDLMATCHINGLOW", "cdlmatchinglow/cdlmatchinglow.c", "exact equal closes"),
+    ];
+    assert_eq!(reference::TALIB_GIT_REVISION, "2247d599bddf37ed37e3a709371517e46efc66f6");
+    assert!(ROWS.iter().all(|(_, source, scenario)| source.ends_with(".c") && !scenario.is_empty()));
 }
