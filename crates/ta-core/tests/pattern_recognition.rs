@@ -8,15 +8,17 @@ use std::cell::Cell;
 
 use ta_core::pattern_recognition::{
     Candle, CandleInput, CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings,
-    PatternDirection, PatternSignal, PatternStrength, Penetration, CDLBELTHOLDConfig,
-    CDLCLOSINGMARUBOZUConfig, CDLCOUNTERATTACKConfig, CDLDARKCLOUDCOVERConfig, CDLDOJIConfig,
-    CDLDOJISTARConfig, CDLDRAGONFLYDOJIConfig, CDLENGULFINGConfig, CDLGRAVESTONEDOJIConfig,
-    CDLHAMMERConfig, CDLHANGINGMANConfig, CDLHARAMIConfig, CDLHARAMICROSSConfig,
-    CDLHIGHWAVEConfig, CDLHOMINGPIGEONConfig, CDLINNECKConfig, CDLINVERTEDHAMMERConfig,
-    CDLKICKINGBYLENGTHConfig, CDLKICKINGConfig, CDLLONGLEGGEDDOJIConfig, CDLLONGLINEConfig,
-    CDLMARUBOZUConfig, CDLMATCHINGLOWConfig, CDLONNECKConfig, CDLPIERCINGConfig,
+    PatternDirection, PatternSignal, PatternStrength, Penetration, CDL3INSIDEConfig,
+    CDL3OUTSIDEConfig, CDLABANDONEDBABYConfig, CDLBELTHOLDConfig, CDLCLOSINGMARUBOZUConfig,
+    CDLCOUNTERATTACKConfig, CDLDARKCLOUDCOVERConfig, CDLDOJIConfig, CDLDOJISTARConfig,
+    CDLDRAGONFLYDOJIConfig, CDLENGULFINGConfig, CDLEVENINGDOJISTARConfig,
+    CDLEVENINGSTARConfig, CDLGRAVESTONEDOJIConfig, CDLHAMMERConfig, CDLHANGINGMANConfig,
+    CDLHARAMIConfig, CDLHARAMICROSSConfig, CDLHIGHWAVEConfig, CDLHOMINGPIGEONConfig,
+    CDLINNECKConfig, CDLINVERTEDHAMMERConfig, CDLKICKINGBYLENGTHConfig, CDLKICKINGConfig,
+    CDLLONGLEGGEDDOJIConfig, CDLLONGLINEConfig, CDLMARUBOZUConfig, CDLMATCHINGLOWConfig,
+    CDLMORNINGDOJISTARConfig, CDLMORNINGSTARConfig, CDLONNECKConfig, CDLPIERCINGConfig,
     CDLRICKSHAWMANConfig, CDLSEPARATINGLINESConfig, CDLSHOOTINGSTARConfig, CDLSHORTLINEConfig,
-    CDLSPINNINGTOPConfig, CDLTAKURIConfig, CDLTHRUSTINGConfig,
+    CDLSPINNINGTOPConfig, CDLTAKURIConfig, CDLTHRUSTINGConfig, CDLUNIQUE3RIVERConfig,
 };
 use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
@@ -909,6 +911,104 @@ fn pinned_two_candle_oracles_qualify_every_definition_through_the_public_seam() 
     );
 }
 
+#[test]
+fn pinned_three_candle_oracles_qualify_every_definition_through_the_public_seam() {
+    let settings = custom_two_candle_settings();
+    let custom_penetration = Penetration::new(0.6 as Float).unwrap();
+    qualify_two_candle!(
+        CDL3INSIDEConfig::default(), CDL3INSIDEConfig::new(settings).unwrap(),
+        THREE_INSIDE_OPEN, THREE_INSIDE_HIGH, THREE_INSIDE_LOW, THREE_INSIDE_CLOSE,
+        THREE_INSIDE_DEFAULT_LOOKBACK, THREE_INSIDE_DEFAULT_F64_CODES,
+        THREE_INSIDE_DEFAULT_F32_CODES, THREE_INSIDE_CUSTOM_LOOKBACK,
+        THREE_INSIDE_CUSTOM_F64_CODES, THREE_INSIDE_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDL3OUTSIDEConfig::default(), CDL3OUTSIDEConfig::new(settings).unwrap(),
+        THREE_OUTSIDE_OPEN, THREE_OUTSIDE_HIGH, THREE_OUTSIDE_LOW, THREE_OUTSIDE_CLOSE,
+        THREE_OUTSIDE_DEFAULT_LOOKBACK, THREE_OUTSIDE_DEFAULT_F64_CODES,
+        THREE_OUTSIDE_DEFAULT_F32_CODES, THREE_OUTSIDE_CUSTOM_LOOKBACK,
+        THREE_OUTSIDE_CUSTOM_F64_CODES, THREE_OUTSIDE_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLABANDONEDBABYConfig::default(),
+        CDLABANDONEDBABYConfig::new(settings, custom_penetration).unwrap(),
+        ABANDONEDBABY_OPEN, ABANDONEDBABY_HIGH, ABANDONEDBABY_LOW, ABANDONEDBABY_CLOSE,
+        ABANDONEDBABY_DEFAULT_LOOKBACK, ABANDONEDBABY_DEFAULT_F64_CODES,
+        ABANDONEDBABY_DEFAULT_F32_CODES, ABANDONEDBABY_CUSTOM_LOOKBACK,
+        ABANDONEDBABY_CUSTOM_F64_CODES, ABANDONEDBABY_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLEVENINGDOJISTARConfig::default(),
+        CDLEVENINGDOJISTARConfig::new(settings, custom_penetration).unwrap(),
+        EVENINGDOJISTAR_OPEN, EVENINGDOJISTAR_HIGH, EVENINGDOJISTAR_LOW, EVENINGDOJISTAR_CLOSE,
+        EVENINGDOJISTAR_DEFAULT_LOOKBACK, EVENINGDOJISTAR_DEFAULT_F64_CODES,
+        EVENINGDOJISTAR_DEFAULT_F32_CODES, EVENINGDOJISTAR_CUSTOM_LOOKBACK,
+        EVENINGDOJISTAR_CUSTOM_F64_CODES, EVENINGDOJISTAR_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLEVENINGSTARConfig::default(),
+        CDLEVENINGSTARConfig::new(settings, custom_penetration).unwrap(),
+        EVENINGSTAR_OPEN, EVENINGSTAR_HIGH, EVENINGSTAR_LOW, EVENINGSTAR_CLOSE,
+        EVENINGSTAR_DEFAULT_LOOKBACK, EVENINGSTAR_DEFAULT_F64_CODES,
+        EVENINGSTAR_DEFAULT_F32_CODES, EVENINGSTAR_CUSTOM_LOOKBACK,
+        EVENINGSTAR_CUSTOM_F64_CODES, EVENINGSTAR_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLMORNINGDOJISTARConfig::default(),
+        CDLMORNINGDOJISTARConfig::new(settings, custom_penetration).unwrap(),
+        MORNINGDOJISTAR_OPEN, MORNINGDOJISTAR_HIGH, MORNINGDOJISTAR_LOW, MORNINGDOJISTAR_CLOSE,
+        MORNINGDOJISTAR_DEFAULT_LOOKBACK, MORNINGDOJISTAR_DEFAULT_F64_CODES,
+        MORNINGDOJISTAR_DEFAULT_F32_CODES, MORNINGDOJISTAR_CUSTOM_LOOKBACK,
+        MORNINGDOJISTAR_CUSTOM_F64_CODES, MORNINGDOJISTAR_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLMORNINGSTARConfig::default(),
+        CDLMORNINGSTARConfig::new(settings, custom_penetration).unwrap(),
+        MORNINGSTAR_OPEN, MORNINGSTAR_HIGH, MORNINGSTAR_LOW, MORNINGSTAR_CLOSE,
+        MORNINGSTAR_DEFAULT_LOOKBACK, MORNINGSTAR_DEFAULT_F64_CODES,
+        MORNINGSTAR_DEFAULT_F32_CODES, MORNINGSTAR_CUSTOM_LOOKBACK,
+        MORNINGSTAR_CUSTOM_F64_CODES, MORNINGSTAR_CUSTOM_F32_CODES
+    );
+    qualify_two_candle!(
+        CDLUNIQUE3RIVERConfig::default(), CDLUNIQUE3RIVERConfig::new(settings).unwrap(),
+        UNIQUE3RIVER_OPEN, UNIQUE3RIVER_HIGH, UNIQUE3RIVER_LOW, UNIQUE3RIVER_CLOSE,
+        UNIQUE3RIVER_DEFAULT_LOOKBACK, UNIQUE3RIVER_DEFAULT_F64_CODES,
+        UNIQUE3RIVER_DEFAULT_F32_CODES, UNIQUE3RIVER_CUSTOM_LOOKBACK,
+        UNIQUE3RIVER_CUSTOM_F64_CODES, UNIQUE3RIVER_CUSTOM_F32_CODES
+    );
+}
+
+#[test]
+fn star_definitions_own_pinned_penetration_defaults_and_accept_values_above_one() {
+    let settings = CandleSettings::default();
+    let above_one = Penetration::new(4.0 as Float).unwrap();
+    assert_eq!(CDLABANDONEDBABYConfig::default().penetration().value(), 0.3 as Float);
+    assert_eq!(CDLEVENINGDOJISTARConfig::default().penetration().value(), 0.3 as Float);
+    assert_eq!(CDLEVENINGSTARConfig::default().penetration().value(), 0.3 as Float);
+    assert_eq!(CDLMORNINGDOJISTARConfig::default().penetration().value(), 0.3 as Float);
+    assert_eq!(CDLMORNINGSTARConfig::default().penetration().value(), 0.3 as Float);
+    assert_eq!(
+        CDLABANDONEDBABYConfig::new(settings, above_one).unwrap().penetration(),
+        above_one
+    );
+    assert_eq!(
+        CDLEVENINGDOJISTARConfig::new(settings, above_one).unwrap().penetration(),
+        above_one
+    );
+    assert_eq!(
+        CDLEVENINGSTARConfig::new(settings, above_one).unwrap().penetration(),
+        above_one
+    );
+    assert_eq!(
+        CDLMORNINGDOJISTARConfig::new(settings, above_one).unwrap().penetration(),
+        above_one
+    );
+    assert_eq!(
+        CDLMORNINGSTARConfig::new(settings, above_one).unwrap().penetration(),
+        above_one
+    );
+}
+
 fn boundary_settings() -> CandleSettings {
     CandleSettings::default()
         .with_setting(
@@ -1138,6 +1238,232 @@ fn two_candle_evidence_rows_cover_pinned_sources_and_qualification_scenarios() {
         ("CDLSEPARATINGLINES", "cdlseparatinglines/cdlseparatinglines.c", "inclusive Equal and strict leading shadow"),
         ("CDLSHOOTINGSTAR", "cdlshootingstar/cdlshootingstar.c", "strict upper shadow"),
         ("CDLTHRUSTING", "cdlthrusting/cdlthrusting.c", "strict Equal and inclusive midpoint"),
+    ];
+    assert_eq!(reference::TALIB_GIT_REVISION, "2247d599bddf37ed37e3a709371517e46efc66f6");
+    assert!(ROWS.iter().all(|(_, source, scenario)| source.ends_with(".c") && !scenario.is_empty()));
+}
+
+fn three_candle_boundary_settings() -> CandleSettings {
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::BodyLong,
+            CandleSetting::new(CandleRangeKind::RealBody, 1, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(CandleRangeKind::RealBody, 1, 1.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyDoji,
+            CandleSetting::new(CandleRangeKind::HighLow, 1, 0.1 as Float).unwrap(),
+        )
+}
+
+#[test]
+fn independently_reasoned_three_candle_boundaries_lock_exact_pinned_predicates() {
+    let settings = three_candle_boundary_settings();
+    let penetration = Penetration::new(0.3 as Float).unwrap();
+    let seed = candle(10.0, 12.0, 9.0, 11.0);
+    let black = candle(20.0, 21.0, 9.0, 10.0);
+    let white = candle(10.0, 21.0, 9.0, 20.0);
+
+    let inside = CDL3INSIDEConfig::new(settings).unwrap();
+    assert_eq!(
+        boundary_code(
+            inside,
+            &[seed, black, candle(17.0, 18.0, 15.0, 16.0), candle(15.0, 22.0, 14.0, 21.0)]
+        ),
+        100
+    );
+    assert_eq!(
+        boundary_code(
+            inside,
+            &[seed, black, candle(11.0, 12.0, 9.5, 10.0), candle(15.0, 22.0, 14.0, 21.0)]
+        ),
+        0
+    );
+
+    let outside = CDL3OUTSIDEConfig::new(settings).unwrap();
+    assert_eq!(
+        boundary_code(
+            outside,
+            &[seed, black, candle(9.0, 22.0, 8.0, 21.0), candle(21.0, 23.0, 20.0, 22.0)]
+        ),
+        100
+    );
+    assert_eq!(
+        boundary_code(
+            outside,
+            &[seed, black, candle(10.0, 22.0, 9.0, 21.0), candle(21.0, 23.0, 20.0, 22.0)]
+        ),
+        0
+    );
+
+    let abandoned = CDLABANDONEDBABYConfig::new(settings, penetration).unwrap();
+    let abandoned_match = [
+        seed,
+        black,
+        candle(7.0, 8.0, 6.0, 7.0),
+        candle(9.0, 19.0, 8.5, 18.0),
+    ];
+    assert_eq!(boundary_code(abandoned, &abandoned_match), 100);
+    assert_eq!(
+        boundary_code(
+            abandoned,
+            &[
+                seed,
+                black,
+                candle(7.0, 9.0, 6.0, 7.0),
+                candle(10.0, 19.0, 9.5, 18.0),
+            ]
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            abandoned,
+            &[
+                seed,
+                black,
+                candle(7.0, 8.0, 6.0, 7.0),
+                candle(9.0, 19.0, 8.0, 18.0),
+            ]
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            abandoned,
+            &[
+                seed,
+                black,
+                candle(7.0, 8.0, 6.0, 7.0),
+                candle(9.0, 19.0, 8.5, 13.0),
+            ]
+        ),
+        0
+    );
+
+    let evening_doji = CDLEVENINGDOJISTARConfig::new(settings, penetration).unwrap();
+    assert_eq!(
+        boundary_code(
+            evening_doji,
+            &[seed, white, candle(21.0, 22.0, 20.5, 21.0), candle(21.0, 21.0, 12.0, 13.0)]
+        ),
+        -100
+    );
+    assert_eq!(
+        boundary_code(
+            evening_doji,
+            &[seed, white, candle(20.0, 21.0, 19.5, 20.0), candle(21.0, 21.0, 12.0, 13.0)]
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            evening_doji,
+            &[seed, white, candle(21.0, 22.0, 20.5, 21.0), candle(21.0, 21.0, 12.0, 17.0)]
+        ),
+        0
+    );
+
+    let evening = CDLEVENINGSTARConfig::new(settings, penetration).unwrap();
+    assert_eq!(
+        boundary_code(
+            evening,
+            &[seed, white, candle(21.0, 23.0, 20.5, 22.0), candle(21.0, 21.0, 12.0, 13.0)]
+        ),
+        -100
+    );
+    assert_eq!(
+        boundary_code(
+            evening,
+            &[seed, white, candle(20.0, 22.0, 19.5, 21.0), candle(21.0, 21.0, 12.0, 13.0)]
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            evening,
+            &[seed, white, candle(21.0, 23.0, 20.5, 22.0), candle(21.0, 21.0, 12.0, 17.0)]
+        ),
+        0
+    );
+
+    let morning_doji = CDLMORNINGDOJISTARConfig::new(settings, penetration).unwrap();
+    assert_eq!(
+        boundary_code(
+            morning_doji,
+            &[seed, black, candle(8.0, 8.5, 7.0, 8.0), candle(9.0, 18.0, 8.5, 17.0)]
+        ),
+        100
+    );
+    assert_eq!(
+        boundary_code(
+            morning_doji,
+            &[seed, black, candle(10.0, 10.0, 9.0, 10.0), candle(9.0, 18.0, 8.5, 17.0)]
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            morning_doji,
+            &[seed, black, candle(8.0, 8.5, 7.0, 8.0), candle(9.0, 14.0, 8.5, 13.0)]
+        ),
+        0
+    );
+
+    let morning = CDLMORNINGSTARConfig::new(settings, penetration).unwrap();
+    assert_eq!(
+        boundary_code(
+            morning,
+            &[seed, black, candle(8.0, 9.0, 6.0, 7.0), candle(9.0, 18.0, 8.5, 17.0)]
+        ),
+        100
+    );
+    assert_eq!(
+        boundary_code(
+            morning,
+            &[seed, black, candle(10.0, 10.0, 8.0, 9.0), candle(9.0, 18.0, 8.5, 17.0)]
+        ),
+        0
+    );
+    assert_eq!(
+        boundary_code(
+            morning,
+            &[seed, black, candle(8.0, 9.0, 6.0, 7.0), candle(9.0, 14.0, 8.5, 13.0)]
+        ),
+        0
+    );
+
+    let unique = CDLUNIQUE3RIVERConfig::new(settings).unwrap();
+    assert_eq!(
+        boundary_code(
+            unique,
+            &[seed, black, candle(18.0, 19.0, 8.0, 12.0), candle(9.0, 10.0, 8.5, 9.5)]
+        ),
+        100
+    );
+    assert_eq!(
+        boundary_code(
+            unique,
+            &[seed, black, candle(18.0, 19.0, 8.0, 12.0), candle(8.0, 9.0, 7.5, 8.5)]
+        ),
+        0
+    );
+}
+
+#[test]
+fn three_candle_evidence_rows_cover_pinned_sources_and_qualification_scenarios() {
+    const ROWS: [(&str, &str, &str); 8] = [
+        ("CDL3INSIDE", "cdl3inside/cdl3inside.c", "strict containment and first-Candle sign"),
+        ("CDL3OUTSIDE", "cdl3outside/cdl3outside.c", "strict engulfing and second-Candle sign"),
+        ("CDLABANDONEDBABY", "cdlabandonedbaby/cdlabandonedbaby.c", "two strict Candle gaps and Penetration"),
+        ("CDLEVENINGDOJISTAR", "cdleveningdojistar/cdleveningdojistar.c", "strict real-body gap and Penetration"),
+        ("CDLEVENINGSTAR", "cdleveningstar/cdleveningstar.c", "BodyShort offsets and Penetration"),
+        ("CDLMORNINGDOJISTAR", "cdlmorningdojistar/cdlmorningdojistar.c", "strict real-body gap and Penetration"),
+        ("CDLMORNINGSTAR", "cdlmorningstar/cdlmorningstar.c", "BodyShort offsets and Penetration"),
+        ("CDLUNIQUE3RIVER", "cdlunique3river/cdlunique3river.c", "strict third open and fixed bullish sign"),
     ];
     assert_eq!(reference::TALIB_GIT_REVISION, "2247d599bddf37ed37e3a709371517e46efc66f6");
     assert!(ROWS.iter().all(|(_, source, scenario)| source.ends_with(".c") && !scenario.is_empty()));

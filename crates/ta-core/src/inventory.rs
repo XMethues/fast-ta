@@ -9,7 +9,7 @@
 pub const FUNCTION_COUNT: usize = 161;
 
 /// Number of functions currently implemented in Rust `ta-core`.
-pub const IMPLEMENTED_FUNCTION_COUNT: usize = 132;
+pub const IMPLEMENTED_FUNCTION_COUNT: usize = 140;
 
 /// Official TA-Lib function group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -221,12 +221,12 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     // Pattern Recognition — 61 functions.
     function!("CDL2CROWS", PatternRecognition, Planned),
     function!("CDL3BLACKCROWS", PatternRecognition, Planned),
-    function!("CDL3INSIDE", PatternRecognition, Planned),
+    function!("CDL3INSIDE", PatternRecognition, Implemented),
     function!("CDL3LINESTRIKE", PatternRecognition, Planned),
-    function!("CDL3OUTSIDE", PatternRecognition, Planned),
+    function!("CDL3OUTSIDE", PatternRecognition, Implemented),
     function!("CDL3STARSINSOUTH", PatternRecognition, Planned),
     function!("CDL3WHITESOLDIERS", PatternRecognition, Planned),
-    function!("CDLABANDONEDBABY", PatternRecognition, Planned),
+    function!("CDLABANDONEDBABY", PatternRecognition, Implemented),
     function!("CDLADVANCEBLOCK", PatternRecognition, Planned),
     function!("CDLBELTHOLD", PatternRecognition, Implemented),
     function!("CDLBREAKAWAY", PatternRecognition, Planned),
@@ -238,8 +238,8 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLDOJISTAR", PatternRecognition, Implemented),
     function!("CDLDRAGONFLYDOJI", PatternRecognition, Implemented),
     function!("CDLENGULFING", PatternRecognition, Implemented),
-    function!("CDLEVENINGDOJISTAR", PatternRecognition, Planned),
-    function!("CDLEVENINGSTAR", PatternRecognition, Planned),
+    function!("CDLEVENINGDOJISTAR", PatternRecognition, Implemented),
+    function!("CDLEVENINGSTAR", PatternRecognition, Implemented),
     function!("CDLGAPSIDESIDEWHITE", PatternRecognition, Planned),
     function!("CDLGRAVESTONEDOJI", PatternRecognition, Implemented),
     function!("CDLHAMMER", PatternRecognition, Implemented),
@@ -261,8 +261,8 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLMARUBOZU", PatternRecognition, Implemented),
     function!("CDLMATCHINGLOW", PatternRecognition, Implemented),
     function!("CDLMATHOLD", PatternRecognition, Planned),
-    function!("CDLMORNINGDOJISTAR", PatternRecognition, Planned),
-    function!("CDLMORNINGSTAR", PatternRecognition, Planned),
+    function!("CDLMORNINGDOJISTAR", PatternRecognition, Implemented),
+    function!("CDLMORNINGSTAR", PatternRecognition, Implemented),
     function!("CDLONNECK", PatternRecognition, Implemented),
     function!("CDLPIERCING", PatternRecognition, Implemented),
     function!("CDLRICKSHAWMAN", PatternRecognition, Implemented),
@@ -277,7 +277,7 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("CDLTASUKIGAP", PatternRecognition, Planned),
     function!("CDLTHRUSTING", PatternRecognition, Implemented),
     function!("CDLTRISTAR", PatternRecognition, Planned),
-    function!("CDLUNIQUE3RIVER", PatternRecognition, Planned),
+    function!("CDLUNIQUE3RIVER", PatternRecognition, Implemented),
     function!("CDLUPSIDEGAP2CROWS", PatternRecognition, Planned),
     function!("CDLXSIDEGAP3METHODS", PatternRecognition, Planned),
     // Statistic Functions — 9 functions.

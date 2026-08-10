@@ -169,6 +169,65 @@ TWO_CANDLE_FIXTURES = {
     ),
 }
 
+THREE_CANDLE_FIXTURES = {
+    "CDL3INSIDE": (
+        [10.0] * 10 + [20.0, 17.0, 15.0, 10.0, 10.0, 13.0, 15.0],
+        [12.0] * 10 + [21.0, 18.0, 22.0, 12.0, 21.0, 15.0, 16.0],
+        [9.0] * 10 + [9.0, 15.0, 14.0, 9.0, 9.0, 12.0, 8.0],
+        [11.0] * 10 + [10.0, 16.0, 21.0, 11.0, 20.0, 14.0, 9.0],
+    ),
+    "CDL3OUTSIDE": (
+        [10.0, 20.0, 9.0, 21.0, 10.0, 21.0, 12.0],
+        [12.0, 21.0, 22.0, 23.0, 21.0, 22.0, 13.0],
+        [9.0, 9.0, 8.0, 20.0, 9.0, 8.0, 7.0],
+        [11.0, 10.0, 21.0, 22.0, 20.0, 9.0, 8.0],
+    ),
+    "CDLABANDONEDBABY": (
+        [10.0] * 10 + [20.0, 7.0, 9.0, 10.0, 10.0, 23.0, 21.5],
+        [12.0] * 10 + [21.0, 8.0, 19.0, 12.0, 21.0, 24.0, 21.5],
+        [9.0] * 10 + [9.0, 6.0, 8.5, 9.0, 9.0, 22.0, 11.0],
+        [11.0] * 10 + [10.0, 7.1, 18.0, 11.0, 20.0, 23.1, 12.0],
+    ),
+    "CDLEVENINGDOJISTAR": (
+        [10.0] * 10 + [10.0, 22.0, 21.0],
+        [12.0] * 10 + [21.0, 23.0, 21.0],
+        [9.0] * 10 + [9.0, 21.0, 12.0],
+        [11.0] * 10 + [20.0, 22.1, 13.0],
+    ),
+    "CDLEVENINGSTAR": (
+        [10.0] * 10 + [10.0, 22.0, 21.0],
+        [12.0] * 10 + [21.0, 24.0, 21.0],
+        [9.0] * 10 + [9.0, 21.0, 12.0],
+        [11.0] * 10 + [20.0, 23.0, 13.0],
+    ),
+    "CDLMORNINGDOJISTAR": (
+        [10.0] * 10 + [20.0, 7.9, 9.0],
+        [12.0] * 10 + [21.0, 9.0, 18.0],
+        [9.0] * 10 + [9.0, 7.0, 8.5],
+        [11.0] * 10 + [10.0, 8.0, 17.0],
+    ),
+    "CDLMORNINGSTAR": (
+        [10.0] * 10 + [20.0, 8.0, 9.0],
+        [12.0] * 10 + [21.0, 9.0, 18.0],
+        [9.0] * 10 + [9.0, 6.0, 8.5],
+        [11.0] * 10 + [10.0, 7.0, 17.0],
+    ),
+    "CDLUNIQUE3RIVER": (
+        [10.0] * 10 + [20.0, 18.0, 9.0],
+        [12.0] * 10 + [21.0, 19.0, 10.0],
+        [9.0] * 10 + [9.0, 8.0, 8.5],
+        [11.0] * 10 + [10.0, 12.0, 9.5],
+    ),
+}
+
+STAR_NAMES = {
+    "CDLABANDONEDBABY",
+    "CDLEVENINGDOJISTAR",
+    "CDLEVENINGSTAR",
+    "CDLMORNINGDOJISTAR",
+    "CDLMORNINGSTAR",
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -240,6 +299,7 @@ class TalibReference:
             "CDLENGULFING",
             *SINGLE_CANDLE_NAMES,
             *(name for name in TWO_CANDLE_FIXTURES if name != "CDLDARKCLOUDCOVER"),
+            *(name for name in THREE_CANDLE_FIXTURES if name not in STAR_NAMES),
         )
         for name in standard_names:
             function = getattr(self.library, f"TA_{name}")
@@ -248,12 +308,13 @@ class TalibReference:
             lookback = getattr(self.library, f"TA_{name}_Lookback")
             lookback.argtypes = []
             lookback.restype = ctypes.c_int
-        dark_cloud = self.library.TA_CDLDARKCLOUDCOVER
-        dark_cloud.argtypes = [*arguments[:6], ctypes.c_double, *arguments[6:]]
-        dark_cloud.restype = ctypes.c_int
-        dark_cloud_lookback = self.library.TA_CDLDARKCLOUDCOVER_Lookback
-        dark_cloud_lookback.argtypes = [ctypes.c_double]
-        dark_cloud_lookback.restype = ctypes.c_int
+        for name in ("CDLDARKCLOUDCOVER", *STAR_NAMES):
+            function = getattr(self.library, f"TA_{name}")
+            function.argtypes = [*arguments[:6], ctypes.c_double, *arguments[6:]]
+            function.restype = ctypes.c_int
+            lookback = getattr(self.library, f"TA_{name}_Lookback")
+            lookback.argtypes = [ctypes.c_double]
+            lookback.restype = ctypes.c_int
 
         self.library.TA_SetCandleSettings.argtypes = [
             ctypes.c_int,
@@ -352,6 +413,12 @@ class TalibReference:
 def rust_float(value: float) -> str:
     rendered = repr(value)
     return rendered if "." in rendered else rendered + ".0"
+
+def fixture_prefix(name: str) -> str:
+    return {
+        "CDL3INSIDE": "THREE_INSIDE",
+        "CDL3OUTSIDE": "THREE_OUTSIDE",
+    }.get(name, name.removeprefix("CDL"))
 
 
 def rust_slice(values: Iterable[float]) -> str:
@@ -455,6 +522,31 @@ def render(reference: TalibReference) -> str:
     for name, observations in TWO_CANDLE_FIXTURES.items():
         prefix = name.removeprefix("CDL") + "_CUSTOM"
         penetration = 0.25 if name == "CDLDARKCLOUDCOVER" else None
+        append_result(
+            lines,
+            prefix,
+            reference.compute(name, observations, False, penetration),
+            reference.compute(name, observations, True, penetration),
+        )
+    lines.append("")
+
+    reference.restore_defaults()
+    for name, observations in THREE_CANDLE_FIXTURES.items():
+        prefix = fixture_prefix(name)
+        append_columns(lines, prefix, observations)
+        penetration = 0.3 if name in STAR_NAMES else None
+        append_result(
+            lines,
+            prefix + "_DEFAULT",
+            reference.compute(name, observations, False, penetration),
+            reference.compute(name, observations, True, penetration),
+        )
+    lines.append("")
+
+    reference.set_custom_two_candle()
+    for name, observations in THREE_CANDLE_FIXTURES.items():
+        prefix = fixture_prefix(name) + "_CUSTOM"
+        penetration = 0.6 if name in STAR_NAMES else None
         append_result(
             lines,
             prefix,

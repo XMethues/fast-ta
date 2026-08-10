@@ -110,6 +110,7 @@ mod doji;
 mod engulfing;
 mod position_shadow;
 mod single_candle;
+mod three_candle_reversal;
 
 pub use body_containment::{
     CDLCOUNTERATTACKBatchRunner, CDLCOUNTERATTACKConfig, CDLCOUNTERATTACKStream,
@@ -145,6 +146,16 @@ pub use single_candle::{
     CDLRICKSHAWMANStream, CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig, CDLSHORTLINEStream,
     CDLSPINNINGTOPBatchRunner, CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream, CDLTAKURIBatchRunner,
     CDLTAKURIConfig, CDLTAKURIStream,
+};
+pub use three_candle_reversal::{
+    CDL3INSIDEBatchRunner, CDL3INSIDEConfig, CDL3INSIDEStream, CDL3OUTSIDEBatchRunner,
+    CDL3OUTSIDEConfig, CDL3OUTSIDEStream, CDLABANDONEDBABYBatchRunner, CDLABANDONEDBABYConfig,
+    CDLABANDONEDBABYStream, CDLEVENINGDOJISTARBatchRunner, CDLEVENINGDOJISTARConfig,
+    CDLEVENINGDOJISTARStream, CDLEVENINGSTARBatchRunner, CDLEVENINGSTARConfig,
+    CDLEVENINGSTARStream, CDLMORNINGDOJISTARBatchRunner, CDLMORNINGDOJISTARConfig,
+    CDLMORNINGDOJISTARStream, CDLMORNINGSTARBatchRunner, CDLMORNINGSTARConfig,
+    CDLMORNINGSTARStream, CDLUNIQUE3RIVERBatchRunner, CDLUNIQUE3RIVERConfig,
+    CDLUNIQUE3RIVERStream,
 };
 pub use types::{
     Candle, CandleInput, CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings,

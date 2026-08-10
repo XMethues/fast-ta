@@ -317,3 +317,92 @@ pub const THRUSTING_DEFAULT_F32_CODES: &[i32] = &[-100, 0];
 pub const THRUSTING_CUSTOM_LOOKBACK: usize = 4;
 pub const THRUSTING_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100, 0];
 pub const THRUSTING_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100, 0];
+
+
+pub const THREE_INSIDE_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 17.0, 15.0, 10.0, 10.0, 13.0, 15.0];
+pub const THREE_INSIDE_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 18.0, 22.0, 12.0, 21.0, 15.0, 16.0];
+pub const THREE_INSIDE_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 15.0, 14.0, 9.0, 9.0, 12.0, 8.0];
+pub const THREE_INSIDE_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.0, 16.0, 21.0, 11.0, 20.0, 14.0, 9.0];
+pub const THREE_INSIDE_DEFAULT_LOOKBACK: usize = 12;
+pub const THREE_INSIDE_DEFAULT_F64_CODES: &[i32] = &[100, 0, 0, 0, -100];
+pub const THREE_INSIDE_DEFAULT_F32_CODES: &[i32] = &[100, 0, 0, 0, -100];
+pub const THREE_INSIDE_CUSTOM_LOOKBACK: usize = 5;
+pub const THREE_INSIDE_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, -100];
+pub const THREE_INSIDE_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, -100];
+
+pub const THREE_OUTSIDE_OPEN: &[f64] = &[10.0, 20.0, 9.0, 21.0, 10.0, 21.0, 12.0];
+pub const THREE_OUTSIDE_HIGH: &[f64] = &[12.0, 21.0, 22.0, 23.0, 21.0, 22.0, 13.0];
+pub const THREE_OUTSIDE_LOW: &[f64] = &[9.0, 9.0, 8.0, 20.0, 9.0, 8.0, 7.0];
+pub const THREE_OUTSIDE_CLOSE: &[f64] = &[11.0, 10.0, 21.0, 22.0, 20.0, 9.0, 8.0];
+pub const THREE_OUTSIDE_DEFAULT_LOOKBACK: usize = 3;
+pub const THREE_OUTSIDE_DEFAULT_F64_CODES: &[i32] = &[100, 0, 0, -100];
+pub const THREE_OUTSIDE_DEFAULT_F32_CODES: &[i32] = &[100, 0, 0, -100];
+pub const THREE_OUTSIDE_CUSTOM_LOOKBACK: usize = 3;
+pub const THREE_OUTSIDE_CUSTOM_F64_CODES: &[i32] = &[100, 0, 0, -100];
+pub const THREE_OUTSIDE_CUSTOM_F32_CODES: &[i32] = &[100, 0, 0, -100];
+
+pub const ABANDONEDBABY_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 7.0, 9.0, 10.0, 10.0, 23.0, 21.5];
+pub const ABANDONEDBABY_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 8.0, 19.0, 12.0, 21.0, 24.0, 21.5];
+pub const ABANDONEDBABY_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 6.0, 8.5, 9.0, 9.0, 22.0, 11.0];
+pub const ABANDONEDBABY_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.0, 7.1, 18.0, 11.0, 20.0, 23.1, 12.0];
+pub const ABANDONEDBABY_DEFAULT_LOOKBACK: usize = 12;
+pub const ABANDONEDBABY_DEFAULT_F64_CODES: &[i32] = &[100, 0, 0, 0, -100];
+pub const ABANDONEDBABY_DEFAULT_F32_CODES: &[i32] = &[100, 0, 0, 0, -100];
+pub const ABANDONEDBABY_CUSTOM_LOOKBACK: usize = 5;
+pub const ABANDONEDBABY_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, -100];
+pub const ABANDONEDBABY_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, -100];
+
+pub const EVENINGDOJISTAR_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 22.0, 21.0];
+pub const EVENINGDOJISTAR_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 23.0, 21.0];
+pub const EVENINGDOJISTAR_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 21.0, 12.0];
+pub const EVENINGDOJISTAR_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 20.0, 22.1, 13.0];
+pub const EVENINGDOJISTAR_DEFAULT_LOOKBACK: usize = 12;
+pub const EVENINGDOJISTAR_DEFAULT_F64_CODES: &[i32] = &[-100];
+pub const EVENINGDOJISTAR_DEFAULT_F32_CODES: &[i32] = &[-100];
+pub const EVENINGDOJISTAR_CUSTOM_LOOKBACK: usize = 5;
+pub const EVENINGDOJISTAR_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100];
+pub const EVENINGDOJISTAR_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100];
+
+pub const EVENINGSTAR_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 22.0, 21.0];
+pub const EVENINGSTAR_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 24.0, 21.0];
+pub const EVENINGSTAR_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 21.0, 12.0];
+pub const EVENINGSTAR_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 20.0, 23.0, 13.0];
+pub const EVENINGSTAR_DEFAULT_LOOKBACK: usize = 12;
+pub const EVENINGSTAR_DEFAULT_F64_CODES: &[i32] = &[-100];
+pub const EVENINGSTAR_DEFAULT_F32_CODES: &[i32] = &[-100];
+pub const EVENINGSTAR_CUSTOM_LOOKBACK: usize = 5;
+pub const EVENINGSTAR_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100];
+pub const EVENINGSTAR_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, -100];
+
+pub const MORNINGDOJISTAR_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 7.9, 9.0];
+pub const MORNINGDOJISTAR_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 9.0, 18.0];
+pub const MORNINGDOJISTAR_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 7.0, 8.5];
+pub const MORNINGDOJISTAR_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.0, 8.0, 17.0];
+pub const MORNINGDOJISTAR_DEFAULT_LOOKBACK: usize = 12;
+pub const MORNINGDOJISTAR_DEFAULT_F64_CODES: &[i32] = &[100];
+pub const MORNINGDOJISTAR_DEFAULT_F32_CODES: &[i32] = &[100];
+pub const MORNINGDOJISTAR_CUSTOM_LOOKBACK: usize = 5;
+pub const MORNINGDOJISTAR_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+pub const MORNINGDOJISTAR_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+
+pub const MORNINGSTAR_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 8.0, 9.0];
+pub const MORNINGSTAR_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 9.0, 18.0];
+pub const MORNINGSTAR_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 6.0, 8.5];
+pub const MORNINGSTAR_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.0, 7.0, 17.0];
+pub const MORNINGSTAR_DEFAULT_LOOKBACK: usize = 12;
+pub const MORNINGSTAR_DEFAULT_F64_CODES: &[i32] = &[100];
+pub const MORNINGSTAR_DEFAULT_F32_CODES: &[i32] = &[100];
+pub const MORNINGSTAR_CUSTOM_LOOKBACK: usize = 5;
+pub const MORNINGSTAR_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+pub const MORNINGSTAR_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+
+pub const UNIQUE3RIVER_OPEN: &[f64] = &[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 18.0, 9.0];
+pub const UNIQUE3RIVER_HIGH: &[f64] = &[12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 21.0, 19.0, 10.0];
+pub const UNIQUE3RIVER_LOW: &[f64] = &[9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 9.0, 8.0, 8.5];
+pub const UNIQUE3RIVER_CLOSE: &[f64] = &[11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 11.0, 10.0, 12.0, 9.5];
+pub const UNIQUE3RIVER_DEFAULT_LOOKBACK: usize = 12;
+pub const UNIQUE3RIVER_DEFAULT_F64_CODES: &[i32] = &[100];
+pub const UNIQUE3RIVER_DEFAULT_F32_CODES: &[i32] = &[100];
+pub const UNIQUE3RIVER_CUSTOM_LOOKBACK: usize = 5;
+pub const UNIQUE3RIVER_CUSTOM_F64_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
+pub const UNIQUE3RIVER_CUSTOM_F32_CODES: &[i32] = &[0, 0, 0, 0, 0, 0, 0, 100];
