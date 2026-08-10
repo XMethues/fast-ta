@@ -1,25 +1,7 @@
 //! Local definitions for gap and continuation patterns.
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
-use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-
-#[inline]
-const fn standard(direction: PatternDirection) -> PatternSignal {
-    PatternSignal::Match {
-        direction,
-        strength: PatternStrength::Standard,
-    }
-}
-
-#[inline]
-fn body_high(context: &RecognitionContext<'_>, offset: usize) -> f64 {
-    context.body_high(offset)
-}
-
-#[inline]
-fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
-    context.body_low(offset)
-}
+use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal};
 
 define_pattern_config!(
     CDL2CROWSConfig,
@@ -72,7 +54,7 @@ impl PatternDefinition for CDL2CROWSConfig {
             && third.close > first.open
             && third.close < first.close
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -145,13 +127,13 @@ impl PatternDefinition for CDL3LINESTRIKEConfig {
         if context.color(3) == context.color(2)
             && context.color(2) == line_color
             && fourth_is_opposite
-            && second.open >= body_low(context, 3) - near_first
-            && second.open <= body_high(context, 3) + near_first
-            && third.open >= body_low(context, 2) - near_second
-            && third.open <= body_high(context, 2) + near_second
+            && second.open >= context.body_low(3) - near_first
+            && second.open <= context.body_high(3) + near_first
+            && third.open >= context.body_low(2) - near_second
+            && third.open <= context.body_high(2) + near_second
             && strike
         {
-            standard(line_color.direction())
+            PatternSignal::standard(line_color.direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -210,7 +192,7 @@ impl PatternDefinition for CDLGAPSIDESIDEWHITEConfig {
             && third.open >= second.open - equal
             && third.open <= second.open + equal
         {
-            standard(if upside {
+            PatternSignal::standard(if upside {
                 PatternDirection::Bullish
             } else {
                 PatternDirection::Bearish
@@ -270,7 +252,7 @@ impl PatternDefinition for CDLSTICKSANDWICHConfig {
             && third.close <= first.close + equal
             && third.close >= first.close - equal
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -336,7 +318,7 @@ impl PatternDefinition for CDLTASUKIGAPConfig {
             && third.close < context.body_low(2)
             && near_size;
         if upside || downside {
-            standard(context.color(1).direction())
+            PatternSignal::standard(context.color(1).direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -387,12 +369,11 @@ impl PatternDefinition for CDLTRISTARConfig {
             && context.real_body(1) <= threshold
             && context.real_body(0) <= threshold
         {
-            if context.real_body_gap_up(1, 2) && body_high(context, 0) < body_high(context, 1) {
-                standard(PatternDirection::Bearish)
-            } else if context.real_body_gap_down(1, 2)
-                && body_low(context, 0) > body_low(context, 1)
+            if context.real_body_gap_up(1, 2) && context.body_high(0) < context.body_high(1) {
+                PatternSignal::standard(PatternDirection::Bearish)
+            } else if context.real_body_gap_down(1, 2) && context.body_low(0) > context.body_low(1)
             {
-                standard(PatternDirection::Bullish)
+                PatternSignal::standard(PatternDirection::Bullish)
             } else {
                 PatternSignal::NoMatch
             }
@@ -453,7 +434,7 @@ impl PatternDefinition for CDLUPSIDEGAP2CROWSConfig {
             && third.close < second.close
             && third.close > first.close
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -502,14 +483,14 @@ impl PatternDefinition for CDLXSIDEGAP3METHODSConfig {
         let third = context.candle(0);
         if first_color == context.color(1)
             && first_color != context.color(0)
-            && third.open < body_high(context, 1)
-            && third.open > body_low(context, 1)
-            && third.close < body_high(context, 2)
-            && third.close > body_low(context, 2)
+            && third.open < context.body_high(1)
+            && third.open > context.body_low(1)
+            && third.close < context.body_high(2)
+            && third.close > context.body_low(2)
             && ((first_color == CandleColor::White && context.real_body_gap_up(1, 2))
                 || (first_color == CandleColor::Black && context.real_body_gap_down(1, 2)))
         {
-            standard(first_color.direction())
+            PatternSignal::standard(first_color.direction())
         } else {
             PatternSignal::NoMatch
         }

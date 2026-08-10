@@ -1,29 +1,8 @@
 //! Local definitions for the three-Candle reversal and star family.
 
 use super::engine::{maximum_average_period, CandleColor, PatternDefinition, RecognitionContext};
-use super::{
-    CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
-    Penetration,
-};
+use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, Penetration};
 use crate::{Float, Result};
-
-#[inline]
-const fn standard(direction: PatternDirection) -> PatternSignal {
-    PatternSignal::Match {
-        direction,
-        strength: PatternStrength::Standard,
-    }
-}
-
-#[inline]
-fn body_high(context: &RecognitionContext<'_>, offset: usize) -> f64 {
-    context.body_high(offset)
-}
-
-#[inline]
-fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
-    context.body_low(offset)
-}
 
 macro_rules! define_star_config {
     ($config:ident, $runner:ident, $stream:ident, [$($setting:expr),+ $(,)?]) => {
@@ -35,7 +14,7 @@ macro_rules! define_star_config {
         }
 
         impl $config {
-            /// Creates the definition with immutable Candle Settings and Penetration.
+            /// Creates the configuration with immutable Candle Settings and Penetration.
             pub fn new(candle_settings: CandleSettings, penetration: Penetration) -> Result<Self> {
                 Ok(Self { candle_settings, penetration })
             }
@@ -121,13 +100,13 @@ impl PatternDefinition for CDL3INSIDEConfig {
                 context.color(0) == CandleColor::White && third.close > first.open
             }
         };
-        if body_high(context, 1) < body_high(context, 2)
-            && body_low(context, 1) > body_low(context, 2)
+        if context.body_high(1) < context.body_high(2)
+            && context.body_low(1) > context.body_low(2)
             && reversal
             && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
             && context.real_body(1) <= context.average(CandleSettingType::BodyShort, 1)
         {
-            standard(context.color(0).direction())
+            PatternSignal::standard(context.color(0).direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -191,7 +170,7 @@ impl PatternDefinition for CDL3OUTSIDEConfig {
             }
         };
         if matches {
-            standard(second_color.direction())
+            PatternSignal::standard(second_color.direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -267,7 +246,7 @@ impl PatternDefinition for CDLABANDONEDBABYConfig {
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
             && reversal
         {
-            standard(third_color.direction())
+            PatternSignal::standard(third_color.direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -329,7 +308,7 @@ impl PatternDefinition for CDLEVENINGDOJISTARConfig {
             && context.real_body(1) <= context.average(CandleSettingType::BodyDoji, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -383,7 +362,7 @@ impl PatternDefinition for CDLEVENINGSTARConfig {
             && context.real_body(1) <= context.average(CandleSettingType::BodyShort, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -445,7 +424,7 @@ impl PatternDefinition for CDLMORNINGDOJISTARConfig {
             && context.real_body(1) <= context.average(CandleSettingType::BodyDoji, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -499,7 +478,7 @@ impl PatternDefinition for CDLMORNINGSTARConfig {
             && context.real_body(1) <= context.average(CandleSettingType::BodyShort, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -557,7 +536,7 @@ impl PatternDefinition for CDLUNIQUE3RIVERConfig {
             && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
             && context.real_body(0) < context.average(CandleSettingType::BodyShort, 0)
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }

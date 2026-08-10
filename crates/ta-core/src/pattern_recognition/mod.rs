@@ -117,7 +117,7 @@ macro_rules! define_pattern_config {
         }
 
         impl $config {
-            /// Creates the definition with an immutable Candle Settings collection.
+            /// Creates the configuration with an immutable Candle Settings collection.
             pub fn new(
                 candle_settings: crate::pattern_recognition::CandleSettings,
             ) -> crate::Result<Self> {

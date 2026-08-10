@@ -1,19 +1,8 @@
 //! Local definitions for five-Candle long formations.
 
 use super::engine::{maximum_average_period, CandleColor, PatternDefinition, RecognitionContext};
-use super::{
-    CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
-    Penetration,
-};
+use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, Penetration};
 use crate::{Float, Result};
-
-#[inline]
-const fn signal(direction: PatternDirection) -> PatternSignal {
-    PatternSignal::Match {
-        direction,
-        strength: PatternStrength::Standard,
-    }
-}
 
 macro_rules! definition {
     ($config:ident, $name:literal, [$($setting:expr),+ $(,)?], $body:expr) => {
@@ -101,7 +90,7 @@ definition!(
             && context.real_body(4) > context.average(CandleSettingType::BodyLong, 4)
             && breaks_away
         {
-            signal(fifth_color.direction())
+            PatternSignal::standard(fifth_color.direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -140,7 +129,7 @@ definition!(
             && fifth.open > fourth.open
             && fifth.close > fourth.high
         {
-            signal(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -155,7 +144,7 @@ pub struct CDLMATHOLDConfig {
 }
 
 impl CDLMATHOLDConfig {
-    /// Creates the definition with immutable Candle Settings and Penetration.
+    /// Creates the configuration with immutable Candle Settings and Penetration.
     pub fn new(candle_settings: CandleSettings, penetration: Penetration) -> Result<Self> {
         Ok(Self {
             candle_settings,
@@ -251,7 +240,7 @@ impl PatternDefinition for CDLMATHOLDConfig {
             && context.real_body(2) < context.average(CandleSettingType::BodyShort, 2)
             && context.real_body(1) < context.average(CandleSettingType::BodyShort, 1)
         {
-            signal(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -335,7 +324,7 @@ impl PatternDefinition for CDLRISEFALL3METHODSConfig {
             && context.real_body(1) < context.average(CandleSettingType::BodyShort, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyLong, 0)
         {
-            signal(first_color.direction())
+            PatternSignal::standard(first_color.direction())
         } else {
             PatternSignal::NoMatch
         }

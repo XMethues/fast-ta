@@ -1,15 +1,7 @@
 //! Local definitions for the two-Candle position and shadow family.
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
-use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-
-#[inline]
-const fn standard(direction: PatternDirection) -> PatternSignal {
-    PatternSignal::Match {
-        direction,
-        strength: PatternStrength::Standard,
-    }
-}
+use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal};
 
 define_pattern_config!(
     CDLHAMMERConfig,
@@ -65,7 +57,7 @@ impl PatternDefinition for CDLHAMMERConfig {
             && context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
             && context.body_low(0) <= previous.low + context.average(CandleSettingType::Near, 1)
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -126,7 +118,7 @@ impl PatternDefinition for CDLHANGINGMANConfig {
             && context.upper_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
             && context.body_low(0) >= previous.high - context.average(CandleSettingType::Near, 1)
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -181,7 +173,7 @@ impl PatternDefinition for CDLINNECKConfig {
             && current.close <= previous.close + equal
             && current.close >= previous.close
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -239,7 +231,7 @@ impl PatternDefinition for CDLINVERTEDHAMMERConfig {
             && context.upper_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
             && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -294,7 +286,7 @@ impl PatternDefinition for CDLONNECKConfig {
             && current.close <= previous.low + equal
             && current.close >= previous.low - equal
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -349,7 +341,7 @@ impl PatternDefinition for CDLPIERCINGConfig {
             && current.close < previous.open
             && current.close > previous.close + context.real_body(1) * 0.5
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -420,7 +412,7 @@ impl PatternDefinition for CDLSEPARATINGLINESConfig {
             && context.real_body(0) > context.average(CandleSettingType::BodyLong, 0)
             && short_leading_shadow
         {
-            standard(color.direction())
+            PatternSignal::standard(color.direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -478,7 +470,7 @@ impl PatternDefinition for CDLSHOOTINGSTARConfig {
             && context.upper_shadow(0) > context.average(CandleSettingType::ShadowLong, 0)
             && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -532,7 +524,7 @@ impl PatternDefinition for CDLTHRUSTINGConfig {
             && current.close > previous.close + context.average(CandleSettingType::Equal, 1)
             && current.close <= previous.close + context.real_body(1) * 0.5
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }

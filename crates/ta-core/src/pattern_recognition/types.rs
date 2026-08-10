@@ -103,6 +103,14 @@ pub enum PatternSignal {
 }
 
 impl PatternSignal {
+    #[inline]
+    pub(crate) const fn standard(direction: PatternDirection) -> Self {
+        Self::Match {
+            direction,
+            strength: PatternStrength::Standard,
+        }
+    }
+
     /// Projects this signal to its exact TA-Lib integer code.
     ///
     /// The only possible codes are `0`, `±80`, `±100`, and `±200`.

@@ -1,15 +1,7 @@
 //! Local definitions for crow, soldier, and advance patterns.
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
-use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-
-#[inline]
-const fn signal(direction: PatternDirection) -> PatternSignal {
-    PatternSignal::Match {
-        direction,
-        strength: PatternStrength::Standard,
-    }
-}
+use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal};
 
 macro_rules! definition {
     ($config:ident, $name:literal, [$($setting:expr),+ $(,)?], $body:expr) => {
@@ -57,7 +49,7 @@ definition!(
             && context.lower_shadow(1) < context.average(CandleSettingType::ShadowVeryShort, 1)
             && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
         {
-            signal(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -106,7 +98,7 @@ definition!(
             && current.low > second.low
             && current.high < second.high
         {
-            signal(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -156,7 +148,7 @@ definition!(
                 > context.real_body(1) - context.average(CandleSettingType::Far, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
         {
-            signal(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -216,7 +208,7 @@ definition!(
             && context.upper_shadow(2) < context.average(CandleSettingType::ShadowShort, 2)
             && weakening
         {
-            signal(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -252,7 +244,7 @@ definition!(
             && current.high > third.high
             && current.low < third.low
         {
-            signal(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -289,7 +281,7 @@ definition!(
             && current.open <= second.close + second_equal
             && current.open >= second.close - second_equal
         {
-            signal(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -335,7 +327,7 @@ definition!(
             && current.open
                 >= second.close - context.real_body(0) - context.average(CandleSettingType::Near, 1)
         {
-            signal(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }

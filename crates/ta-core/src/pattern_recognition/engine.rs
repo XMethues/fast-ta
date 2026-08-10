@@ -174,7 +174,6 @@ pub(crate) struct RecognitionContext<'a> {
     history: &'a CandleHistory,
 }
 
-#[allow(dead_code)]
 impl RecognitionContext<'_> {
     #[inline]
     fn raw_candle(&self, offset: usize) -> Candle {
@@ -188,23 +187,8 @@ impl RecognitionContext<'_> {
     }
 
     #[inline]
-    pub(crate) fn open(&self, offset: usize) -> PatternFloat {
-        self.candle(offset).open
-    }
-
-    #[inline]
-    pub(crate) fn high(&self, offset: usize) -> PatternFloat {
-        self.candle(offset).high
-    }
-
-    #[inline]
     pub(crate) fn low(&self, offset: usize) -> PatternFloat {
         self.candle(offset).low
-    }
-
-    #[inline]
-    pub(crate) fn close(&self, offset: usize) -> PatternFloat {
-        self.candle(offset).close
     }
 
     #[inline]
@@ -245,11 +229,6 @@ impl RecognitionContext<'_> {
     #[inline]
     pub(crate) fn lower_shadow(&self, offset: usize) -> PatternFloat {
         self.raw_candle(offset).lower_shadow()
-    }
-
-    #[inline]
-    pub(crate) fn shadows(&self, offset: usize) -> PatternFloat {
-        self.raw_candle(offset).shadows()
     }
 
     #[inline]

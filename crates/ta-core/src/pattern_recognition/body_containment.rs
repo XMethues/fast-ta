@@ -7,24 +7,6 @@ use super::{
 };
 use crate::{Float, Result};
 
-#[inline]
-const fn standard(direction: PatternDirection) -> PatternSignal {
-    PatternSignal::Match {
-        direction,
-        strength: PatternStrength::Standard,
-    }
-}
-
-#[inline]
-fn body_high(context: &RecognitionContext<'_>, offset: usize) -> f64 {
-    context.body_high(offset)
-}
-
-#[inline]
-fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
-    context.body_low(offset)
-}
-
 define_pattern_config!(
     CDLCOUNTERATTACKConfig,
     CDLCOUNTERATTACKBatchRunner,
@@ -65,7 +47,7 @@ impl PatternDefinition for CDLCOUNTERATTACKConfig {
             && current.close <= previous.close + equal
             && current.close >= previous.close - equal
         {
-            standard(context.color(0).direction())
+            PatternSignal::standard(context.color(0).direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -80,7 +62,7 @@ pub struct CDLDARKCLOUDCOVERConfig {
 }
 
 impl CDLDARKCLOUDCOVERConfig {
-    /// Creates the definition with immutable Candle Settings and Penetration.
+    /// Creates the configuration with immutable Candle Settings and Penetration.
     pub fn new(candle_settings: CandleSettings, penetration: Penetration) -> Result<Self> {
         Ok(Self {
             candle_settings,
@@ -148,7 +130,7 @@ impl PatternDefinition for CDLDARKCLOUDCOVERConfig {
             && current.close > previous.open
             && current.close < previous.close - context.real_body(1) * self.penetration.wide_value()
         {
-            standard(PatternDirection::Bearish)
+            PatternSignal::standard(PatternDirection::Bearish)
         } else {
             PatternSignal::NoMatch
         }
@@ -201,7 +183,7 @@ impl PatternDefinition for CDLDOJISTARConfig {
             && context.real_body(0) <= context.average(CandleSettingType::BodyDoji, 0)
             && gap
         {
-            standard(previous_color.opposite_direction())
+            PatternSignal::standard(previous_color.opposite_direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -239,12 +221,12 @@ macro_rules! impl_harami_definition {
                     return PatternSignal::NoMatch;
                 }
                 let direction = context.color(1).opposite_direction();
-                if body_high(context, 0) < body_high(context, 1)
-                    && body_low(context, 0) > body_low(context, 1)
+                if context.body_high(0) < context.body_high(1)
+                    && context.body_low(0) > context.body_low(1)
                 {
-                    standard(direction)
-                } else if body_high(context, 0) <= body_high(context, 1)
-                    && body_low(context, 0) >= body_low(context, 1)
+                    PatternSignal::standard(direction)
+                } else if context.body_high(0) <= context.body_high(1)
+                    && context.body_low(0) >= context.body_low(1)
                 {
                     PatternSignal::Match {
                         direction,
@@ -320,7 +302,7 @@ impl PatternDefinition for CDLHOMINGPIGEONConfig {
             && current.open < previous.open
             && current.close > previous.close
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
@@ -389,7 +371,7 @@ impl PatternDefinition for CDLKICKINGConfig {
         _state: &mut Self::State,
     ) -> PatternSignal {
         if is_kicking(context) {
-            standard(context.color(0).direction())
+            PatternSignal::standard(context.color(0).direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -448,7 +430,7 @@ impl PatternDefinition for CDLKICKINGBYLENGTHConfig {
         } else {
             1
         };
-        standard(context.color(selected).direction())
+        PatternSignal::standard(context.color(selected).direction())
     }
 }
 
@@ -491,7 +473,7 @@ impl PatternDefinition for CDLMATCHINGLOWConfig {
             && current.close <= previous.close + equal
             && current.close >= previous.close - equal
         {
-            standard(PatternDirection::Bullish)
+            PatternSignal::standard(PatternDirection::Bullish)
         } else {
             PatternSignal::NoMatch
         }
