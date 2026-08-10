@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate CDLDOJI/CDLENGULFING fixtures through pinned TA-Lib C."""
+"""Generate qualified Pattern Recognition fixtures through pinned TA-Lib C."""
 
 from __future__ import annotations
 
@@ -37,6 +37,26 @@ ENGULFING = (
     [8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 7.0],
     [9.0, 8.0, 11.0, 6.0, 12.0, 4.0, 8.0],
 )
+SINGLE_CANDLE = (
+    [10.0] * 10 + [10.0, 14.0, 13.0, 7.0, 9.5, 10.5, 10.0, 11.0, 9.75, 10.25],
+    [15.0] * 10 + [14.25, 14.25, 13.25, 15.0, 14.0, 14.0, 11.5, 11.5, 12.0, 12.0],
+    [5.0] * 10 + [9.75, 9.75, 5.0, 6.75, 6.0, 6.0, 9.5, 9.5, 8.0, 8.0],
+    [12.0] * 10 + [14.0, 10.0, 13.0, 7.0, 10.5, 9.5, 11.0, 10.0, 10.25, 9.75],
+)
+SINGLE_CANDLE_NAMES = (
+    "CDLBELTHOLD",
+    "CDLCLOSINGMARUBOZU",
+    "CDLDRAGONFLYDOJI",
+    "CDLGRAVESTONEDOJI",
+    "CDLHIGHWAVE",
+    "CDLLONGLEGGEDDOJI",
+    "CDLLONGLINE",
+    "CDLMARUBOZU",
+    "CDLRICKSHAWMAN",
+    "CDLSHORTLINE",
+    "CDLSPINNINGTOP",
+    "CDLTAKURI",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,8 +70,7 @@ def build_pinned_talib(source_archive: Path, workspace: Path) -> Path:
     digest = hashlib.sha256(source_archive.read_bytes()).hexdigest()
     if digest != TALIB_SOURCE_ARCHIVE_SHA256:
         raise RuntimeError(
-            f"TA-Lib archive checksum mismatch: expected "
-            f"{TALIB_SOURCE_ARCHIVE_SHA256}, got {digest}"
+            f"TA-Lib archive checksum mismatch: expected {TALIB_SOURCE_ARCHIVE_SHA256}, got {digest}"
         )
     with tarfile.open(source_archive, "r:gz") as archive:
         archive.extractall(workspace)
@@ -105,7 +124,7 @@ class TalibReference:
             ctypes.POINTER(ctypes.c_int),
             ctypes.POINTER(ctypes.c_int),
         ]
-        for name in ("CDLDOJI", "CDLENGULFING"):
+        for name in ("CDLDOJI", "CDLENGULFING", *SINGLE_CANDLE_NAMES):
             function = getattr(self.library, f"TA_{name}")
             function.argtypes = arguments
             function.restype = ctypes.c_int
@@ -131,12 +150,28 @@ class TalibReference:
     def restore_defaults(self) -> None:
         self._check(self.library.TA_RestoreCandleDefaultSettings(11), "restore defaults")
 
-    def set_custom_doji(self) -> None:
-        # TA_BodyDoji=3, TA_RangeType_RealBody=0.
+    def set_setting(self, setting_type: int, range_type: int, period: int, factor: float) -> None:
         self._check(
-            self.library.TA_SetCandleSettings(3, 0, 3, ctypes.c_double(0.5)),
-            "set BodyDoji",
+            self.library.TA_SetCandleSettings(setting_type, range_type, period, factor),
+            f"set Candle Setting {setting_type}",
         )
+
+    def set_custom_doji(self) -> None:
+        self.set_setting(3, 0, 3, 0.5)
+
+    def set_custom_single_candle(self) -> None:
+        # The eight settings referenced by this wave. Enum/range numbers are pinned C values.
+        for setting in (
+            (0, 0, 3, 1.5),
+            (2, 0, 3, 2.0),
+            (3, 1, 3, 0.125),
+            (4, 0, 0, 1.25),
+            (5, 0, 0, 3.0),
+            (6, 2, 3, 0.5),
+            (7, 1, 3, 0.0625),
+            (8, 1, 3, 0.125),
+        ):
+            self.set_setting(*setting)
 
     def compute(
         self,
@@ -150,18 +185,13 @@ class TalibReference:
             else list(column)
             for column in observations
         ]
-        open_values, high_values, low_values, close_values = columns
-        length = len(open_values)
-        arrays = [
-            (ctypes.c_double * length)(*column)
-            for column in (open_values, high_values, low_values, close_values)
-        ]
+        length = len(columns[0])
+        arrays = [(ctypes.c_double * length)(*column) for column in columns]
         output = (ctypes.c_int * length)()
         begin = ctypes.c_int()
         count = ctypes.c_int()
-        function = getattr(self.library, f"TA_{name}")
         self._check(
-            function(
+            getattr(self.library, f"TA_{name}")(
                 0,
                 length - 1,
                 *arrays,
@@ -171,8 +201,8 @@ class TalibReference:
             ),
             f"TA_{name}",
         )
-        expected_lookback = getattr(self.library, f"TA_{name}_Lookback")()
-        if begin.value != expected_lookback or count.value != length - expected_lookback:
+        lookback = getattr(self.library, f"TA_{name}_Lookback")()
+        if begin.value != lookback or count.value != length - lookback:
             raise RuntimeError(f"{name}: unexpected output range {begin.value}+{count.value}")
         return begin.value, list(output[: count.value])
 
@@ -189,17 +219,23 @@ def rust_slice(values: Iterable[float]) -> str:
     return ", ".join(rust_float(value) for value in values)
 
 
-def render(reference: TalibReference) -> str:
-    reference.restore_defaults()
-    default64 = reference.compute("CDLDOJI", DOJI_DEFAULT, False)
-    default32 = reference.compute("CDLDOJI", DOJI_DEFAULT, True)
-    reference.set_custom_doji()
-    custom64 = reference.compute("CDLDOJI", DOJI_CUSTOM, False)
-    custom32 = reference.compute("CDLDOJI", DOJI_CUSTOM, True)
-    reference.restore_defaults()
-    engulf64 = reference.compute("CDLENGULFING", ENGULFING, False)
-    engulf32 = reference.compute("CDLENGULFING", ENGULFING, True)
+def append_columns(lines: list[str], prefix: str, columns: Sequence[Sequence[float]]) -> None:
+    for suffix, values in zip(("OPEN", "HIGH", "LOW", "CLOSE"), columns):
+        lines.append(f"pub const {prefix}_{suffix}: &[f64] = &[{rust_slice(values)}];")
 
+
+def append_result(
+    lines: list[str],
+    prefix: str,
+    f64_result: tuple[int, list[int]],
+    f32_result: tuple[int, list[int]],
+) -> None:
+    lines.append(f"pub const {prefix}_LOOKBACK: usize = {f64_result[0]};")
+    lines.append(f"pub const {prefix}_F64_CODES: &[i32] = &{f64_result[1]!r};")
+    lines.append(f"pub const {prefix}_F32_CODES: &[i32] = &{f32_result[1]!r};")
+
+
+def render(reference: TalibReference) -> str:
     lines = [
         "// Generated by tests/fixtures/generate_pattern_recognition.py. Do not edit by hand.",
         f"// Reference source: TA-Lib v{TALIB_VERSION}, commit {TALIB_GIT_REVISION}.",
@@ -210,18 +246,58 @@ def render(reference: TalibReference) -> str:
         f'pub const TALIB_SOURCE_ARCHIVE_SHA256: &str = "{TALIB_SOURCE_ARCHIVE_SHA256}";',
         "",
     ]
-    fixtures = [
-        ("DOJI_DEFAULT", DOJI_DEFAULT, default64, default32),
-        ("DOJI_CUSTOM", DOJI_CUSTOM, custom64, custom32),
-        ("ENGULFING", ENGULFING, engulf64, engulf32),
-    ]
-    for prefix, columns, f64_result, f32_result in fixtures:
-        for suffix, values in zip(("OPEN", "HIGH", "LOW", "CLOSE"), columns):
-            lines.append(f"pub const {prefix}_{suffix}: &[f64] = &[{rust_slice(values)}];")
-        lines.append(f"pub const {prefix}_LOOKBACK: usize = {f64_result[0]};")
-        lines.append(f"pub const {prefix}_F64_CODES: &[i32] = &{f64_result[1]!r};")
-        lines.append(f"pub const {prefix}_F32_CODES: &[i32] = &{f32_result[1]!r};")
-        lines.append("")
+
+    reference.restore_defaults()
+    append_columns(lines, "DOJI_DEFAULT", DOJI_DEFAULT)
+    append_result(
+        lines,
+        "DOJI_DEFAULT",
+        reference.compute("CDLDOJI", DOJI_DEFAULT, False),
+        reference.compute("CDLDOJI", DOJI_DEFAULT, True),
+    )
+    lines.append("")
+
+    reference.set_custom_doji()
+    append_columns(lines, "DOJI_CUSTOM", DOJI_CUSTOM)
+    append_result(
+        lines,
+        "DOJI_CUSTOM",
+        reference.compute("CDLDOJI", DOJI_CUSTOM, False),
+        reference.compute("CDLDOJI", DOJI_CUSTOM, True),
+    )
+    lines.append("")
+
+    reference.restore_defaults()
+    append_columns(lines, "ENGULFING", ENGULFING)
+    append_result(
+        lines,
+        "ENGULFING",
+        reference.compute("CDLENGULFING", ENGULFING, False),
+        reference.compute("CDLENGULFING", ENGULFING, True),
+    )
+    lines.append("")
+
+    append_columns(lines, "SINGLE_CANDLE", SINGLE_CANDLE)
+    for name in SINGLE_CANDLE_NAMES:
+        prefix = name.removeprefix("CDL") + "_DEFAULT"
+        append_result(
+            lines,
+            prefix,
+            reference.compute(name, SINGLE_CANDLE, False),
+            reference.compute(name, SINGLE_CANDLE, True),
+        )
+    lines.append("")
+
+    reference.set_custom_single_candle()
+    for name in SINGLE_CANDLE_NAMES:
+        prefix = name.removeprefix("CDL") + "_CUSTOM"
+        append_result(
+            lines,
+            prefix,
+            reference.compute(name, SINGLE_CANDLE, False),
+            reference.compute(name, SINGLE_CANDLE, True),
+        )
+    lines.append("")
     return "\n".join(lines)
 
 

@@ -8,8 +8,11 @@ use std::cell::Cell;
 
 use ta_core::pattern_recognition::{
     Candle, CandleInput, CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings,
-    PatternDirection, PatternSignal, PatternStrength, Penetration, CDLDOJIConfig,
-    CDLENGULFINGConfig,
+    PatternDirection, PatternSignal, PatternStrength, Penetration, CDLBELTHOLDConfig,
+    CDLCLOSINGMARUBOZUConfig, CDLDOJIConfig, CDLDRAGONFLYDOJIConfig, CDLENGULFINGConfig,
+    CDLGRAVESTONEDOJIConfig, CDLHIGHWAVEConfig, CDLLONGLEGGEDDOJIConfig, CDLLONGLINEConfig,
+    CDLMARUBOZUConfig, CDLRICKSHAWMANConfig, CDLSHORTLINEConfig, CDLSPINNINGTOPConfig,
+    CDLTAKURIConfig,
 };
 use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
@@ -546,4 +549,177 @@ fn prepared_and_streaming_steady_state_do_not_allocate_or_grow() {
         }),
         0
     );
+}
+
+fn single_candle_series() -> Series {
+    Series::from_fixture(
+        reference::SINGLE_CANDLE_OPEN,
+        reference::SINGLE_CANDLE_HIGH,
+        reference::SINGLE_CANDLE_LOW,
+        reference::SINGLE_CANDLE_CLOSE,
+    )
+}
+
+fn custom_single_candle_settings() -> CandleSettings {
+    use CandleRangeKind::{HighLow, RealBody, Shadows};
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::BodyLong,
+            CandleSetting::new(RealBody, 3, 1.5 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(RealBody, 3, 2.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyDoji,
+            CandleSetting::new(HighLow, 3, 0.125 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowLong,
+            CandleSetting::new(RealBody, 0, 1.25 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowVeryLong,
+            CandleSetting::new(RealBody, 0, 3.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowShort,
+            CandleSetting::new(Shadows, 3, 0.5 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowVeryShort,
+            CandleSetting::new(HighLow, 3, 0.0625 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Near,
+            CandleSetting::new(HighLow, 3, 0.125 as Float).unwrap(),
+        )
+}
+
+macro_rules! qualify_single_candle {
+    (
+        $series:expr, $default:expr, $custom:expr,
+        $default_lookback:ident, $default_f64:ident, $default_f32:ident,
+        $custom_lookback:ident, $custom_f64:ident, $custom_f32:ident
+    ) => {{
+        let default_expected =
+            expected_codes(reference::$default_f64, reference::$default_f32);
+        assert!(default_expected
+            .iter()
+            .any(|signal| matches!(signal, PatternSignal::Match { .. })));
+        qualify_pattern_fixture(
+            $default,
+            $series,
+            reference::$default_lookback,
+            &default_expected,
+        );
+
+        let custom_expected = expected_codes(reference::$custom_f64, reference::$custom_f32);
+        assert!(custom_expected
+            .iter()
+            .any(|signal| matches!(signal, PatternSignal::Match { .. })));
+        assert_eq!($custom.warm_up(), reference::$custom_lookback);
+        qualify_pattern_fixture(
+            $custom,
+            $series,
+            reference::$custom_lookback,
+            &custom_expected,
+        );
+    }};
+}
+
+#[test]
+fn pinned_single_candle_oracles_qualify_every_definition_through_the_public_seam() {
+    let series = single_candle_series();
+    let settings = custom_single_candle_settings();
+    qualify_single_candle!(
+        &series, CDLBELTHOLDConfig::default(), CDLBELTHOLDConfig::new(settings).unwrap(),
+        BELTHOLD_DEFAULT_LOOKBACK, BELTHOLD_DEFAULT_F64_CODES, BELTHOLD_DEFAULT_F32_CODES,
+        BELTHOLD_CUSTOM_LOOKBACK, BELTHOLD_CUSTOM_F64_CODES, BELTHOLD_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLCLOSINGMARUBOZUConfig::default(),
+        CDLCLOSINGMARUBOZUConfig::new(settings).unwrap(),
+        CLOSINGMARUBOZU_DEFAULT_LOOKBACK, CLOSINGMARUBOZU_DEFAULT_F64_CODES,
+        CLOSINGMARUBOZU_DEFAULT_F32_CODES, CLOSINGMARUBOZU_CUSTOM_LOOKBACK,
+        CLOSINGMARUBOZU_CUSTOM_F64_CODES, CLOSINGMARUBOZU_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLDRAGONFLYDOJIConfig::default(), CDLDRAGONFLYDOJIConfig::new(settings).unwrap(),
+        DRAGONFLYDOJI_DEFAULT_LOOKBACK, DRAGONFLYDOJI_DEFAULT_F64_CODES,
+        DRAGONFLYDOJI_DEFAULT_F32_CODES, DRAGONFLYDOJI_CUSTOM_LOOKBACK,
+        DRAGONFLYDOJI_CUSTOM_F64_CODES, DRAGONFLYDOJI_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLGRAVESTONEDOJIConfig::default(),
+        CDLGRAVESTONEDOJIConfig::new(settings).unwrap(),
+        GRAVESTONEDOJI_DEFAULT_LOOKBACK, GRAVESTONEDOJI_DEFAULT_F64_CODES,
+        GRAVESTONEDOJI_DEFAULT_F32_CODES, GRAVESTONEDOJI_CUSTOM_LOOKBACK,
+        GRAVESTONEDOJI_CUSTOM_F64_CODES, GRAVESTONEDOJI_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLHIGHWAVEConfig::default(), CDLHIGHWAVEConfig::new(settings).unwrap(),
+        HIGHWAVE_DEFAULT_LOOKBACK, HIGHWAVE_DEFAULT_F64_CODES, HIGHWAVE_DEFAULT_F32_CODES,
+        HIGHWAVE_CUSTOM_LOOKBACK, HIGHWAVE_CUSTOM_F64_CODES, HIGHWAVE_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLLONGLEGGEDDOJIConfig::default(),
+        CDLLONGLEGGEDDOJIConfig::new(settings).unwrap(),
+        LONGLEGGEDDOJI_DEFAULT_LOOKBACK, LONGLEGGEDDOJI_DEFAULT_F64_CODES,
+        LONGLEGGEDDOJI_DEFAULT_F32_CODES, LONGLEGGEDDOJI_CUSTOM_LOOKBACK,
+        LONGLEGGEDDOJI_CUSTOM_F64_CODES, LONGLEGGEDDOJI_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLLONGLINEConfig::default(), CDLLONGLINEConfig::new(settings).unwrap(),
+        LONGLINE_DEFAULT_LOOKBACK, LONGLINE_DEFAULT_F64_CODES, LONGLINE_DEFAULT_F32_CODES,
+        LONGLINE_CUSTOM_LOOKBACK, LONGLINE_CUSTOM_F64_CODES, LONGLINE_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLMARUBOZUConfig::default(), CDLMARUBOZUConfig::new(settings).unwrap(),
+        MARUBOZU_DEFAULT_LOOKBACK, MARUBOZU_DEFAULT_F64_CODES, MARUBOZU_DEFAULT_F32_CODES,
+        MARUBOZU_CUSTOM_LOOKBACK, MARUBOZU_CUSTOM_F64_CODES, MARUBOZU_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLRICKSHAWMANConfig::default(), CDLRICKSHAWMANConfig::new(settings).unwrap(),
+        RICKSHAWMAN_DEFAULT_LOOKBACK, RICKSHAWMAN_DEFAULT_F64_CODES,
+        RICKSHAWMAN_DEFAULT_F32_CODES, RICKSHAWMAN_CUSTOM_LOOKBACK,
+        RICKSHAWMAN_CUSTOM_F64_CODES, RICKSHAWMAN_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLSHORTLINEConfig::default(), CDLSHORTLINEConfig::new(settings).unwrap(),
+        SHORTLINE_DEFAULT_LOOKBACK, SHORTLINE_DEFAULT_F64_CODES, SHORTLINE_DEFAULT_F32_CODES,
+        SHORTLINE_CUSTOM_LOOKBACK, SHORTLINE_CUSTOM_F64_CODES, SHORTLINE_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLSPINNINGTOPConfig::default(), CDLSPINNINGTOPConfig::new(settings).unwrap(),
+        SPINNINGTOP_DEFAULT_LOOKBACK, SPINNINGTOP_DEFAULT_F64_CODES,
+        SPINNINGTOP_DEFAULT_F32_CODES, SPINNINGTOP_CUSTOM_LOOKBACK,
+        SPINNINGTOP_CUSTOM_F64_CODES, SPINNINGTOP_CUSTOM_F32_CODES
+    );
+    qualify_single_candle!(
+        &series, CDLTAKURIConfig::default(), CDLTAKURIConfig::new(settings).unwrap(),
+        TAKURI_DEFAULT_LOOKBACK, TAKURI_DEFAULT_F64_CODES, TAKURI_DEFAULT_F32_CODES,
+        TAKURI_CUSTOM_LOOKBACK, TAKURI_CUSTOM_F64_CODES, TAKURI_CUSTOM_F32_CODES
+    );
+}
+
+#[test]
+fn single_candle_evidence_rows_cover_pinned_sources_and_canonical_near_misses() {
+    const ROWS: [(&str, &str); 12] = [
+        ("CDLBELTHOLD", "cdlbelthold/cdlbelthold.c"),
+        ("CDLCLOSINGMARUBOZU", "cdlclosingmarubozu/cdlclosingmarubozu.c"),
+        ("CDLDRAGONFLYDOJI", "cdldragonflydoji/cdldragonflydoji.c"),
+        ("CDLGRAVESTONEDOJI", "cdlgravestonedoji/cdlgravestonedoji.c"),
+        ("CDLHIGHWAVE", "cdlhighwave/cdlhighwave.c"),
+        ("CDLLONGLEGGEDDOJI", "cdllongleggeddoji/cdllongleggeddoji.c"),
+        ("CDLLONGLINE", "cdllongline/cdllongline.c"),
+        ("CDLMARUBOZU", "cdlmarubozu/cdlmarubozu.c"),
+        ("CDLRICKSHAWMAN", "cdlrickshawman/cdlrickshawman.c"),
+        ("CDLSHORTLINE", "cdlshortline/cdlshortline.c"),
+        ("CDLSPINNINGTOP", "cdlspinningtop/cdlspinningtop.c"),
+        ("CDLTAKURI", "cdltakuri/cdltakuri.c"),
+    ];
+    assert_eq!(ROWS.len(), 12);
+    assert!(ROWS.iter().all(|(_, source)| source.ends_with(".c")));
 }

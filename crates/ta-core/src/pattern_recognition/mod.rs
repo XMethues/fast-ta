@@ -107,9 +107,23 @@ macro_rules! impl_pattern_execution {
 
 mod doji;
 mod engulfing;
+mod single_candle;
 
 pub use doji::{CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream};
 pub use engulfing::{CDLENGULFINGBatchRunner, CDLENGULFINGConfig, CDLENGULFINGStream};
+pub use single_candle::{
+    CDLBELTHOLDBatchRunner, CDLBELTHOLDConfig, CDLBELTHOLDStream,
+    CDLCLOSINGMARUBOZUBatchRunner, CDLCLOSINGMARUBOZUConfig, CDLCLOSINGMARUBOZUStream,
+    CDLDRAGONFLYDOJIBatchRunner, CDLDRAGONFLYDOJIConfig, CDLDRAGONFLYDOJIStream,
+    CDLGRAVESTONEDOJIBatchRunner, CDLGRAVESTONEDOJIConfig, CDLGRAVESTONEDOJIStream,
+    CDLHIGHWAVEBatchRunner, CDLHIGHWAVEConfig, CDLHIGHWAVEStream,
+    CDLLONGLEGGEDDOJIBatchRunner, CDLLONGLEGGEDDOJIConfig, CDLLONGLEGGEDDOJIStream,
+    CDLLONGLINEBatchRunner, CDLLONGLINEConfig, CDLLONGLINEStream, CDLMARUBOZUBatchRunner,
+    CDLMARUBOZUConfig, CDLMARUBOZUStream, CDLRICKSHAWMANBatchRunner, CDLRICKSHAWMANConfig,
+    CDLRICKSHAWMANStream, CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig, CDLSHORTLINEStream,
+    CDLSPINNINGTOPBatchRunner, CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream, CDLTAKURIBatchRunner,
+    CDLTAKURIConfig, CDLTAKURIStream,
+};
 pub use types::{
     Candle, CandleInput, CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings,
     PatternDirection, PatternSignal, PatternStrength, Penetration,

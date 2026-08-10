@@ -69,8 +69,19 @@ use ta_core::price_transform::{
     TYPPRICEConfig, TYPPRICEStream, WCLPRICEBatchRunner, WCLPRICEConfig, WCLPRICEStream,
 };
 use ta_core::pattern_recognition::{
-    CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream, CDLENGULFINGBatchRunner,
-    CDLENGULFINGConfig, CDLENGULFINGStream,
+    CDLBELTHOLDBatchRunner, CDLBELTHOLDConfig, CDLBELTHOLDStream,
+    CDLCLOSINGMARUBOZUBatchRunner, CDLCLOSINGMARUBOZUConfig, CDLCLOSINGMARUBOZUStream,
+    CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream, CDLDRAGONFLYDOJIBatchRunner,
+    CDLDRAGONFLYDOJIConfig, CDLDRAGONFLYDOJIStream, CDLENGULFINGBatchRunner,
+    CDLENGULFINGConfig, CDLENGULFINGStream, CDLGRAVESTONEDOJIBatchRunner,
+    CDLGRAVESTONEDOJIConfig, CDLGRAVESTONEDOJIStream, CDLHIGHWAVEBatchRunner,
+    CDLHIGHWAVEConfig, CDLHIGHWAVEStream, CDLLONGLEGGEDDOJIBatchRunner,
+    CDLLONGLEGGEDDOJIConfig, CDLLONGLEGGEDDOJIStream, CDLLONGLINEBatchRunner,
+    CDLLONGLINEConfig, CDLLONGLINEStream, CDLMARUBOZUBatchRunner, CDLMARUBOZUConfig,
+    CDLMARUBOZUStream, CDLRICKSHAWMANBatchRunner, CDLRICKSHAWMANConfig, CDLRICKSHAWMANStream,
+    CDLSHORTLINEBatchRunner, CDLSHORTLINEConfig, CDLSHORTLINEStream, CDLSPINNINGTOPBatchRunner,
+    CDLSPINNINGTOPConfig, CDLSPINNINGTOPStream, CDLTAKURIBatchRunner, CDLTAKURIConfig,
+    CDLTAKURIStream,
 };
 use ta_core::statistic::{
     BETABatchRunner, BETAConfig, BETAStream, CORRELBatchRunner, CORRELConfig, CORRELStream,
@@ -257,6 +268,18 @@ fn first_tranche_functions_are_marked_implemented() {
         "WILLR",
         "CDLDOJI",
         "CDLENGULFING",
+        "CDLBELTHOLD",
+        "CDLCLOSINGMARUBOZU",
+        "CDLDRAGONFLYDOJI",
+        "CDLGRAVESTONEDOJI",
+        "CDLHIGHWAVE",
+        "CDLLONGLEGGEDDOJI",
+        "CDLLONGLINE",
+        "CDLMARUBOZU",
+        "CDLRICKSHAWMAN",
+        "CDLSHORTLINE",
+        "CDLSPINNINGTOP",
+        "CDLTAKURI",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -379,13 +402,49 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<NATRConfig, NATRBatchRunner, NATRStream>();
     assert_execution_types::<TRANGEConfig, TRANGEBatchRunner, TRANGEStream>();
 
-    // Pattern Recognition (2 implemented indicators).
+    // Pattern Recognition (14 implemented indicators).
     assert_execution_types::<CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream>();
     assert_execution_types::<
         CDLENGULFINGConfig,
         CDLENGULFINGBatchRunner,
         CDLENGULFINGStream,
     >();
+    assert_execution_types::<CDLBELTHOLDConfig, CDLBELTHOLDBatchRunner, CDLBELTHOLDStream>();
+    assert_execution_types::<
+        CDLCLOSINGMARUBOZUConfig,
+        CDLCLOSINGMARUBOZUBatchRunner,
+        CDLCLOSINGMARUBOZUStream,
+    >();
+    assert_execution_types::<
+        CDLDRAGONFLYDOJIConfig,
+        CDLDRAGONFLYDOJIBatchRunner,
+        CDLDRAGONFLYDOJIStream,
+    >();
+    assert_execution_types::<
+        CDLGRAVESTONEDOJIConfig,
+        CDLGRAVESTONEDOJIBatchRunner,
+        CDLGRAVESTONEDOJIStream,
+    >();
+    assert_execution_types::<CDLHIGHWAVEConfig, CDLHIGHWAVEBatchRunner, CDLHIGHWAVEStream>();
+    assert_execution_types::<
+        CDLLONGLEGGEDDOJIConfig,
+        CDLLONGLEGGEDDOJIBatchRunner,
+        CDLLONGLEGGEDDOJIStream,
+    >();
+    assert_execution_types::<CDLLONGLINEConfig, CDLLONGLINEBatchRunner, CDLLONGLINEStream>();
+    assert_execution_types::<CDLMARUBOZUConfig, CDLMARUBOZUBatchRunner, CDLMARUBOZUStream>();
+    assert_execution_types::<
+        CDLRICKSHAWMANConfig,
+        CDLRICKSHAWMANBatchRunner,
+        CDLRICKSHAWMANStream,
+    >();
+    assert_execution_types::<CDLSHORTLINEConfig, CDLSHORTLINEBatchRunner, CDLSHORTLINEStream>();
+    assert_execution_types::<
+        CDLSPINNINGTOPConfig,
+        CDLSPINNINGTOPBatchRunner,
+        CDLSPINNINGTOPStream,
+    >();
+    assert_execution_types::<CDLTAKURIConfig, CDLTAKURIBatchRunner, CDLTAKURIStream>();
 
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
@@ -550,6 +609,18 @@ fn inventory_count_matches_execution_seam_coverage() {
         "WILLR",
         "CDLDOJI",
         "CDLENGULFING",
+        "CDLBELTHOLD",
+        "CDLCLOSINGMARUBOZU",
+        "CDLDRAGONFLYDOJI",
+        "CDLGRAVESTONEDOJI",
+        "CDLHIGHWAVE",
+        "CDLLONGLEGGEDDOJI",
+        "CDLLONGLINE",
+        "CDLMARUBOZU",
+        "CDLRICKSHAWMAN",
+        "CDLSHORTLINE",
+        "CDLSPINNINGTOP",
+        "CDLTAKURI",
     ];
 
     assert_eq!(
