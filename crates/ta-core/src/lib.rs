@@ -18,7 +18,6 @@
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-#[cfg(not(feature = "std"))]
 extern crate alloc;
 
 #[cfg(not(feature = "std"))]
@@ -45,6 +44,8 @@ pub mod momentum;
 pub mod overlap;
 /// Price Transform functions.
 pub mod price_transform;
+/// Pattern Recognition indicators.
+pub mod pattern_recognition;
 pub mod simd;
 /// Statistic Functions.
 pub mod statistic;

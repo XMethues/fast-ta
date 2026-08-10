@@ -66,6 +66,12 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.flags == ''
         run: cargo test -p ta-core --no-default-features --features f32,std
 
+      - name: Check no-std float modes
+        if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.flags == ''
+        run: |
+          cargo check -p ta-core --lib --no-default-features --features f64,core_error
+          cargo check -p ta-core --lib --no-default-features --features f32,core_error
+
       - name: Run clippy
         run: |
           cd crates/ta-core

@@ -68,6 +68,10 @@ use ta_core::price_transform::{
     AVGPRICEStream, MEDPRICEBatchRunner, MEDPRICEConfig, MEDPRICEStream, TYPPRICEBatchRunner,
     TYPPRICEConfig, TYPPRICEStream, WCLPRICEBatchRunner, WCLPRICEConfig, WCLPRICEStream,
 };
+use ta_core::pattern_recognition::{
+    CDLDOJIBatchRunner, CDLDOJIConfig, CDLDOJIStream, CDLENGULFINGBatchRunner,
+    CDLENGULFINGConfig, CDLENGULFINGStream,
+};
 use ta_core::statistic::{
     BETABatchRunner, BETAConfig, BETAStream, CORRELBatchRunner, CORRELConfig, CORRELStream,
     LINEARREGBatchRunner, LINEARREGConfig, LINEARREGStream, LINEARREG_ANGLEBatchRunner,
@@ -251,6 +255,8 @@ fn first_tranche_functions_are_marked_implemented() {
         "STOCHF",
         "STOCHRSI",
         "WILLR",
+        "CDLDOJI",
+        "CDLENGULFING",
     ];
 
     assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
@@ -372,6 +378,14 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
     assert_execution_types::<ATRConfig, ATRBatchRunner, ATRStream>();
     assert_execution_types::<NATRConfig, NATRBatchRunner, NATRStream>();
     assert_execution_types::<TRANGEConfig, TRANGEBatchRunner, TRANGEStream>();
+
+    // Pattern Recognition (2 implemented indicators).
+    assert_execution_types::<CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream>();
+    assert_execution_types::<
+        CDLENGULFINGConfig,
+        CDLENGULFINGBatchRunner,
+        CDLENGULFINGStream,
+    >();
 
     // Statistic Functions (9 implemented indicators).
     assert_execution_types::<BETAConfig, BETABatchRunner, BETAStream>();
@@ -534,6 +548,8 @@ fn inventory_count_matches_execution_seam_coverage() {
         "STOCHF",
         "STOCHRSI",
         "WILLR",
+        "CDLDOJI",
+        "CDLENGULFING",
     ];
 
     assert_eq!(
@@ -552,14 +568,9 @@ fn inventory_count_matches_execution_seam_coverage() {
 }
 
 #[test]
-fn deferred_functions_remain_planned() {
-    // Pattern Recognition functions remain the final 61 unimplemented
-    // entries in the catalogue; their discrete-signal semantics require
-    // a separate domain-modeling and executable spec stage.
-    for name in ["CDLDOJI", "CDLENGULFING", "CDLHAMMER"] {
-        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
-        assert_eq!(info.status, ImplementationStatus::Planned, "{name}");
-    }
+fn remaining_pattern_recognition_functions_remain_planned() {
+    let info = function("CDLHAMMER").expect("missing CDLHAMMER");
+    assert_eq!(info.status, ImplementationStatus::Planned);
 }
 
 #[test]
