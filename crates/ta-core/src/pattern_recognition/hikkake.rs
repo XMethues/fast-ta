@@ -116,7 +116,7 @@ impl PatternDefinition for CDLHIKKAKEConfig {
 }
 
 /// Immutable CDLHIKKAKEMOD Indicator Configuration.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CDLHIKKAKEMODConfig {
     candle_settings: CandleSettings,
 }
@@ -150,14 +150,6 @@ impl CDLHIKKAKEMODConfig {
             .average_period()
             .max(1)
             + 2
-    }
-}
-
-impl Default for CDLHIKKAKEMODConfig {
-    fn default() -> Self {
-        Self {
-            candle_settings: CandleSettings::default(),
-        }
     }
 }
 

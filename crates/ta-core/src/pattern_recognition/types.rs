@@ -355,6 +355,13 @@ impl Penetration {
 
     #[inline]
     pub(crate) fn wide_value(self) -> f64 {
-        self.0 as f64
+        #[cfg(feature = "f32")]
+        {
+            self.0 as f64
+        }
+        #[cfg(not(feature = "f32"))]
+        {
+            self.0
+        }
     }
 }
