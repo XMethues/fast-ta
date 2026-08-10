@@ -3969,11 +3969,6 @@ fn hikkake_evidence_rows_cover_pinned_state_predicates_boundaries_and_transition
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum QualificationEvidence {
-    Verified,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BoundaryEvidence {
     Foundation,
     SingleCandle,
@@ -4025,17 +4020,247 @@ impl BoundaryEvidence {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DirectionMask(u8);
+
+impl DirectionMask {
+    const NONE: Self = Self(0);
+    const BULLISH: Self = Self(1);
+    const BEARISH: Self = Self(2);
+    const BOTH: Self = Self(Self::BULLISH.0 | Self::BEARISH.0);
+
+    fn from_codes(columns: [&[i32]; 2]) -> Self {
+        let mut mask = Self::NONE;
+        for &code in columns.into_iter().flatten() {
+            if code > 0 {
+                mask.0 |= Self::BULLISH.0;
+            } else if code < 0 {
+                mask.0 |= Self::BEARISH.0;
+            }
+        }
+        mask
+    }
+
+    const fn from_direction(direction: PatternDirection) -> Self {
+        match direction {
+            PatternDirection::Bullish => Self::BULLISH,
+            PatternDirection::Bearish => Self::BEARISH,
+        }
+    }
+
+    const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SupportedDirections {
+    BullishOnly,
+    BearishOnly,
+    Both,
+}
+
+impl SupportedDirections {
+    const fn mask(self) -> DirectionMask {
+        match self {
+            Self::BullishOnly => DirectionMask::BULLISH,
+            Self::BearishOnly => DirectionMask::BEARISH,
+            Self::Both => DirectionMask::BOTH,
+        }
+    }
+}
+
+trait CatalogueDirectionEvidence {
+    const SUPPORTED_DIRECTIONS: SupportedDirections;
+
+    fn supplemental_direction_evidence() -> DirectionMask {
+        DirectionMask::NONE
+    }
+}
+
+macro_rules! direction_evidence {
+    ($support:ident => $($config:ty),+ $(,)?) => {
+        $(
+            impl CatalogueDirectionEvidence for $config {
+                const SUPPORTED_DIRECTIONS: SupportedDirections =
+                    SupportedDirections::$support;
+            }
+        )+
+    };
+}
+
+direction_evidence!(
+    Both =>
+        CDLENGULFINGConfig,
+        CDLBELTHOLDConfig,
+        CDLCLOSINGMARUBOZUConfig,
+        CDLHIGHWAVEConfig,
+        CDLLONGLINEConfig,
+        CDLMARUBOZUConfig,
+        CDLSEPARATINGLINESConfig,
+        CDLSHORTLINEConfig,
+        CDLSPINNINGTOPConfig,
+        CDL3INSIDEConfig,
+        CDL3OUTSIDEConfig,
+        CDLABANDONEDBABYConfig,
+        CDL3LINESTRIKEConfig,
+        CDLGAPSIDESIDEWHITEConfig,
+        CDLTASUKIGAPConfig,
+        CDLTRISTARConfig,
+        CDLXSIDEGAP3METHODSConfig,
+        CDLBREAKAWAYConfig,
+        CDLRISEFALL3METHODSConfig,
+        CDLHIKKAKEConfig,
+        CDLHIKKAKEMODConfig,
+);
+
+direction_evidence!(
+    BullishOnly =>
+        CDLDOJIConfig,
+        CDLDRAGONFLYDOJIConfig,
+        CDLGRAVESTONEDOJIConfig,
+        CDLLONGLEGGEDDOJIConfig,
+        CDLRICKSHAWMANConfig,
+        CDLTAKURIConfig,
+        CDLHOMINGPIGEONConfig,
+        CDLMATCHINGLOWConfig,
+        CDLHAMMERConfig,
+        CDLINVERTEDHAMMERConfig,
+        CDLPIERCINGConfig,
+        CDLUNIQUE3RIVERConfig,
+        CDLSTICKSANDWICHConfig,
+        CDL3STARSINSOUTHConfig,
+        CDL3WHITESOLDIERSConfig,
+        CDLCONCEALBABYSWALLConfig,
+        CDLLADDERBOTTOMConfig,
+        CDLMATHOLDConfig,
+        CDLMORNINGDOJISTARConfig,
+        CDLMORNINGSTARConfig,
+);
+
+direction_evidence!(
+    BearishOnly =>
+        CDLDARKCLOUDCOVERConfig,
+        CDLHANGINGMANConfig,
+        CDLINNECKConfig,
+        CDLONNECKConfig,
+        CDLSHOOTINGSTARConfig,
+        CDLTHRUSTINGConfig,
+        CDLEVENINGDOJISTARConfig,
+        CDLEVENINGSTARConfig,
+        CDL2CROWSConfig,
+        CDLUPSIDEGAP2CROWSConfig,
+        CDL3BLACKCROWSConfig,
+        CDLADVANCEBLOCKConfig,
+        CDLIDENTICAL3CROWSConfig,
+        CDLSTALLEDPATTERNConfig,
+);
+
+fn qualify_direction_case<C>(
+    config: C,
+    candles: &[Candle],
+    expected_direction: PatternDirection,
+) -> DirectionMask
+where
+    C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    for<'a> C:
+        IndicatorConfig<Input<'a> = CandleInput<'a>, OutputMut<'a> = &'a mut [PatternSignal]>,
+    C::BatchRunner: PreparedBatchRunner<C>,
+    C::Stream: StreamingComputation<C, Tick = Candle, TickOutput = PatternSignal>,
+{
+    let series = hikkake_series(candles);
+    let lookback = config.lookback();
+    assert_eq!(series.open.len() - lookback, 1);
+    let expected = [PatternSignal::Match {
+        direction: expected_direction,
+        strength: PatternStrength::Standard,
+    }];
+    qualify_pattern_fixture(config, &series, lookback, &expected);
+    DirectionMask::from_direction(expected_direction)
+}
+
+fn counterattack_opposite_polarity() -> DirectionMask {
+    qualify_direction_case(
+        CDLCOUNTERATTACKConfig::new(boundary_settings()).unwrap(),
+        &[
+            candle(10.0, 20.0, 10.0, 20.0),
+            candle(30.0, 30.0, 20.0, 20.0),
+        ],
+        PatternDirection::Bearish,
+    )
+}
+
+fn doji_star_opposite_polarity() -> DirectionMask {
+    qualify_direction_case(
+        CDLDOJISTARConfig::new(boundary_settings()).unwrap(),
+        &[candle(20.0, 20.0, 10.0, 10.0), candle(8.0, 8.0, 8.0, 8.0)],
+        PatternDirection::Bullish,
+    )
+}
+
+fn harami_opposite_polarity() -> DirectionMask {
+    qualify_direction_case(
+        CDLHARAMIConfig::new(boundary_settings()).unwrap(),
+        &[
+            candle(20.0, 20.0, 10.0, 10.0),
+            candle(14.0, 16.0, 14.0, 16.0),
+        ],
+        PatternDirection::Bullish,
+    )
+}
+
+fn harami_cross_opposite_polarity() -> DirectionMask {
+    qualify_direction_case(
+        CDLHARAMICROSSConfig::new(boundary_settings()).unwrap(),
+        &[
+            candle(20.0, 20.0, 10.0, 10.0),
+            candle(15.0, 16.0, 14.0, 15.0),
+        ],
+        PatternDirection::Bullish,
+    )
+}
+
+fn kicking_opposite_polarity() -> DirectionMask {
+    qualify_direction_case(
+        CDLKICKINGConfig::new(boundary_settings()).unwrap(),
+        &[candle(10.0, 20.0, 10.0, 20.0), candle(8.0, 8.0, -2.0, -2.0)],
+        PatternDirection::Bearish,
+    )
+}
+
+fn kicking_by_length_opposite_polarity() -> DirectionMask {
+    qualify_direction_case(
+        CDLKICKINGBYLENGTHConfig::new(boundary_settings()).unwrap(),
+        &[candle(10.0, 20.0, 10.0, 20.0), candle(8.0, 8.0, -2.0, -2.0)],
+        PatternDirection::Bullish,
+    )
+}
+
+macro_rules! supplemental_direction_evidence {
+    ($config:ty => $scenario:ident) => {
+        impl CatalogueDirectionEvidence for $config {
+            const SUPPORTED_DIRECTIONS: SupportedDirections = SupportedDirections::Both;
+
+            fn supplemental_direction_evidence() -> DirectionMask {
+                $scenario()
+            }
+        }
+    };
+}
+
+supplemental_direction_evidence!(CDLCOUNTERATTACKConfig => counterattack_opposite_polarity);
+supplemental_direction_evidence!(CDLDOJISTARConfig => doji_star_opposite_polarity);
+supplemental_direction_evidence!(CDLHARAMIConfig => harami_opposite_polarity);
+supplemental_direction_evidence!(CDLHARAMICROSSConfig => harami_cross_opposite_polarity);
+supplemental_direction_evidence!(CDLKICKINGConfig => kicking_opposite_polarity);
+supplemental_direction_evidence!(
+    CDLKICKINGBYLENGTHConfig => kicking_by_length_opposite_polarity
+);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct QualificationRow {
     name: &'static str,
-    pinned_c_default_fixture: QualificationEvidence,
-    required_custom_configuration: QualificationEvidence,
-    canonical_match: QualificationEvidence,
     one_boundary_near_miss: BoundaryEvidence,
-    four_mode_parity: QualificationEvidence,
-    validation_non_mutation: QualificationEvidence,
-    default_f64: QualificationEvidence,
-    supported_f32: QualificationEvidence,
-    execution_type_assertion: QualificationEvidence,
+    supported_directions: SupportedDirections,
 }
 
 fn assert_fixture_column(
@@ -4074,7 +4299,7 @@ fn qualify_catalogue_row<C>(
     custom_f32_codes: &[i32],
 ) -> QualificationRow
 where
-    C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    C: Copy + 'static + CatalogueDirectionEvidence + IndicatorConfig<Output = Vec<PatternSignal>>,
     for<'a> C:
         IndicatorConfig<Input<'a> = CandleInput<'a>, OutputMut<'a> = &'a mut [PatternSignal]>,
     C::BatchRunner: PreparedBatchRunner<C>,
@@ -4099,27 +4324,28 @@ where
         custom_f32_codes,
     );
 
-    for columns in [
-        [default_f64_codes, custom_f64_codes],
-        [default_f32_codes, custom_f32_codes],
-    ] {
-        assert!(
-            columns
-                .iter()
-                .flat_map(|codes| codes.iter())
-                .any(|&code| code != 0),
-            "{name} canonical match evidence"
-        );
-        if boundary == BoundaryEvidence::SingleCandle {
-            assert!(
-                columns
-                    .iter()
-                    .flat_map(|codes| codes.iter())
-                    .any(|&code| code == 0),
-                "{name} fixture-backed one-boundary near-miss evidence"
-            );
-        }
-    }
+    let f64_directions = DirectionMask::from_codes([default_f64_codes, custom_f64_codes]);
+    let f32_directions = DirectionMask::from_codes([default_f32_codes, custom_f32_codes]);
+    assert_ne!(
+        f64_directions,
+        DirectionMask::NONE,
+        "{name} f64 canonical match"
+    );
+    assert_ne!(
+        f32_directions,
+        DirectionMask::NONE,
+        "{name} f32 canonical match"
+    );
+    assert_eq!(
+        f64_directions, f32_directions,
+        "{name} float modes disagree on fixture direction coverage"
+    );
+    let observed_directions = f64_directions.union(C::supplemental_direction_evidence());
+    assert_eq!(
+        observed_directions,
+        C::SUPPORTED_DIRECTIONS.mask(),
+        "{name} supported-direction evidence"
+    );
 
     qualify_pattern_fixture(
         default_config,
@@ -4136,15 +4362,8 @@ where
 
     QualificationRow {
         name,
-        pinned_c_default_fixture: QualificationEvidence::Verified,
-        required_custom_configuration: QualificationEvidence::Verified,
-        canonical_match: QualificationEvidence::Verified,
         one_boundary_near_miss: boundary,
-        four_mode_parity: QualificationEvidence::Verified,
-        validation_non_mutation: QualificationEvidence::Verified,
-        default_f64: QualificationEvidence::Verified,
-        supported_f32: QualificationEvidence::Verified,
-        execution_type_assertion: QualificationEvidence::Verified,
+        supported_directions: C::SUPPORTED_DIRECTIONS,
     }
 }
 
@@ -5301,67 +5520,19 @@ fn complete_pattern_recognition_catalogue_focused_smoke_qualifies_all_61_rows() 
     rows.extend(hikkake_qualification_rows());
 
     assert_eq!(rows.len(), 61);
+    let mut bullish_only = 0;
+    let mut bearish_only = 0;
+    let mut both_directions = 0;
     for row in &rows {
-        assert_eq!(
-            row.pinned_c_default_fixture,
-            QualificationEvidence::Verified,
-            "{} pinned C default fixture",
-            row.name
-        );
-        assert_eq!(
-            row.required_custom_configuration,
-            QualificationEvidence::Verified,
-            "{} custom configuration",
-            row.name
-        );
-        assert_eq!(
-            row.canonical_match,
-            QualificationEvidence::Verified,
-            "{} canonical match",
-            row.name
-        );
-        assert_eq!(
-            row.four_mode_parity,
-            QualificationEvidence::Verified,
-            "{} four-mode parity",
-            row.name
-        );
-        assert_eq!(
-            row.validation_non_mutation,
-            QualificationEvidence::Verified,
-            "{} validation non-mutation",
-            row.name
-        );
-        assert_eq!(
-            row.default_f64,
-            QualificationEvidence::Verified,
-            "{} default f64",
-            row.name
-        );
-        assert_eq!(
-            row.supported_f32,
-            QualificationEvidence::Verified,
-            "{} supported f32",
-            row.name
-        );
-        assert_eq!(
-            row.execution_type_assertion,
-            QualificationEvidence::Verified,
-            "{} execution type assertion",
-            row.name
-        );
-        assert!(matches!(
-            row.one_boundary_near_miss,
-            BoundaryEvidence::Foundation
-                | BoundaryEvidence::SingleCandle
-                | BoundaryEvidence::BodyContainmentAndPositionShadow
-                | BoundaryEvidence::ThreeCandleReversal
-                | BoundaryEvidence::GapContinuation
-                | BoundaryEvidence::CrowAndSoldier
-                | BoundaryEvidence::LongFormation
-                | BoundaryEvidence::HikkakeState
-        ));
+        match row.supported_directions {
+            SupportedDirections::BullishOnly => bullish_only += 1,
+            SupportedDirections::BearishOnly => bearish_only += 1,
+            SupportedDirections::Both => both_directions += 1,
+        }
     }
+    assert_eq!(bullish_only, 20);
+    assert_eq!(bearish_only, 14);
+    assert_eq!(both_directions, 27);
 
     for boundary in [
         BoundaryEvidence::Foundation,
