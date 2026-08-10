@@ -4309,20 +4309,20 @@ fn assert_fixture_column(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(Debug, Clone, Copy)]
+struct QualificationCase<'a, C> {
+    series: &'a Series,
+    config: C,
+    lookback: usize,
+    f64_codes: &'a [i32],
+    f32_codes: &'a [i32],
+}
+
 fn qualify_catalogue_row<C>(
     name: &'static str,
     boundary: BoundaryEvidence,
-    default_config: C,
-    custom_config: C,
-    default_series: &Series,
-    custom_series: &Series,
-    default_lookback: usize,
-    default_f64_codes: &[i32],
-    default_f32_codes: &[i32],
-    custom_lookback: usize,
-    custom_f64_codes: &[i32],
-    custom_f32_codes: &[i32],
+    default: QualificationCase<'_, C>,
+    custom: QualificationCase<'_, C>,
 ) -> QualificationRow
 where
     C: Copy + 'static + CatalogueDirectionEvidence + IndicatorConfig<Output = Vec<PatternSignal>>,
@@ -4337,21 +4337,21 @@ where
     );
     assert_fixture_column(
         name,
-        default_series,
-        default_lookback,
-        default_f64_codes,
-        default_f32_codes,
+        default.series,
+        default.lookback,
+        default.f64_codes,
+        default.f32_codes,
     );
     assert_fixture_column(
         name,
-        custom_series,
-        custom_lookback,
-        custom_f64_codes,
-        custom_f32_codes,
+        custom.series,
+        custom.lookback,
+        custom.f64_codes,
+        custom.f32_codes,
     );
 
-    let f64_directions = DirectionMask::from_codes([default_f64_codes, custom_f64_codes]);
-    let f32_directions = DirectionMask::from_codes([default_f32_codes, custom_f32_codes]);
+    let f64_directions = DirectionMask::from_codes([default.f64_codes, custom.f64_codes]);
+    let f32_directions = DirectionMask::from_codes([default.f32_codes, custom.f32_codes]);
     assert_ne!(
         f64_directions,
         DirectionMask::NONE,
@@ -4374,16 +4374,16 @@ where
     );
 
     qualify_pattern_fixture(
-        default_config,
-        default_series,
-        default_lookback,
-        &expected_codes(default_f64_codes, default_f32_codes),
+        default.config,
+        default.series,
+        default.lookback,
+        &expected_codes(default.f64_codes, default.f32_codes),
     );
     qualify_pattern_fixture(
-        custom_config,
-        custom_series,
-        custom_lookback,
-        &expected_codes(custom_f64_codes, custom_f32_codes),
+        custom.config,
+        custom.series,
+        custom.lookback,
+        &expected_codes(custom.f64_codes, custom.f32_codes),
     );
 
     QualificationRow {
@@ -4409,16 +4409,20 @@ macro_rules! push_qualification_row {
         $rows.push(qualify_catalogue_row(
             $name,
             BoundaryEvidence::$boundary,
-            $default,
-            $custom,
-            &series,
-            &series,
-            reference::$default_lookback,
-            reference::$default_f64,
-            reference::$default_f32,
-            reference::$custom_lookback,
-            reference::$custom_f64,
-            reference::$custom_f32,
+            QualificationCase {
+                series: &series,
+                config: $default,
+                lookback: reference::$default_lookback,
+                f64_codes: reference::$default_f64,
+                f32_codes: reference::$default_f32,
+            },
+            QualificationCase {
+                series: &series,
+                config: $custom,
+                lookback: reference::$custom_lookback,
+                f64_codes: reference::$custom_f64,
+                f32_codes: reference::$custom_f32,
+            },
         ));
     }};
 }
@@ -4444,16 +4448,20 @@ fn foundation_qualification_rows() -> Vec<QualificationRow> {
     rows.push(qualify_catalogue_row(
         "CDLDOJI",
         BoundaryEvidence::Foundation,
-        CDLDOJIConfig::default(),
-        CDLDOJIConfig::new(doji_settings).unwrap(),
-        &default_doji,
-        &custom_doji,
-        reference::DOJI_DEFAULT_LOOKBACK,
-        reference::DOJI_DEFAULT_F64_CODES,
-        reference::DOJI_DEFAULT_F32_CODES,
-        reference::DOJI_CUSTOM_LOOKBACK,
-        reference::DOJI_CUSTOM_F64_CODES,
-        reference::DOJI_CUSTOM_F32_CODES,
+        QualificationCase {
+            series: &default_doji,
+            config: CDLDOJIConfig::default(),
+            lookback: reference::DOJI_DEFAULT_LOOKBACK,
+            f64_codes: reference::DOJI_DEFAULT_F64_CODES,
+            f32_codes: reference::DOJI_DEFAULT_F32_CODES,
+        },
+        QualificationCase {
+            series: &custom_doji,
+            config: CDLDOJIConfig::new(doji_settings).unwrap(),
+            lookback: reference::DOJI_CUSTOM_LOOKBACK,
+            f64_codes: reference::DOJI_CUSTOM_F64_CODES,
+            f32_codes: reference::DOJI_CUSTOM_F32_CODES,
+        },
     ));
 
     let engulfing = Series::from_fixture(
@@ -4469,16 +4477,20 @@ fn foundation_qualification_rows() -> Vec<QualificationRow> {
     rows.push(qualify_catalogue_row(
         "CDLENGULFING",
         BoundaryEvidence::Foundation,
-        CDLENGULFINGConfig::default(),
-        CDLENGULFINGConfig::new(inert_settings).unwrap(),
-        &engulfing,
-        &engulfing,
-        reference::ENGULFING_LOOKBACK,
-        reference::ENGULFING_F64_CODES,
-        reference::ENGULFING_F32_CODES,
-        reference::ENGULFING_LOOKBACK,
-        reference::ENGULFING_F64_CODES,
-        reference::ENGULFING_F32_CODES,
+        QualificationCase {
+            series: &engulfing,
+            config: CDLENGULFINGConfig::default(),
+            lookback: reference::ENGULFING_LOOKBACK,
+            f64_codes: reference::ENGULFING_F64_CODES,
+            f32_codes: reference::ENGULFING_F32_CODES,
+        },
+        QualificationCase {
+            series: &engulfing,
+            config: CDLENGULFINGConfig::new(inert_settings).unwrap(),
+            lookback: reference::ENGULFING_LOOKBACK,
+            f64_codes: reference::ENGULFING_F64_CODES,
+            f32_codes: reference::ENGULFING_F32_CODES,
+        },
     ));
     rows
 }
