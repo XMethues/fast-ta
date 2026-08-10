@@ -353,57 +353,6 @@ impl PatternDefinition for CDLABANDONEDBABYConfig {
     }
 }
 
-macro_rules! impl_star_definition {
-    ($config:ident, $name:literal, $first_color:expr, $third_color:expr, $short_setting:expr, [$($referenced:expr),+ $(,)?], $signal_direction:expr, $gap:ident, $penetrates:expr) => {
-        impl PatternDefinition for $config {
-            type State = ();
-
-            fn name(&self) -> &'static str {
-                $name
-            }
-
-            fn settings(&self) -> CandleSettings {
-                self.candle_settings
-            }
-
-            fn referenced_settings(&self) -> &'static [CandleSettingType] {
-                &[$($referenced),+]
-            }
-
-            fn lookback(&self) -> usize {
-                self.warm_up()
-            }
-
-            fn transition_start(&self) -> usize {
-                self.lookback()
-            }
-
-            fn initial_state(&self) -> Self::State {}
-
-            fn transition(
-                &self,
-                context: &RecognitionContext<'_>,
-                _state: &mut Self::State,
-            ) -> PatternSignal {
-                let first = context.candle(2);
-                let third = context.candle(0);
-                if context.color(2) == $first_color
-                    && context.color(0) == $third_color
-                    && context.$gap(1, 2)
-                    && ($penetrates)(third.close, first, context.real_body(2), self.penetration.value())
-                    && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
-                    && context.real_body(1) <= context.average($short_setting, 1)
-                    && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
-                {
-                    standard($signal_direction)
-                } else {
-                    PatternSignal::NoMatch
-                }
-            }
-        }
-    };
-}
-
 define_star_config!(
     CDLEVENINGDOJISTARConfig,
     CDLEVENINGDOJISTARBatchRunner,
@@ -414,22 +363,57 @@ define_star_config!(
         CandleSettingType::BodyShort,
     ]
 );
-impl_star_definition!(
-    CDLEVENINGDOJISTARConfig,
-    "CDLEVENINGDOJISTAR",
-    CandleColor::White,
-    CandleColor::Black,
-    CandleSettingType::BodyDoji,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::BodyLong,
-        CandleSettingType::BodyShort,
-    ],
-    PatternDirection::Bearish,
-    real_body_gap_up,
-    |close: Float, first: super::Candle, body: Float, penetration: Float| close
-        < first.close - body * penetration
-);
+
+impl PatternDefinition for CDLEVENINGDOJISTARConfig {
+    type State = ();
+
+    fn name(&self) -> &'static str {
+        "CDLEVENINGDOJISTAR"
+    }
+
+    fn settings(&self) -> CandleSettings {
+        self.candle_settings
+    }
+
+    fn referenced_settings(&self) -> &'static [CandleSettingType] {
+        &[
+            CandleSettingType::BodyDoji,
+            CandleSettingType::BodyLong,
+            CandleSettingType::BodyShort,
+        ]
+    }
+
+    fn lookback(&self) -> usize {
+        self.warm_up()
+    }
+
+    fn transition_start(&self) -> usize {
+        self.lookback()
+    }
+
+    fn initial_state(&self) -> Self::State {}
+
+    fn transition(
+        &self,
+        context: &RecognitionContext<'_>,
+        _state: &mut Self::State,
+    ) -> PatternSignal {
+        let first = context.candle(2);
+        let third = context.candle(0);
+        if context.color(2) == CandleColor::White
+            && context.color(0) == CandleColor::Black
+            && context.real_body_gap_up(1, 2)
+            && third.close < first.close - context.real_body(2) * self.penetration.value()
+            && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
+            && context.real_body(1) <= context.average(CandleSettingType::BodyDoji, 1)
+            && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
+        {
+            standard(PatternDirection::Bearish)
+        } else {
+            PatternSignal::NoMatch
+        }
+    }
+}
 
 define_star_config!(
     CDLEVENINGSTARConfig,
@@ -437,18 +421,53 @@ define_star_config!(
     CDLEVENINGSTARStream,
     [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
 );
-impl_star_definition!(
-    CDLEVENINGSTARConfig,
-    "CDLEVENINGSTAR",
-    CandleColor::White,
-    CandleColor::Black,
-    CandleSettingType::BodyShort,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort],
-    PatternDirection::Bearish,
-    real_body_gap_up,
-    |close: Float, first: super::Candle, body: Float, penetration: Float| close
-        < first.close - body * penetration
-);
+
+impl PatternDefinition for CDLEVENINGSTARConfig {
+    type State = ();
+
+    fn name(&self) -> &'static str {
+        "CDLEVENINGSTAR"
+    }
+
+    fn settings(&self) -> CandleSettings {
+        self.candle_settings
+    }
+
+    fn referenced_settings(&self) -> &'static [CandleSettingType] {
+        &[CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    }
+
+    fn lookback(&self) -> usize {
+        self.warm_up()
+    }
+
+    fn transition_start(&self) -> usize {
+        self.lookback()
+    }
+
+    fn initial_state(&self) -> Self::State {}
+
+    fn transition(
+        &self,
+        context: &RecognitionContext<'_>,
+        _state: &mut Self::State,
+    ) -> PatternSignal {
+        let first = context.candle(2);
+        let third = context.candle(0);
+        if context.color(2) == CandleColor::White
+            && context.color(0) == CandleColor::Black
+            && context.real_body_gap_up(1, 2)
+            && third.close < first.close - context.real_body(2) * self.penetration.value()
+            && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
+            && context.real_body(1) <= context.average(CandleSettingType::BodyShort, 1)
+            && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
+        {
+            standard(PatternDirection::Bearish)
+        } else {
+            PatternSignal::NoMatch
+        }
+    }
+}
 
 define_star_config!(
     CDLMORNINGDOJISTARConfig,
@@ -460,22 +479,57 @@ define_star_config!(
         CandleSettingType::BodyShort,
     ]
 );
-impl_star_definition!(
-    CDLMORNINGDOJISTARConfig,
-    "CDLMORNINGDOJISTAR",
-    CandleColor::Black,
-    CandleColor::White,
-    CandleSettingType::BodyDoji,
-    [
-        CandleSettingType::BodyDoji,
-        CandleSettingType::BodyLong,
-        CandleSettingType::BodyShort,
-    ],
-    PatternDirection::Bullish,
-    real_body_gap_down,
-    |close: Float, first: super::Candle, body: Float, penetration: Float| close
-        > first.close + body * penetration
-);
+
+impl PatternDefinition for CDLMORNINGDOJISTARConfig {
+    type State = ();
+
+    fn name(&self) -> &'static str {
+        "CDLMORNINGDOJISTAR"
+    }
+
+    fn settings(&self) -> CandleSettings {
+        self.candle_settings
+    }
+
+    fn referenced_settings(&self) -> &'static [CandleSettingType] {
+        &[
+            CandleSettingType::BodyDoji,
+            CandleSettingType::BodyLong,
+            CandleSettingType::BodyShort,
+        ]
+    }
+
+    fn lookback(&self) -> usize {
+        self.warm_up()
+    }
+
+    fn transition_start(&self) -> usize {
+        self.lookback()
+    }
+
+    fn initial_state(&self) -> Self::State {}
+
+    fn transition(
+        &self,
+        context: &RecognitionContext<'_>,
+        _state: &mut Self::State,
+    ) -> PatternSignal {
+        let first = context.candle(2);
+        let third = context.candle(0);
+        if context.color(2) == CandleColor::Black
+            && context.color(0) == CandleColor::White
+            && context.real_body_gap_down(1, 2)
+            && third.close > first.close + context.real_body(2) * self.penetration.value()
+            && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
+            && context.real_body(1) <= context.average(CandleSettingType::BodyDoji, 1)
+            && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
+        {
+            standard(PatternDirection::Bullish)
+        } else {
+            PatternSignal::NoMatch
+        }
+    }
+}
 
 define_star_config!(
     CDLMORNINGSTARConfig,
@@ -483,18 +537,53 @@ define_star_config!(
     CDLMORNINGSTARStream,
     [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
 );
-impl_star_definition!(
-    CDLMORNINGSTARConfig,
-    "CDLMORNINGSTAR",
-    CandleColor::Black,
-    CandleColor::White,
-    CandleSettingType::BodyShort,
-    [CandleSettingType::BodyLong, CandleSettingType::BodyShort],
-    PatternDirection::Bullish,
-    real_body_gap_down,
-    |close: Float, first: super::Candle, body: Float, penetration: Float| close
-        > first.close + body * penetration
-);
+
+impl PatternDefinition for CDLMORNINGSTARConfig {
+    type State = ();
+
+    fn name(&self) -> &'static str {
+        "CDLMORNINGSTAR"
+    }
+
+    fn settings(&self) -> CandleSettings {
+        self.candle_settings
+    }
+
+    fn referenced_settings(&self) -> &'static [CandleSettingType] {
+        &[CandleSettingType::BodyLong, CandleSettingType::BodyShort]
+    }
+
+    fn lookback(&self) -> usize {
+        self.warm_up()
+    }
+
+    fn transition_start(&self) -> usize {
+        self.lookback()
+    }
+
+    fn initial_state(&self) -> Self::State {}
+
+    fn transition(
+        &self,
+        context: &RecognitionContext<'_>,
+        _state: &mut Self::State,
+    ) -> PatternSignal {
+        let first = context.candle(2);
+        let third = context.candle(0);
+        if context.color(2) == CandleColor::Black
+            && context.color(0) == CandleColor::White
+            && context.real_body_gap_down(1, 2)
+            && third.close > first.close + context.real_body(2) * self.penetration.value()
+            && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
+            && context.real_body(1) <= context.average(CandleSettingType::BodyShort, 1)
+            && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
+        {
+            standard(PatternDirection::Bullish)
+        } else {
+            PatternSignal::NoMatch
+        }
+    }
+}
 
 define_three_candle_config!(
     CDLUNIQUE3RIVERConfig,
