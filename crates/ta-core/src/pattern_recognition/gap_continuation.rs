@@ -2,29 +2,12 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-use crate::Result;
-
-fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
-    referenced
-        .iter()
-        .map(|&kind| settings.setting(kind).average_period())
-        .max()
-        .unwrap_or(0)
-}
 
 #[inline]
 const fn standard(direction: PatternDirection) -> PatternSignal {
     PatternSignal::Match {
         direction,
         strength: PatternStrength::Standard,
-    }
-}
-
-#[inline]
-const fn direction(color: CandleColor) -> PatternDirection {
-    match color {
-        CandleColor::White => PatternDirection::Bullish,
-        CandleColor::Black => PatternDirection::Bearish,
     }
 }
 
@@ -38,44 +21,7 @@ fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
     context.body_low(offset)
 }
 
-macro_rules! define_gap_config {
-    ($config:ident, $runner:ident, $stream:ident, $span:expr, [$($setting:expr),* $(,)?]) => {
-        #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub struct $config {
-            candle_settings: CandleSettings,
-        }
-
-        impl $config {
-            /// Creates the definition with an immutable Candle Settings collection.
-            pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-                Ok(Self { candle_settings })
-            }
-
-            /// Returns the owned immutable Candle Settings value.
-            #[inline]
-            pub const fn candle_settings(&self) -> CandleSettings {
-                self.candle_settings
-            }
-
-            /// Returns the Warm-up tick count, identical to Lookback.
-            #[inline]
-            pub fn warm_up(&self) -> usize {
-                maximum_average_period(self.candle_settings, &[$($setting),*]) + $span
-            }
-        }
-
-        impl Default for $config {
-            fn default() -> Self {
-                Self { candle_settings: CandleSettings::default() }
-            }
-        }
-
-        impl_pattern_execution!($config, $runner, $stream);
-    };
-}
-
-define_gap_config!(
+define_pattern_config!(
     CDL2CROWSConfig,
     CDL2CROWSBatchRunner,
     CDL2CROWSStream,
@@ -133,7 +79,7 @@ impl PatternDefinition for CDL2CROWSConfig {
     }
 }
 
-define_gap_config!(
+define_pattern_config!(
     CDL3LINESTRIKEConfig,
     CDL3LINESTRIKEBatchRunner,
     CDL3LINESTRIKEStream,
@@ -205,14 +151,14 @@ impl PatternDefinition for CDL3LINESTRIKEConfig {
             && third.open <= body_high(context, 2) + near_second
             && strike
         {
-            standard(direction(line_color))
+            standard(line_color.direction())
         } else {
             PatternSignal::NoMatch
         }
     }
 }
 
-define_gap_config!(
+define_pattern_config!(
     CDLGAPSIDESIDEWHITEConfig,
     CDLGAPSIDESIDEWHITEBatchRunner,
     CDLGAPSIDESIDEWHITEStream,
@@ -275,7 +221,7 @@ impl PatternDefinition for CDLGAPSIDESIDEWHITEConfig {
     }
 }
 
-define_gap_config!(
+define_pattern_config!(
     CDLSTICKSANDWICHConfig,
     CDLSTICKSANDWICHBatchRunner,
     CDLSTICKSANDWICHStream,
@@ -331,7 +277,7 @@ impl PatternDefinition for CDLSTICKSANDWICHConfig {
     }
 }
 
-define_gap_config!(
+define_pattern_config!(
     CDLTASUKIGAPConfig,
     CDLTASUKIGAPBatchRunner,
     CDLTASUKIGAPStream,
@@ -390,14 +336,14 @@ impl PatternDefinition for CDLTASUKIGAPConfig {
             && third.close < context.body_low(2)
             && near_size;
         if upside || downside {
-            standard(direction(context.color(1)))
+            standard(context.color(1).direction())
         } else {
             PatternSignal::NoMatch
         }
     }
 }
 
-define_gap_config!(
+define_pattern_config!(
     CDLTRISTARConfig,
     CDLTRISTARBatchRunner,
     CDLTRISTARStream,
@@ -456,7 +402,7 @@ impl PatternDefinition for CDLTRISTARConfig {
     }
 }
 
-define_gap_config!(
+define_pattern_config!(
     CDLUPSIDEGAP2CROWSConfig,
     CDLUPSIDEGAP2CROWSBatchRunner,
     CDLUPSIDEGAP2CROWSStream,
@@ -514,7 +460,7 @@ impl PatternDefinition for CDLUPSIDEGAP2CROWSConfig {
     }
 }
 
-define_gap_config!(
+define_pattern_config!(
     CDLXSIDEGAP3METHODSConfig,
     CDLXSIDEGAP3METHODSBatchRunner,
     CDLXSIDEGAP3METHODSStream,
@@ -563,7 +509,7 @@ impl PatternDefinition for CDLXSIDEGAP3METHODSConfig {
             && ((first_color == CandleColor::White && context.real_body_gap_up(1, 2))
                 || (first_color == CandleColor::Black && context.real_body_gap_down(1, 2)))
         {
-            standard(direction(first_color))
+            standard(first_color.direction())
         } else {
             PatternSignal::NoMatch
         }

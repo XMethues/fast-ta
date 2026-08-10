@@ -2,44 +2,15 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-use crate::Result;
 
-/// Immutable CDLENGULFING Indicator Configuration.
-///
-/// The definition is setting-free, so Candle Settings are owned consistently
-/// with other Pattern Recognition configurations but do not affect its fixed
-/// Lookback or results.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CDLENGULFINGConfig {
-    candle_settings: CandleSettings,
-}
-
-impl CDLENGULFINGConfig {
-    /// Creates CDLENGULFING with an immutable Candle Settings collection.
-    pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-        Ok(Self { candle_settings })
-    }
-
-    /// Returns the owned immutable Candle Settings value.
-    #[inline]
-    pub const fn candle_settings(&self) -> CandleSettings {
-        self.candle_settings
-    }
-
-    /// Returns the fixed Warm-up tick count, identical to Lookback.
-    #[inline]
-    pub const fn warm_up(&self) -> usize {
-        2
-    }
-}
-
-impl Default for CDLENGULFINGConfig {
-    fn default() -> Self {
-        Self {
-            candle_settings: CandleSettings::default(),
-        }
-    }
-}
+// Setting-free: owned Candle Settings do not affect its fixed Lookback or results.
+define_pattern_config!(
+    CDLENGULFINGConfig,
+    CDLENGULFINGBatchRunner,
+    CDLENGULFINGStream,
+    2,
+    []
+);
 
 impl PatternDefinition for CDLENGULFINGConfig {
     type State = ();
@@ -105,9 +76,3 @@ impl PatternDefinition for CDLENGULFINGConfig {
         }
     }
 }
-
-impl_pattern_execution!(
-    CDLENGULFINGConfig,
-    CDLENGULFINGBatchRunner,
-    CDLENGULFINGStream
-);

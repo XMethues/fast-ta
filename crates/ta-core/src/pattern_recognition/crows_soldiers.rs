@@ -2,15 +2,6 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-use crate::Result;
-
-fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
-    referenced
-        .iter()
-        .map(|&kind| settings.setting(kind).average_period())
-        .max()
-        .unwrap_or(0)
-}
 
 #[inline]
 const fn signal(direction: PatternDirection) -> PatternSignal {
@@ -18,21 +9,6 @@ const fn signal(direction: PatternDirection) -> PatternSignal {
         direction,
         strength: PatternStrength::Standard,
     }
-}
-
-macro_rules! define_config {
-    ($config:ident, $runner:ident, $stream:ident, $span:expr, [$($setting:expr),+ $(,)?]) => {
-        #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub struct $config { candle_settings: CandleSettings }
-        impl $config {
-            pub fn new(candle_settings: CandleSettings) -> Result<Self> { Ok(Self { candle_settings }) }
-            #[inline] pub const fn candle_settings(&self) -> CandleSettings { self.candle_settings }
-            #[inline] pub fn warm_up(&self) -> usize { maximum_average_period(self.candle_settings, &[$($setting),+]) + $span }
-        }
-        impl Default for $config { fn default() -> Self { Self { candle_settings: CandleSettings::default() } } }
-        impl_pattern_execution!($config, $runner, $stream);
-    };
 }
 
 macro_rules! definition {
@@ -50,7 +26,7 @@ macro_rules! definition {
     };
 }
 
-define_config!(
+define_pattern_config!(
     CDL3BLACKCROWSConfig,
     CDL3BLACKCROWSBatchRunner,
     CDL3BLACKCROWSStream,
@@ -88,7 +64,7 @@ definition!(
     }
 );
 
-define_config!(
+define_pattern_config!(
     CDL3STARSINSOUTHConfig,
     CDL3STARSINSOUTHBatchRunner,
     CDL3STARSINSOUTHStream,
@@ -137,7 +113,7 @@ definition!(
     }
 );
 
-define_config!(
+define_pattern_config!(
     CDL3WHITESOLDIERSConfig,
     CDL3WHITESOLDIERSBatchRunner,
     CDL3WHITESOLDIERSStream,
@@ -187,7 +163,7 @@ definition!(
     }
 );
 
-define_config!(
+define_pattern_config!(
     CDLADVANCEBLOCKConfig,
     CDLADVANCEBLOCKBatchRunner,
     CDLADVANCEBLOCKStream,
@@ -247,7 +223,7 @@ definition!(
     }
 );
 
-define_config!(
+define_pattern_config!(
     CDLCONCEALBABYSWALLConfig,
     CDLCONCEALBABYSWALLBatchRunner,
     CDLCONCEALBABYSWALLStream,
@@ -283,7 +259,7 @@ definition!(
     }
 );
 
-define_config!(
+define_pattern_config!(
     CDLIDENTICAL3CROWSConfig,
     CDLIDENTICAL3CROWSBatchRunner,
     CDLIDENTICAL3CROWSStream,
@@ -320,7 +296,7 @@ definition!(
     }
 );
 
-define_config!(
+define_pattern_config!(
     CDLSTALLEDPATTERNConfig,
     CDLSTALLEDPATTERNBatchRunner,
     CDLSTALLEDPATTERNStream,

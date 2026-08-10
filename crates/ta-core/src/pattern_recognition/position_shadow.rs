@@ -2,15 +2,6 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-use crate::Result;
-
-fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
-    referenced
-        .iter()
-        .map(|&kind| settings.setting(kind).average_period())
-        .max()
-        .unwrap_or(0)
-}
 
 #[inline]
 const fn standard(direction: PatternDirection) -> PatternSignal {
@@ -20,47 +11,11 @@ const fn standard(direction: PatternDirection) -> PatternSignal {
     }
 }
 
-macro_rules! define_position_shadow_config {
-    ($config:ident, $runner:ident, $stream:ident, [$($setting:expr),+ $(,)?]) => {
-        #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub struct $config {
-            candle_settings: CandleSettings,
-        }
-
-        impl $config {
-            /// Creates the definition with an immutable Candle Settings collection.
-            pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-                Ok(Self { candle_settings })
-            }
-
-            /// Returns the owned immutable Candle Settings value.
-            #[inline]
-            pub const fn candle_settings(&self) -> CandleSettings {
-                self.candle_settings
-            }
-
-            /// Returns the Warm-up tick count, identical to Lookback.
-            #[inline]
-            pub fn warm_up(&self) -> usize {
-                maximum_average_period(self.candle_settings, &[$($setting),+]) + 1
-            }
-        }
-
-        impl Default for $config {
-            fn default() -> Self {
-                Self { candle_settings: CandleSettings::default() }
-            }
-        }
-
-        impl_pattern_execution!($config, $runner, $stream);
-    };
-}
-
-define_position_shadow_config!(
+define_pattern_config!(
     CDLHAMMERConfig,
     CDLHAMMERBatchRunner,
     CDLHAMMERStream,
+    1,
     [
         CandleSettingType::BodyShort,
         CandleSettingType::ShadowLong,
@@ -117,10 +72,11 @@ impl PatternDefinition for CDLHAMMERConfig {
     }
 }
 
-define_position_shadow_config!(
+define_pattern_config!(
     CDLHANGINGMANConfig,
     CDLHANGINGMANBatchRunner,
     CDLHANGINGMANStream,
+    1,
     [
         CandleSettingType::BodyShort,
         CandleSettingType::ShadowLong,
@@ -177,10 +133,11 @@ impl PatternDefinition for CDLHANGINGMANConfig {
     }
 }
 
-define_position_shadow_config!(
+define_pattern_config!(
     CDLINNECKConfig,
     CDLINNECKBatchRunner,
     CDLINNECKStream,
+    1,
     [CandleSettingType::BodyLong, CandleSettingType::Equal]
 );
 
@@ -231,10 +188,11 @@ impl PatternDefinition for CDLINNECKConfig {
     }
 }
 
-define_position_shadow_config!(
+define_pattern_config!(
     CDLINVERTEDHAMMERConfig,
     CDLINVERTEDHAMMERBatchRunner,
     CDLINVERTEDHAMMERStream,
+    1,
     [
         CandleSettingType::BodyShort,
         CandleSettingType::ShadowLong,
@@ -288,10 +246,11 @@ impl PatternDefinition for CDLINVERTEDHAMMERConfig {
     }
 }
 
-define_position_shadow_config!(
+define_pattern_config!(
     CDLONNECKConfig,
     CDLONNECKBatchRunner,
     CDLONNECKStream,
+    1,
     [CandleSettingType::BodyLong, CandleSettingType::Equal]
 );
 
@@ -342,10 +301,11 @@ impl PatternDefinition for CDLONNECKConfig {
     }
 }
 
-define_position_shadow_config!(
+define_pattern_config!(
     CDLPIERCINGConfig,
     CDLPIERCINGBatchRunner,
     CDLPIERCINGStream,
+    1,
     [CandleSettingType::BodyLong]
 );
 
@@ -396,10 +356,11 @@ impl PatternDefinition for CDLPIERCINGConfig {
     }
 }
 
-define_position_shadow_config!(
+define_pattern_config!(
     CDLSEPARATINGLINESConfig,
     CDLSEPARATINGLINESBatchRunner,
     CDLSEPARATINGLINESStream,
+    1,
     [
         CandleSettingType::BodyLong,
         CandleSettingType::Equal,
@@ -459,20 +420,18 @@ impl PatternDefinition for CDLSEPARATINGLINESConfig {
             && context.real_body(0) > context.average(CandleSettingType::BodyLong, 0)
             && short_leading_shadow
         {
-            standard(match color {
-                CandleColor::White => PatternDirection::Bullish,
-                CandleColor::Black => PatternDirection::Bearish,
-            })
+            standard(color.direction())
         } else {
             PatternSignal::NoMatch
         }
     }
 }
 
-define_position_shadow_config!(
+define_pattern_config!(
     CDLSHOOTINGSTARConfig,
     CDLSHOOTINGSTARBatchRunner,
     CDLSHOOTINGSTARStream,
+    1,
     [
         CandleSettingType::BodyShort,
         CandleSettingType::ShadowLong,
@@ -526,10 +485,11 @@ impl PatternDefinition for CDLSHOOTINGSTARConfig {
     }
 }
 
-define_position_shadow_config!(
+define_pattern_config!(
     CDLTHRUSTINGConfig,
     CDLTHRUSTINGBatchRunner,
     CDLTHRUSTINGStream,
+    1,
     [CandleSettingType::BodyLong, CandleSettingType::Equal]
 );
 

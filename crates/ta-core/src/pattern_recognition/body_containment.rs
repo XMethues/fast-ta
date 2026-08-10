@@ -7,35 +7,11 @@ use super::{
 };
 use crate::{Float, Result};
 
-fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
-    referenced
-        .iter()
-        .map(|&kind| settings.setting(kind).average_period())
-        .max()
-        .unwrap_or(0)
-}
-
 #[inline]
 const fn standard(direction: PatternDirection) -> PatternSignal {
     PatternSignal::Match {
         direction,
         strength: PatternStrength::Standard,
-    }
-}
-
-#[inline]
-const fn direction(color: CandleColor) -> PatternDirection {
-    match color {
-        CandleColor::White => PatternDirection::Bullish,
-        CandleColor::Black => PatternDirection::Bearish,
-    }
-}
-
-#[inline]
-const fn opposite_direction(color: CandleColor) -> PatternDirection {
-    match color {
-        CandleColor::White => PatternDirection::Bearish,
-        CandleColor::Black => PatternDirection::Bullish,
     }
 }
 
@@ -49,37 +25,11 @@ fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
     context.body_low(offset)
 }
 
-macro_rules! define_two_candle_config {
-    ($config:ident, $runner:ident, $stream:ident, [$($setting:expr),+ $(,)?]) => {
-        #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub struct $config { candle_settings: CandleSettings }
-
-        impl $config {
-            /// Creates the definition with an immutable Candle Settings collection.
-            pub fn new(candle_settings: CandleSettings) -> Result<Self> { Ok(Self { candle_settings }) }
-            /// Returns the owned immutable Candle Settings value.
-            #[inline]
-            pub const fn candle_settings(&self) -> CandleSettings { self.candle_settings }
-            /// Returns the Warm-up tick count, identical to Lookback.
-            #[inline]
-            pub fn warm_up(&self) -> usize {
-                maximum_average_period(self.candle_settings, &[$($setting),+]) + 1
-            }
-        }
-
-        impl Default for $config {
-            fn default() -> Self { Self { candle_settings: CandleSettings::default() } }
-        }
-
-        impl_pattern_execution!($config, $runner, $stream);
-    };
-}
-
-define_two_candle_config!(
+define_pattern_config!(
     CDLCOUNTERATTACKConfig,
     CDLCOUNTERATTACKBatchRunner,
     CDLCOUNTERATTACKStream,
+    1,
     [CandleSettingType::BodyLong, CandleSettingType::Equal]
 );
 
@@ -115,7 +65,7 @@ impl PatternDefinition for CDLCOUNTERATTACKConfig {
             && current.close <= previous.close + equal
             && current.close >= previous.close - equal
         {
-            standard(direction(context.color(0)))
+            standard(context.color(0).direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -211,10 +161,11 @@ impl_pattern_execution!(
     CDLDARKCLOUDCOVERStream
 );
 
-define_two_candle_config!(
+define_pattern_config!(
     CDLDOJISTARConfig,
     CDLDOJISTARBatchRunner,
     CDLDOJISTARStream,
+    1,
     [CandleSettingType::BodyDoji, CandleSettingType::BodyLong]
 );
 
@@ -250,7 +201,7 @@ impl PatternDefinition for CDLDOJISTARConfig {
             && context.real_body(0) <= context.average(CandleSettingType::BodyDoji, 0)
             && gap
         {
-            standard(opposite_direction(previous_color))
+            standard(previous_color.opposite_direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -287,7 +238,7 @@ macro_rules! impl_harami_definition {
                 {
                     return PatternSignal::NoMatch;
                 }
-                let direction = opposite_direction(context.color(1));
+                let direction = context.color(1).opposite_direction();
                 if body_high(context, 0) < body_high(context, 1)
                     && body_low(context, 0) > body_low(context, 1)
                 {
@@ -307,18 +258,20 @@ macro_rules! impl_harami_definition {
     };
 }
 
-define_two_candle_config!(
+define_pattern_config!(
     CDLHARAMIConfig,
     CDLHARAMIBatchRunner,
     CDLHARAMIStream,
+    1,
     [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
 );
 impl_harami_definition!(CDLHARAMIConfig, CandleSettingType::BodyShort, "CDLHARAMI");
 
-define_two_candle_config!(
+define_pattern_config!(
     CDLHARAMICROSSConfig,
     CDLHARAMICROSSBatchRunner,
     CDLHARAMICROSSStream,
+    1,
     [CandleSettingType::BodyLong, CandleSettingType::BodyDoji]
 );
 impl_harami_definition!(
@@ -327,10 +280,11 @@ impl_harami_definition!(
     "CDLHARAMICROSS"
 );
 
-define_two_candle_config!(
+define_pattern_config!(
     CDLHOMINGPIGEONConfig,
     CDLHOMINGPIGEONBatchRunner,
     CDLHOMINGPIGEONStream,
+    1,
     [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
 );
 
@@ -390,79 +344,119 @@ fn is_kicking(context: &RecognitionContext<'_>) -> bool {
         && gap
 }
 
-macro_rules! define_kicking_config {
-    ($config:ident, $runner:ident, $stream:ident, $name:literal, $direction:expr) => {
-        define_two_candle_config!(
-            $config,
-            $runner,
-            $stream,
-            [
-                CandleSettingType::BodyLong,
-                CandleSettingType::ShadowVeryShort
-            ]
-        );
-        impl PatternDefinition for $config {
-            type State = ();
-            fn name(&self) -> &'static str {
-                $name
-            }
-            fn settings(&self) -> CandleSettings {
-                self.candle_settings
-            }
-            fn referenced_settings(&self) -> &'static [CandleSettingType] {
-                &[
-                    CandleSettingType::BodyLong,
-                    CandleSettingType::ShadowVeryShort,
-                ]
-            }
-            fn lookback(&self) -> usize {
-                self.warm_up()
-            }
-            fn transition_start(&self) -> usize {
-                self.lookback()
-            }
-            fn initial_state(&self) -> Self::State {}
-            fn transition(
-                &self,
-                context: &RecognitionContext<'_>,
-                _state: &mut Self::State,
-            ) -> PatternSignal {
-                if is_kicking(context) {
-                    standard(($direction)(context))
-                } else {
-                    PatternSignal::NoMatch
-                }
-            }
-        }
-    };
-}
-
-define_kicking_config!(
+define_pattern_config!(
     CDLKICKINGConfig,
     CDLKICKINGBatchRunner,
     CDLKICKINGStream,
-    "CDLKICKING",
-    |context: &RecognitionContext<'_>| direction(context.color(0))
+    1,
+    [
+        CandleSettingType::BodyLong,
+        CandleSettingType::ShadowVeryShort
+    ]
 );
-define_kicking_config!(
+
+impl PatternDefinition for CDLKICKINGConfig {
+    type State = ();
+
+    fn name(&self) -> &'static str {
+        "CDLKICKING"
+    }
+
+    fn settings(&self) -> CandleSettings {
+        self.candle_settings
+    }
+
+    fn referenced_settings(&self) -> &'static [CandleSettingType] {
+        &[
+            CandleSettingType::BodyLong,
+            CandleSettingType::ShadowVeryShort,
+        ]
+    }
+
+    fn lookback(&self) -> usize {
+        self.warm_up()
+    }
+
+    fn transition_start(&self) -> usize {
+        self.lookback()
+    }
+
+    fn initial_state(&self) -> Self::State {}
+
+    fn transition(
+        &self,
+        context: &RecognitionContext<'_>,
+        _state: &mut Self::State,
+    ) -> PatternSignal {
+        if is_kicking(context) {
+            standard(context.color(0).direction())
+        } else {
+            PatternSignal::NoMatch
+        }
+    }
+}
+
+define_pattern_config!(
     CDLKICKINGBYLENGTHConfig,
     CDLKICKINGBYLENGTHBatchRunner,
     CDLKICKINGBYLENGTHStream,
-    "CDLKICKINGBYLENGTH",
-    |context: &RecognitionContext<'_>| {
+    1,
+    [
+        CandleSettingType::BodyLong,
+        CandleSettingType::ShadowVeryShort
+    ]
+);
+
+impl PatternDefinition for CDLKICKINGBYLENGTHConfig {
+    type State = ();
+
+    fn name(&self) -> &'static str {
+        "CDLKICKINGBYLENGTH"
+    }
+
+    fn settings(&self) -> CandleSettings {
+        self.candle_settings
+    }
+
+    fn referenced_settings(&self) -> &'static [CandleSettingType] {
+        &[
+            CandleSettingType::BodyLong,
+            CandleSettingType::ShadowVeryShort,
+        ]
+    }
+
+    fn lookback(&self) -> usize {
+        self.warm_up()
+    }
+
+    fn transition_start(&self) -> usize {
+        self.lookback()
+    }
+
+    fn initial_state(&self) -> Self::State {}
+
+    fn transition(
+        &self,
+        context: &RecognitionContext<'_>,
+        _state: &mut Self::State,
+    ) -> PatternSignal {
+        if !is_kicking(context) {
+            return PatternSignal::NoMatch;
+        }
         let selected = if context.real_body(0) > context.real_body(1) {
             0
         } else {
             1
         };
-        direction(context.color(selected))
+        standard(context.color(selected).direction())
     }
-);
+}
 
-define_two_candle_config!(
+define_pattern_config!(
     CDLMATCHINGLOWConfig,
     CDLMATCHINGLOWBatchRunner,
     CDLMATCHINGLOWStream,
+    1,
     [CandleSettingType::Equal]
 );
 

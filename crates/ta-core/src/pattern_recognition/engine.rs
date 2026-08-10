@@ -1,7 +1,8 @@
 //! Crate-private generic execution engine for Pattern Recognition definitions.
 
 use super::{
-    Candle, CandleInput, CandleRangeKind, CandleSettingType, CandleSettings, PatternSignal,
+    Candle, CandleInput, CandleRangeKind, CandleSettingType, CandleSettings, PatternDirection,
+    PatternSignal,
 };
 use crate::{common::validate_finite_value, TalibError};
 use crate::{
@@ -26,6 +27,24 @@ pub(crate) fn widen(value: Float) -> PatternFloat {
 pub(crate) enum CandleColor {
     White,
     Black,
+}
+
+impl CandleColor {
+    #[inline]
+    pub(crate) const fn direction(self) -> PatternDirection {
+        match self {
+            Self::White => PatternDirection::Bullish,
+            Self::Black => PatternDirection::Bearish,
+        }
+    }
+
+    #[inline]
+    pub(crate) const fn opposite_direction(self) -> PatternDirection {
+        match self {
+            Self::White => PatternDirection::Bearish,
+            Self::Black => PatternDirection::Bullish,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -287,6 +306,17 @@ impl RecognitionContext<'_> {
     pub(crate) fn candle_gap_down(&self, second: usize, first: usize) -> bool {
         self.candle(second).high < self.candle(first).low
     }
+}
+
+pub(crate) fn maximum_average_period(
+    settings: CandleSettings,
+    referenced: &[CandleSettingType],
+) -> usize {
+    referenced
+        .iter()
+        .map(|&setting_type| settings.setting(setting_type).average_period())
+        .max()
+        .unwrap_or(0)
 }
 
 /// Static, crate-owned definition seam. Predicates and formulas stay local.

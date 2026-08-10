@@ -1,19 +1,11 @@
 //! Local definitions for five-Candle long formations.
 
-use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
+use super::engine::{maximum_average_period, CandleColor, PatternDefinition, RecognitionContext};
 use super::{
     CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
     Penetration,
 };
 use crate::{Float, Result};
-
-fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
-    referenced
-        .iter()
-        .map(|&kind| settings.setting(kind).average_period())
-        .max()
-        .unwrap_or(0)
-}
 
 #[inline]
 const fn signal(direction: PatternDirection) -> PatternSignal {
@@ -21,45 +13,6 @@ const fn signal(direction: PatternDirection) -> PatternSignal {
         direction,
         strength: PatternStrength::Standard,
     }
-}
-
-macro_rules! define_config {
-    ($config:ident, $runner:ident, $stream:ident, [$($setting:expr),+ $(,)?]) => {
-        #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub struct $config {
-            candle_settings: CandleSettings,
-        }
-
-        impl $config {
-            /// Creates the definition with immutable Candle Settings.
-            pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-                Ok(Self { candle_settings })
-            }
-
-            /// Returns the owned immutable Candle Settings value.
-            #[inline]
-            pub const fn candle_settings(&self) -> CandleSettings {
-                self.candle_settings
-            }
-
-            /// Returns the Warm-up tick count, identical to Lookback.
-            #[inline]
-            pub fn warm_up(&self) -> usize {
-                maximum_average_period(self.candle_settings, &[$($setting),+]) + 4
-            }
-        }
-
-        impl Default for $config {
-            fn default() -> Self {
-                Self {
-                    candle_settings: CandleSettings::default(),
-                }
-            }
-        }
-
-        impl_pattern_execution!($config, $runner, $stream);
-    };
 }
 
 macro_rules! definition {
@@ -100,10 +53,11 @@ macro_rules! definition {
     };
 }
 
-define_config!(
+define_pattern_config!(
     CDLBREAKAWAYConfig,
     CDLBREAKAWAYBatchRunner,
     CDLBREAKAWAYStream,
+    4,
     [CandleSettingType::BodyLong]
 );
 
@@ -147,20 +101,18 @@ definition!(
             && context.real_body(4) > context.average(CandleSettingType::BodyLong, 4)
             && breaks_away
         {
-            signal(match fifth_color {
-                CandleColor::White => PatternDirection::Bullish,
-                CandleColor::Black => PatternDirection::Bearish,
-            })
+            signal(fifth_color.direction())
         } else {
             PatternSignal::NoMatch
         }
     }
 );
 
-define_config!(
+define_pattern_config!(
     CDLLADDERBOTTOMConfig,
     CDLLADDERBOTTOMBatchRunner,
     CDLLADDERBOTTOMStream,
+    4,
     [CandleSettingType::ShadowVeryShort]
 );
 
@@ -306,10 +258,11 @@ impl PatternDefinition for CDLMATHOLDConfig {
     }
 }
 
-define_config!(
+define_pattern_config!(
     CDLRISEFALL3METHODSConfig,
     CDLRISEFALL3METHODSBatchRunner,
     CDLRISEFALL3METHODSStream,
+    4,
     [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
 );
 
@@ -382,10 +335,7 @@ impl PatternDefinition for CDLRISEFALL3METHODSConfig {
             && context.real_body(1) < context.average(CandleSettingType::BodyShort, 1)
             && context.real_body(0) > context.average(CandleSettingType::BodyLong, 0)
         {
-            signal(match first_color {
-                CandleColor::White => PatternDirection::Bullish,
-                CandleColor::Black => PatternDirection::Bearish,
-            })
+            signal(first_color.direction())
         } else {
             PatternSignal::NoMatch
         }

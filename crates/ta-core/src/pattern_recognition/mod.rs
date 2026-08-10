@@ -105,6 +105,55 @@ macro_rules! impl_pattern_execution {
     };
 }
 
+macro_rules! define_pattern_config {
+    (
+        $config:ident, $runner:ident, $stream:ident,
+        $span:expr, [$($setting:expr),* $(,)?]
+    ) => {
+        #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
+        #[derive(Debug, Clone, Copy, PartialEq)]
+        pub struct $config {
+            candle_settings: crate::pattern_recognition::CandleSettings,
+        }
+
+        impl $config {
+            /// Creates the definition with an immutable Candle Settings collection.
+            pub fn new(
+                candle_settings: crate::pattern_recognition::CandleSettings,
+            ) -> crate::Result<Self> {
+                Ok(Self { candle_settings })
+            }
+
+            /// Returns the owned immutable Candle Settings value.
+            #[inline]
+            pub const fn candle_settings(
+                &self,
+            ) -> crate::pattern_recognition::CandleSettings {
+                self.candle_settings
+            }
+
+            /// Returns the Warm-up tick count, identical to Lookback.
+            #[inline]
+            pub fn warm_up(&self) -> usize {
+                crate::pattern_recognition::engine::maximum_average_period(
+                    self.candle_settings,
+                    &[$($setting),*],
+                ) + $span
+            }
+        }
+
+        impl Default for $config {
+            fn default() -> Self {
+                Self {
+                    candle_settings: crate::pattern_recognition::CandleSettings::default(),
+                }
+            }
+        }
+
+        impl_pattern_execution!($config, $runner, $stream);
+    };
+}
+
 mod body_containment;
 mod crows_soldiers;
 mod doji;

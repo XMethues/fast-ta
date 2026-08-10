@@ -1,33 +1,17 @@
 //! Local definitions for the three-Candle reversal and star family.
 
-use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
+use super::engine::{maximum_average_period, CandleColor, PatternDefinition, RecognitionContext};
 use super::{
     CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
     Penetration,
 };
 use crate::{Float, Result};
 
-fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
-    referenced
-        .iter()
-        .map(|&kind| settings.setting(kind).average_period())
-        .max()
-        .unwrap_or(0)
-}
-
 #[inline]
 const fn standard(direction: PatternDirection) -> PatternSignal {
     PatternSignal::Match {
         direction,
         strength: PatternStrength::Standard,
-    }
-}
-
-#[inline]
-const fn direction(color: CandleColor) -> PatternDirection {
-    match color {
-        CandleColor::White => PatternDirection::Bullish,
-        CandleColor::Black => PatternDirection::Bearish,
     }
 }
 
@@ -39,43 +23,6 @@ fn body_high(context: &RecognitionContext<'_>, offset: usize) -> f64 {
 #[inline]
 fn body_low(context: &RecognitionContext<'_>, offset: usize) -> f64 {
     context.body_low(offset)
-}
-
-macro_rules! define_three_candle_config {
-    ($config:ident, $runner:ident, $stream:ident, [$($setting:expr),+ $(,)?]) => {
-        #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub struct $config {
-            candle_settings: CandleSettings,
-        }
-
-        impl $config {
-            /// Creates the definition with an immutable Candle Settings collection.
-            pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-                Ok(Self { candle_settings })
-            }
-
-            /// Returns the owned immutable Candle Settings value.
-            #[inline]
-            pub const fn candle_settings(&self) -> CandleSettings {
-                self.candle_settings
-            }
-
-            /// Returns the Warm-up tick count, identical to Lookback.
-            #[inline]
-            pub fn warm_up(&self) -> usize {
-                maximum_average_period(self.candle_settings, &[$($setting),+]) + 2
-            }
-        }
-
-        impl Default for $config {
-            fn default() -> Self {
-                Self { candle_settings: CandleSettings::default() }
-            }
-        }
-
-        impl_pattern_execution!($config, $runner, $stream);
-    };
 }
 
 macro_rules! define_star_config {
@@ -125,10 +72,11 @@ macro_rules! define_star_config {
     };
 }
 
-define_three_candle_config!(
+define_pattern_config!(
     CDL3INSIDEConfig,
     CDL3INSIDEBatchRunner,
     CDL3INSIDEStream,
+    2,
     [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
 );
 
@@ -179,45 +127,20 @@ impl PatternDefinition for CDL3INSIDEConfig {
             && context.real_body(2) > context.average(CandleSettingType::BodyLong, 2)
             && context.real_body(1) <= context.average(CandleSettingType::BodyShort, 1)
         {
-            standard(direction(context.color(0)))
+            standard(context.color(0).direction())
         } else {
             PatternSignal::NoMatch
         }
     }
 }
 
-/// Immutable CDL3OUTSIDE Indicator Configuration.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CDL3OUTSIDEConfig {
-    candle_settings: CandleSettings,
-}
-
-impl CDL3OUTSIDEConfig {
-    /// Creates the definition with an immutable Candle Settings collection.
-    pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-        Ok(Self { candle_settings })
-    }
-
-    /// Returns the owned immutable Candle Settings value.
-    #[inline]
-    pub const fn candle_settings(&self) -> CandleSettings {
-        self.candle_settings
-    }
-
-    /// Returns the Warm-up tick count, identical to Lookback.
-    #[inline]
-    pub const fn warm_up(&self) -> usize {
-        3
-    }
-}
-
-impl Default for CDL3OUTSIDEConfig {
-    fn default() -> Self {
-        Self {
-            candle_settings: CandleSettings::default(),
-        }
-    }
-}
+define_pattern_config!(
+    CDL3OUTSIDEConfig,
+    CDL3OUTSIDEBatchRunner,
+    CDL3OUTSIDEStream,
+    3,
+    []
+);
 
 impl PatternDefinition for CDL3OUTSIDEConfig {
     type State = ();
@@ -268,14 +191,12 @@ impl PatternDefinition for CDL3OUTSIDEConfig {
             }
         };
         if matches {
-            standard(direction(second_color))
+            standard(second_color.direction())
         } else {
             PatternSignal::NoMatch
         }
     }
 }
-
-impl_pattern_execution!(CDL3OUTSIDEConfig, CDL3OUTSIDEBatchRunner, CDL3OUTSIDEStream);
 
 define_star_config!(
     CDLABANDONEDBABYConfig,
@@ -346,7 +267,7 @@ impl PatternDefinition for CDLABANDONEDBABYConfig {
             && context.real_body(0) > context.average(CandleSettingType::BodyShort, 0)
             && reversal
         {
-            standard(direction(third_color))
+            standard(third_color.direction())
         } else {
             PatternSignal::NoMatch
         }
@@ -585,10 +506,11 @@ impl PatternDefinition for CDLMORNINGSTARConfig {
     }
 }
 
-define_three_candle_config!(
+define_pattern_config!(
     CDLUNIQUE3RIVERConfig,
     CDLUNIQUE3RIVERBatchRunner,
     CDLUNIQUE3RIVERStream,
+    2,
     [CandleSettingType::BodyLong, CandleSettingType::BodyShort]
 );
 

@@ -2,22 +2,10 @@
 
 use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-use crate::Result;
-
-fn maximum_average_period(settings: CandleSettings, referenced: &[CandleSettingType]) -> usize {
-    referenced
-        .iter()
-        .map(|&setting_type| settings.setting(setting_type).average_period())
-        .max()
-        .unwrap_or(0)
-}
 
 #[inline]
 fn color_signal(context: &RecognitionContext<'_>) -> PatternSignal {
-    let direction = match context.color(0) {
-        CandleColor::White => PatternDirection::Bullish,
-        CandleColor::Black => PatternDirection::Bearish,
-    };
+    let direction = context.color(0).direction();
     PatternSignal::Match {
         direction,
         strength: PatternStrength::Standard,
@@ -32,49 +20,11 @@ const fn positive_signal() -> PatternSignal {
     }
 }
 
-macro_rules! define_single_candle_config {
-    ($config:ident, $runner:ident, $stream:ident, [$($setting:expr),+ $(,)?]) => {
-        #[doc = concat!("Immutable ", stringify!($config), " Indicator Configuration.")]
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub struct $config {
-            candle_settings: CandleSettings,
-        }
-
-        impl $config {
-            /// Creates the definition with an immutable Candle Settings collection.
-            pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-                Ok(Self { candle_settings })
-            }
-
-            /// Returns the owned immutable Candle Settings value.
-            #[inline]
-            pub const fn candle_settings(&self) -> CandleSettings {
-                self.candle_settings
-            }
-
-            /// Returns the Warm-up tick count, identical to Lookback.
-            #[inline]
-            pub fn warm_up(&self) -> usize {
-                maximum_average_period(self.candle_settings, &[$($setting),+])
-            }
-        }
-
-        impl Default for $config {
-            fn default() -> Self {
-                Self {
-                    candle_settings: CandleSettings::default(),
-                }
-            }
-        }
-
-        impl_pattern_execution!($config, $runner, $stream);
-    };
-}
-
-define_single_candle_config!(
+define_pattern_config!(
     CDLBELTHOLDConfig,
     CDLBELTHOLDBatchRunner,
     CDLBELTHOLDStream,
+    0,
     [
         CandleSettingType::BodyLong,
         CandleSettingType::ShadowVeryShort,
@@ -123,10 +73,11 @@ impl PatternDefinition for CDLBELTHOLDConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLCLOSINGMARUBOZUConfig,
     CDLCLOSINGMARUBOZUBatchRunner,
     CDLCLOSINGMARUBOZUStream,
+    0,
     [
         CandleSettingType::BodyLong,
         CandleSettingType::ShadowVeryShort
@@ -175,10 +126,11 @@ impl PatternDefinition for CDLCLOSINGMARUBOZUConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLDRAGONFLYDOJIConfig,
     CDLDRAGONFLYDOJIBatchRunner,
     CDLDRAGONFLYDOJIStream,
+    0,
     [
         CandleSettingType::BodyDoji,
         CandleSettingType::ShadowVeryShort
@@ -225,10 +177,11 @@ impl PatternDefinition for CDLDRAGONFLYDOJIConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLGRAVESTONEDOJIConfig,
     CDLGRAVESTONEDOJIBatchRunner,
     CDLGRAVESTONEDOJIStream,
+    0,
     [
         CandleSettingType::BodyDoji,
         CandleSettingType::ShadowVeryShort
@@ -275,10 +228,11 @@ impl PatternDefinition for CDLGRAVESTONEDOJIConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLHIGHWAVEConfig,
     CDLHIGHWAVEBatchRunner,
     CDLHIGHWAVEStream,
+    0,
     [
         CandleSettingType::BodyShort,
         CandleSettingType::ShadowVeryLong
@@ -325,10 +279,11 @@ impl PatternDefinition for CDLHIGHWAVEConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLLONGLEGGEDDOJIConfig,
     CDLLONGLEGGEDDOJIBatchRunner,
     CDLLONGLEGGEDDOJIStream,
+    0,
     [CandleSettingType::BodyDoji, CandleSettingType::ShadowLong]
 );
 
@@ -368,10 +323,11 @@ impl PatternDefinition for CDLLONGLEGGEDDOJIConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLLONGLINEConfig,
     CDLLONGLINEBatchRunner,
     CDLLONGLINEStream,
+    0,
     [CandleSettingType::BodyLong, CandleSettingType::ShadowShort]
 );
 
@@ -412,10 +368,11 @@ impl PatternDefinition for CDLLONGLINEConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLMARUBOZUConfig,
     CDLMARUBOZUBatchRunner,
     CDLMARUBOZUStream,
+    0,
     [
         CandleSettingType::BodyLong,
         CandleSettingType::ShadowVeryShort
@@ -462,10 +419,11 @@ impl PatternDefinition for CDLMARUBOZUConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLRICKSHAWMANConfig,
     CDLRICKSHAWMANBatchRunner,
     CDLRICKSHAWMANStream,
+    0,
     [
         CandleSettingType::BodyDoji,
         CandleSettingType::ShadowLong,
@@ -517,10 +475,11 @@ impl PatternDefinition for CDLRICKSHAWMANConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLSHORTLINEConfig,
     CDLSHORTLINEBatchRunner,
     CDLSHORTLINEStream,
+    0,
     [CandleSettingType::BodyShort, CandleSettingType::ShadowShort]
 );
 
@@ -561,10 +520,11 @@ impl PatternDefinition for CDLSHORTLINEConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLSPINNINGTOPConfig,
     CDLSPINNINGTOPBatchRunner,
     CDLSPINNINGTOPStream,
+    0,
     [CandleSettingType::BodyShort]
 );
 
@@ -605,10 +565,11 @@ impl PatternDefinition for CDLSPINNINGTOPConfig {
     }
 }
 
-define_single_candle_config!(
+define_pattern_config!(
     CDLTAKURIConfig,
     CDLTAKURIBatchRunner,
     CDLTAKURIStream,
+    0,
     [
         CandleSettingType::BodyDoji,
         CandleSettingType::ShadowVeryShort,

@@ -2,42 +2,14 @@
 
 use super::engine::{PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
-use crate::Result;
 
-/// Immutable CDLDOJI Indicator Configuration.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CDLDOJIConfig {
-    candle_settings: CandleSettings,
-}
-
-impl CDLDOJIConfig {
-    /// Creates CDLDOJI with an immutable Candle Settings collection.
-    pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-        Ok(Self { candle_settings })
-    }
-
-    /// Returns the owned immutable Candle Settings value.
-    #[inline]
-    pub const fn candle_settings(&self) -> CandleSettings {
-        self.candle_settings
-    }
-
-    /// Returns the Warm-up tick count, identical to Lookback.
-    #[inline]
-    pub fn warm_up(&self) -> usize {
-        self.candle_settings
-            .setting(CandleSettingType::BodyDoji)
-            .average_period()
-    }
-}
-
-impl Default for CDLDOJIConfig {
-    fn default() -> Self {
-        Self {
-            candle_settings: CandleSettings::default(),
-        }
-    }
-}
+define_pattern_config!(
+    CDLDOJIConfig,
+    CDLDOJIBatchRunner,
+    CDLDOJIStream,
+    0,
+    [CandleSettingType::BodyDoji]
+);
 
 impl PatternDefinition for CDLDOJIConfig {
     type State = ();
@@ -81,5 +53,3 @@ impl PatternDefinition for CDLDOJIConfig {
         }
     }
 }
-
-impl_pattern_execution!(CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream);

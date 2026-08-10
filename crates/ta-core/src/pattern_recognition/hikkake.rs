@@ -59,41 +59,14 @@ fn transition(
     PatternSignal::NoMatch
 }
 
-/// Immutable CDLHIKKAKE Indicator Configuration.
-///
-/// The ordinary definition is setting-free. Candle Settings are still owned to
-/// preserve the common Pattern Recognition configuration seam.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CDLHIKKAKEConfig {
-    candle_settings: CandleSettings,
-}
-
-impl CDLHIKKAKEConfig {
-    /// Creates CDLHIKKAKE with immutable Candle Settings.
-    pub fn new(candle_settings: CandleSettings) -> Result<Self> {
-        Ok(Self { candle_settings })
-    }
-
-    /// Returns the owned immutable Candle Settings value.
-    #[inline]
-    pub const fn candle_settings(&self) -> CandleSettings {
-        self.candle_settings
-    }
-
-    /// Returns the fixed Warm-up tick count, identical to Lookback.
-    #[inline]
-    pub const fn warm_up(&self) -> usize {
-        5
-    }
-}
-
-impl Default for CDLHIKKAKEConfig {
-    fn default() -> Self {
-        Self {
-            candle_settings: CandleSettings::default(),
-        }
-    }
-}
+// Setting-free: Candle Settings are owned only to preserve the common configuration seam.
+define_pattern_config!(
+    CDLHIKKAKEConfig,
+    CDLHIKKAKEBatchRunner,
+    CDLHIKKAKEStream,
+    5,
+    []
+);
 
 impl PatternDefinition for CDLHIKKAKEConfig {
     type State = State;
@@ -141,8 +114,6 @@ impl PatternDefinition for CDLHIKKAKEConfig {
         transition(state, formation, current.close)
     }
 }
-
-impl_pattern_execution!(CDLHIKKAKEConfig, CDLHIKKAKEBatchRunner, CDLHIKKAKEStream);
 
 /// Immutable CDLHIKKAKEMOD Indicator Configuration.
 #[derive(Debug, Clone, Copy, PartialEq)]
