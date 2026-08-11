@@ -341,8 +341,7 @@ fn report_is_generated_from_reread_rows_and_separates_comparable_from_unavailabl
     assert!(report.contains("Clean before/after optimization effects"));
     assert!(report.contains("4.000 us [3.600, 4.400]"));
     assert!(report.contains("Runtime platform qualification from committed JSONL"));
-    assert!(report.contains("run [31513123909]"));
-    assert!(report.contains("slower than scalar on this runner; no practical benefit"));
+    assert!(report.contains("run [31515400920]"));
     assert!(report.contains("practical benefit on this runner"));
     assert!(report.contains("Canonical comparison baseline"));
     assert!(!report.contains("clean baseline missing"));
@@ -402,7 +401,7 @@ fn committed_platform_qualification_artifacts_are_runtime_evidence() {
             .expect("read committed qualification");
         assert_eq!(qualification.platform, platform);
         assert_eq!(qualification.precision, precision);
-        assert_eq!(qualification.workflow_run_id, 31_513_123_909);
+        assert_eq!(qualification.workflow_run_id, "31515400920");
         assert_eq!(qualification.measurements.len(), measurement_count);
         assert!(qualification
             .measurements

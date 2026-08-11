@@ -262,6 +262,9 @@ pub(super) struct RegressionFit {
     pub(super) intercept: Float,
 }
 
+#[cfg(feature = "f32")]
+const REGRESSION_REBASE_INTERVAL: usize = 8;
+#[cfg(not(feature = "f32"))]
 const REGRESSION_REBASE_INTERVAL: usize = 256;
 
 #[derive(Debug, Clone)]

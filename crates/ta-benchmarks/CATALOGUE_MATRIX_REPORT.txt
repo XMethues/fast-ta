@@ -349,42 +349,42 @@ These rows are parsed from the named JSONL artifacts. Speedup is scalar median d
 
 | Artifact | Platform | Precision | Runtime / CPU | Active backend | Equivalence | Workflow provenance | Commit |
 |---|---|---|---|---|---|---|---|
-| crates/ta-benchmarks/baselines/typprice_x86_f64_qualification.jsonl | x86_64 | f64 | rustc 1.97.1 (8bab26f4f 2026-07-14) / INTEL(R) XEON(R) PLATINUM 8573C | avx512f | all measurement rows verified | run [31513123909](https://github.com/XMethues/fast-ta/actions/runs/31513123909), job 93851587082 | 0306801184363ae472b8fffab036ef8aa1740afd |
-| crates/ta-benchmarks/baselines/typprice_x86_f32_qualification.jsonl | x86_64 | f32 | rustc 1.97.1 (8bab26f4f 2026-07-14) / INTEL(R) XEON(R) PLATINUM 8573C | avx512f | all measurement rows verified | run [31513123909](https://github.com/XMethues/fast-ta/actions/runs/31513123909), job 93851587082 | 0306801184363ae472b8fffab036ef8aa1740afd |
-| crates/ta-benchmarks/baselines/typprice_wasm_qualification.jsonl | wasm32-unknown-unknown | f64 | Node.js v22.23.1 / AMD EPYC 7763 64-Core Processor | simd128 | all measurement rows verified | run [31513123909](https://github.com/XMethues/fast-ta/actions/runs/31513123909), job 93851587045 | 0306801184363ae472b8fffab036ef8aa1740afd |
+| crates/ta-benchmarks/baselines/typprice_x86_f64_qualification.jsonl | x86_64 | f64 | rustc 1.97.1 (8bab26f4f 2026-07-14) / INTEL(R) XEON(R) PLATINUM 8573C | avx512f | all measurement rows verified | run [31515400920](https://github.com/XMethues/fast-ta/actions/runs/31515400920), job x86-typprice | d999c0c87e8e9ddbe359a47044dd463f8896f242 |
+| crates/ta-benchmarks/baselines/typprice_x86_f32_qualification.jsonl | x86_64 | f32 | rustc 1.97.1 (8bab26f4f 2026-07-14) / INTEL(R) XEON(R) PLATINUM 8573C | avx512f | all measurement rows verified | run [31515400920](https://github.com/XMethues/fast-ta/actions/runs/31515400920), job x86-typprice | d999c0c87e8e9ddbe359a47044dd463f8896f242 |
+| crates/ta-benchmarks/baselines/typprice_wasm_qualification.jsonl | wasm32-unknown-unknown | f64 | v22.23.1 / AMD EPYC 7763 64-Core Processor | simd128 | all measurement rows verified | run [31515400920](https://github.com/XMethues/fast-ta/actions/runs/31515400920), job wasm-typprice | d999c0c87e8e9ddbe359a47044dd463f8896f242 |
 
 | Platform | Precision | Input | Mode | Backend | Median [95% CI] | Throughput | Speedup vs matching scalar | Disposition |
 |---|---|---:|---|---|---:|---:|---:|---|
-| x86_64 | f64 | 256 | explicit kernel | avx2 | 4.367 us [4.366, 4.371] | 58.623 Mobs/s | 0.403x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f64 | 256 | explicit kernel | avx512f | 3.839 us [3.837, 3.842] | 66.690 Mobs/s | 0.459x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f64 | 256 | explicit kernel | scalar | 1.761 us [1.704, 1.770] | 145.372 Mobs/s | 1.000x | scalar reference |
-| x86_64 | f64 | 256 | public TYPPRICE | avx512f | 9.623 us [9.591, 9.693] | 26.603 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
-| x86_64 | f64 | 4096 | explicit kernel | avx2 | 70.919 us [70.864, 71.041] | 57.756 Mobs/s | 0.399x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f64 | 4096 | explicit kernel | avx512f | 62.524 us [62.426, 62.836] | 65.511 Mobs/s | 0.453x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f64 | 4096 | explicit kernel | scalar | 28.315 us [27.936, 28.562] | 144.657 Mobs/s | 1.000x | scalar reference |
-| x86_64 | f64 | 4096 | public TYPPRICE | avx512f | 152.944 us [152.645, 153.759] | 26.781 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
-| x86_64 | f64 | 65536 | explicit kernel | avx2 | 1149.706 us [1148.793, 1152.454] | 57.002 Mobs/s | 0.370x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f64 | 65536 | explicit kernel | avx512f | 1021.110 us [1020.291, 1023.281] | 64.181 Mobs/s | 0.417x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f64 | 65536 | explicit kernel | scalar | 425.395 us [423.657, 428.187] | 154.059 Mobs/s | 1.000x | scalar reference |
-| x86_64 | f64 | 65536 | public TYPPRICE | avx512f | 2459.657 us [2457.219, 2469.729] | 26.644 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
-| x86_64 | f32 | 256 | explicit kernel | avx2 | 2.176 us [2.175, 2.179] | 117.642 Mobs/s | 0.792x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f32 | 256 | explicit kernel | avx512f | 1.916 us [1.914, 1.929] | 133.622 Mobs/s | 0.899x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f32 | 256 | explicit kernel | scalar | 1.723 us [1.681, 1.791] | 148.614 Mobs/s | 1.000x | scalar reference |
-| x86_64 | f32 | 256 | public TYPPRICE | avx512f | 4.931 us [4.926, 4.967] | 51.915 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
-| x86_64 | f32 | 4096 | explicit kernel | avx2 | 35.472 us [35.040, 35.917] | 115.473 Mobs/s | 0.767x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f32 | 4096 | explicit kernel | avx512f | 30.969 us [30.935, 30.994] | 132.262 Mobs/s | 0.878x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f32 | 4096 | explicit kernel | scalar | 27.196 us [26.698, 28.299] | 150.608 Mobs/s | 1.000x | scalar reference |
-| x86_64 | f32 | 4096 | public TYPPRICE | avx512f | 77.277 us [77.179, 77.427] | 53.004 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
-| x86_64 | f32 | 65536 | explicit kernel | avx2 | 568.253 us [566.595, 569.271] | 115.329 Mobs/s | 0.759x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f32 | 65536 | explicit kernel | avx512f | 496.464 us [496.025, 497.357] | 132.006 Mobs/s | 0.868x | slower than scalar on this runner; no practical benefit |
-| x86_64 | f32 | 65536 | explicit kernel | scalar | 431.033 us [424.076, 432.954] | 152.044 Mobs/s | 1.000x | scalar reference |
-| x86_64 | f32 | 65536 | public TYPPRICE | avx512f | 1236.320 us [1234.333, 1240.567] | 53.009 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
-| wasm32-unknown-unknown | f64 | 256 | public WASM typprice | scalar | 4.556 us [4.190, 5.229] | 56.185 Mobs/s | 1.000x | scalar reference |
-| wasm32-unknown-unknown | f64 | 256 | public WASM typprice | simd128 | 2.615 us [2.207, 3.152] | 97.907 Mobs/s | 1.743x | practical benefit on this runner |
-| wasm32-unknown-unknown | f64 | 4096 | public WASM typprice | scalar | 20.894 us [20.327, 27.815] | 196.034 Mobs/s | 1.000x | scalar reference |
-| wasm32-unknown-unknown | f64 | 4096 | public WASM typprice | simd128 | 12.793 us [12.692, 12.923] | 320.163 Mobs/s | 1.633x | practical benefit on this runner |
-| wasm32-unknown-unknown | f64 | 65536 | public WASM typprice | scalar | 338.469 us [331.961, 374.564] | 193.625 Mobs/s | 1.000x | scalar reference |
-| wasm32-unknown-unknown | f64 | 65536 | public WASM typprice | simd128 | 212.544 us [206.725, 268.432] | 308.340 Mobs/s | 1.592x | practical benefit on this runner |
+| x86_64 | f64 | 256 | explicit kernel | avx2 | 0.162 us [0.160, 0.165] | 1582.797 Mobs/s | 0.992x | within the 5% band on this runner |
+| x86_64 | f64 | 256 | explicit kernel | avx512f | 0.161 us [0.160, 0.163] | 1585.792 Mobs/s | 0.993x | within the 5% band on this runner |
+| x86_64 | f64 | 256 | explicit kernel | scalar | 0.160 us [0.160, 0.165] | 1596.348 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f64 | 256 | public TYPPRICE | avx512f | 0.198 us [0.196, 0.199] | 1295.494 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f64 | 4096 | explicit kernel | avx2 | 2.568 us [2.395, 2.586] | 1595.076 Mobs/s | 0.923x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 4096 | explicit kernel | avx512f | 2.584 us [2.566, 2.589] | 1584.998 Mobs/s | 0.917x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 4096 | explicit kernel | scalar | 2.370 us [2.363, 2.381] | 1727.925 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f64 | 4096 | public TYPPRICE | avx512f | 3.571 us [3.568, 3.678] | 1147.017 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f64 | 65536 | explicit kernel | avx2 | 41.268 us [39.152, 41.590] | 1588.072 Mobs/s | 0.921x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 65536 | explicit kernel | avx512f | 39.037 us [38.425, 41.054] | 1678.828 Mobs/s | 0.974x | within the 5% band on this runner |
+| x86_64 | f64 | 65536 | explicit kernel | scalar | 38.004 us [37.984, 38.772] | 1724.436 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f64 | 65536 | public TYPPRICE | avx512f | 66.244 us [65.963, 66.437] | 989.310 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f32 | 256 | explicit kernel | avx2 | 0.050 us [0.050, 0.050] | 5105.297 Mobs/s | 1.249x | practical benefit on this runner |
+| x86_64 | f32 | 256 | explicit kernel | avx512f | 0.046 us [0.046, 0.046] | 5586.287 Mobs/s | 1.367x | practical benefit on this runner |
+| x86_64 | f32 | 256 | explicit kernel | scalar | 0.063 us [0.062, 0.063] | 4086.976 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f32 | 256 | public TYPPRICE | avx512f | 0.055 us [0.052, 0.058] | 4627.705 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f32 | 4096 | explicit kernel | avx2 | 0.733 us [0.733, 0.733] | 5586.673 Mobs/s | 1.313x | practical benefit on this runner |
+| x86_64 | f32 | 4096 | explicit kernel | avx512f | 0.733 us [0.733, 0.752] | 5586.623 Mobs/s | 1.313x | practical benefit on this runner |
+| x86_64 | f32 | 4096 | explicit kernel | scalar | 0.963 us [0.963, 0.963] | 4254.936 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f32 | 4096 | public TYPPRICE | avx512f | 1.327 us [1.280, 1.364] | 3085.515 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f32 | 65536 | explicit kernel | avx2 | 12.834 us [12.833, 12.836] | 5106.516 Mobs/s | 1.200x | practical benefit on this runner |
+| x86_64 | f32 | 65536 | explicit kernel | avx512f | 12.828 us [12.040, 12.829] | 5108.645 Mobs/s | 1.200x | practical benefit on this runner |
+| x86_64 | f32 | 65536 | explicit kernel | scalar | 15.397 us [15.396, 15.402] | 4256.358 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f32 | 65536 | public TYPPRICE | avx512f | 21.552 us [21.412, 21.726] | 3040.874 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| wasm32-unknown-unknown | f64 | 256 | public WASM typprice | scalar | 3.736 us [3.347, 4.226] | 68.525 Mobs/s | 1.000x | scalar reference |
+| wasm32-unknown-unknown | f64 | 256 | public WASM typprice | simd128 | 3.556 us [3.409, 3.834] | 71.984 Mobs/s | 1.050x | practical benefit on this runner |
+| wasm32-unknown-unknown | f64 | 4096 | public WASM typprice | scalar | 20.049 us [19.869, 22.323] | 204.297 Mobs/s | 1.000x | scalar reference |
+| wasm32-unknown-unknown | f64 | 4096 | public WASM typprice | simd128 | 13.514 us [13.234, 17.242] | 303.085 Mobs/s | 1.484x | practical benefit on this runner |
+| wasm32-unknown-unknown | f64 | 65536 | public WASM typprice | scalar | 342.799 us [322.634, 394.033] | 191.179 Mobs/s | 1.000x | scalar reference |
+| wasm32-unknown-unknown | f64 | 65536 | public WASM typprice | simd128 | 205.382 us [203.363, 363.795] | 319.093 Mobs/s | 1.669x | practical benefit on this runner |
 
 Validation and allocation boundaries
 
