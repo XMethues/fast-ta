@@ -1,7 +1,7 @@
 Pinned representative Indicator Catalogue performance matrix
 
 TA-Lib 0.6.4 (43f9d5042ecc4bd367941846494ad907bf20ea50) | Python 3.12.13 binding 0.6.4 / core 0.6.4 | NumPy 2.2.3 | float 64-bit
-Commit 079a39c61ff5adedffd636b69cd2b3b37b9794df (dirty: false) | Apple M2 | Darwin 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:27:52 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T8112 aarch64 | rustc 1.93.0 (254b59607 2026-01-19)
+Commit 1d6b6be76456ee53f6748ed537ef155146203047 (dirty: false) | Apple M2 | Darwin 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:27:52 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T8112 aarch64 | rustc 1.93.0 (254b59607 2026-01-19)
 Run classification: clean reference run; completeness and publication status follow.
 95% intervals are deterministic bootstrap confidence intervals for the median (10,000 resamples). Outliers use Tukey's 1.5 IQR fences. Rust/C ratios below use only same-run caller-owned rows with identical case, parameters, fixture, and input length.
 
@@ -17,7 +17,7 @@ Representative matrix
 | Momentum Indicators | RSI | timeperiod=14 | float x1 |
 | Overlap Studies | BBANDS | timeperiod=20;nbdevup=2;nbdevdn=2;matype=SMA | float x3 |
 | Overlap Studies | SMA | timeperiod=14 | float x1 |
-| Pattern Recognition | CDL3BLACKCROWS | candle_settings=TA-Lib defaults | integer x1 |
+| Pattern Recognition | CDL3WHITESOLDIERS | candle_settings=TA-Lib defaults | integer x1 |
 | Pattern Recognition | CDLDOJI | candle_settings=TA-Lib defaults | integer x1 |
 | Pattern Recognition | CDLENGULFING | candle_settings=TA-Lib defaults | integer x1 |
 | Price Transform | TYPPRICE | none | float x1 |
@@ -25,33 +25,41 @@ Representative matrix
 | Volatility Indicators | ATR | timeperiod=14 | float x1 |
 | Volume Indicators | OBV | none | float x1 |
 
+Pattern Recognition execution-shape coverage
+
+| Definition | Execution shape | Rationale |
+|---|---|---|
+| CDLDOJI | single-setting stateful rolling average | one immutable-default BodyDoji rolling history |
+| CDL3WHITESOLDIERS | multi-setting stateful rolling averages | four independently aligned immutable-default rolling histories: ShadowVeryShort, BodyShort, Far, and Near |
+| CDLENGULFING | setting-free cross-candle predicate | setting-free predicate over current and previous candles; Streaming retains cross-candle state |
+
 Same-run geometric Rust/C caller-owned summary
 
 | Input | Mode | Comparable cases | Geometric Rust/C latency ratio | Semantics |
 |---:|---|---:|---:|---|
-| 256 | caller-owned Batch Computation vs direct C caller-owned | 15 | 1.134x | comparable only |
-| 4096 | caller-owned Batch Computation vs direct C caller-owned | 15 | 1.298x | comparable only |
-| 65536 | caller-owned Batch Computation vs direct C caller-owned | 15 | 1.243x | comparable only |
+| 256 | caller-owned Batch Computation vs direct C caller-owned | 15 | 1.202x | comparable only |
+| 4096 | caller-owned Batch Computation vs direct C caller-owned | 15 | 1.293x | comparable only |
+| 65536 | caller-owned Batch Computation vs direct C caller-owned | 15 | 1.263x | comparable only |
 
 Large-throughput optimization ordering
 
 | Rank | Definition | Rust/C latency ratio | Disposition |
 |---:|---|---:|---|
-| 1 | CDL3BLACKCROWS | 3.564x | remaining comparative gap above 5% |
-| 2 | CDLDOJI | 2.634x | remaining comparative gap above 5% |
-| 3 | TYPPRICE | 2.299x | remaining comparative gap above 5% |
-| 4 | ADD | 2.191x | remaining comparative gap above 5% |
-| 5 | CDLENGULFING | 2.146x | remaining comparative gap above 5% |
-| 6 | OBV | 1.291x | remaining comparative gap above 5% |
-| 7 | HT_DCPHASE | 1.244x | remaining comparative gap above 5% |
-| 8 | SIN | 1.038x | parity band |
-| 9 | ADX | 1.026x | parity band |
-| 10 | ATR | 1.018x | parity band |
-| 11 | LINEARREG | 0.930x | fast-ta faster |
-| 12 | RSI | 0.928x | fast-ta faster |
-| 13 | BBANDS | 0.639x | fast-ta faster |
-| 14 | SMA | 0.591x | fast-ta faster |
-| 15 | MACD | 0.455x | fast-ta faster |
+| 1 | CDL3WHITESOLDIERS | 4.642x | remaining comparative gap above 5% |
+| 2 | CDLDOJI | 2.432x | remaining comparative gap above 5% |
+| 3 | CDLENGULFING | 2.310x | remaining comparative gap above 5% |
+| 4 | TYPPRICE | 2.117x | remaining comparative gap above 5% |
+| 5 | ADD | 1.878x | remaining comparative gap above 5% |
+| 6 | HT_DCPHASE | 1.324x | remaining comparative gap above 5% |
+| 7 | OBV | 1.189x | remaining comparative gap above 5% |
+| 8 | ADX | 1.058x | remaining comparative gap above 5% |
+| 9 | SIN | 1.031x | parity band |
+| 10 | ATR | 1.015x | parity band |
+| 11 | LINEARREG | 0.986x | parity band |
+| 12 | RSI | 0.930x | fast-ta faster |
+| 13 | BBANDS | 0.682x | fast-ta faster |
+| 14 | SMA | 0.639x | fast-ta faster |
+| 15 | MACD | 0.461x | fast-ta faster |
 
 Run completeness and semantic gate
 
@@ -63,21 +71,21 @@ Per-case caller-owned Rust/C latency ratios
 
 | Definition | 256 | 4,096 | 65,536 | 65,536 disposition |
 |---|---:|---:|---:|---|
-| ADD | 1.732x | 2.290x | 2.191x | unresolved gap above the 5% band |
-| ADX | 1.026x | 1.068x | 1.026x | parity band |
-| ATR | 0.990x | 1.018x | 1.018x | parity band |
-| BBANDS | 0.834x | 0.852x | 0.639x | fast-ta faster |
-| CDL3BLACKCROWS | 3.181x | 3.644x | 3.564x | unresolved gap above the 5% band |
-| CDLDOJI | 1.495x | 2.565x | 2.634x | unresolved gap above the 5% band |
-| CDLENGULFING | 1.770x | 2.130x | 2.146x | unresolved gap above the 5% band |
-| HT_DCPHASE | 1.240x | 1.221x | 1.244x | unresolved gap above the 5% band |
-| LINEARREG | 0.818x | 0.951x | 0.930x | fast-ta faster |
-| MACD | 0.494x | 0.463x | 0.455x | fast-ta faster |
-| OBV | 1.166x | 1.285x | 1.291x | unresolved gap above the 5% band |
-| RSI | 0.909x | 0.931x | 0.928x | fast-ta faster |
-| SIN | 1.005x | 1.049x | 1.038x | parity band |
-| SMA | 0.532x | 0.595x | 0.591x | fast-ta faster |
-| TYPPRICE | 1.877x | 2.973x | 2.299x | unresolved gap above the 5% band |
+| ADD | 1.721x | 2.396x | 1.878x | unresolved gap above the 5% band |
+| ADX | 1.088x | 1.067x | 1.058x | unresolved gap above the 5% band |
+| ATR | 0.986x | 0.944x | 1.015x | parity band |
+| BBANDS | 0.834x | 0.842x | 0.682x | fast-ta faster |
+| CDL3WHITESOLDIERS | 4.255x | 4.029x | 4.642x | unresolved gap above the 5% band |
+| CDLDOJI | 2.248x | 2.553x | 2.432x | unresolved gap above the 5% band |
+| CDLENGULFING | 1.823x | 2.112x | 2.310x | unresolved gap above the 5% band |
+| HT_DCPHASE | 1.162x | 1.229x | 1.324x | unresolved gap above the 5% band |
+| LINEARREG | 0.969x | 0.942x | 0.986x | parity band |
+| MACD | 0.495x | 0.461x | 0.461x | fast-ta faster |
+| OBV | 1.158x | 1.197x | 1.189x | unresolved gap above the 5% band |
+| RSI | 0.912x | 0.927x | 0.930x | fast-ta faster |
+| SIN | 1.004x | 1.035x | 1.031x | parity band |
+| SMA | 0.562x | 0.592x | 0.639x | fast-ta faster |
+| TYPPRICE | 1.764x | 2.965x | 2.117x | unresolved gap above the 5% band |
 
 Execution-path cost summaries
 
@@ -85,21 +93,21 @@ Ratios are geometric path/C latency indices over matching cases. Only the caller
 
 | Input | Path | Cases | Geometric path/C ratio | Interpretation |
 |---:|---|---:|---:|---|
-| 256 | Owned Compact Output | 15 | 1.241x | API-owned compact allocation included |
-| 256 | caller-owned Rust/C kernel | 15 | 1.134x | primary comparable kernel seam |
-| 256 | Prepared reuse | 15 | 1.140x | preparation and caller output allocation excluded |
-| 256 | Streaming reset plus ticks | 15 | 3.080x | separate stateful execution cost |
-| 256 | official Python NumPy API | 15 | 1.251x | user-facing API-owned output cost |
-| 4096 | Owned Compact Output | 15 | 1.411x | API-owned compact allocation included |
-| 4096 | caller-owned Rust/C kernel | 15 | 1.298x | primary comparable kernel seam |
-| 4096 | Prepared reuse | 15 | 1.299x | preparation and caller output allocation excluded |
-| 4096 | Streaming reset plus ticks | 15 | 3.492x | separate stateful execution cost |
-| 4096 | official Python NumPy API | 15 | 1.039x | user-facing API-owned output cost |
-| 65536 | Owned Compact Output | 15 | 1.304x | API-owned compact allocation included |
-| 65536 | caller-owned Rust/C kernel | 15 | 1.243x | primary comparable kernel seam |
-| 65536 | Prepared reuse | 15 | 1.268x | preparation and caller output allocation excluded |
-| 65536 | Streaming reset plus ticks | 15 | 3.393x | separate stateful execution cost |
-| 65536 | official Python NumPy API | 15 | 1.019x | user-facing API-owned output cost |
+| 256 | Owned Compact Output | 15 | 1.315x | API-owned compact allocation included |
+| 256 | caller-owned Rust/C kernel | 15 | 1.202x | primary comparable kernel seam |
+| 256 | Prepared reuse | 15 | 1.196x | preparation and caller output allocation excluded |
+| 256 | Streaming reset plus ticks | 15 | 3.059x | separate stateful execution cost |
+| 256 | official Python NumPy API | 15 | 1.287x | user-facing API-owned output cost |
+| 4096 | Owned Compact Output | 15 | 1.413x | API-owned compact allocation included |
+| 4096 | caller-owned Rust/C kernel | 15 | 1.293x | primary comparable kernel seam |
+| 4096 | Prepared reuse | 15 | 1.292x | preparation and caller output allocation excluded |
+| 4096 | Streaming reset plus ticks | 15 | 3.261x | separate stateful execution cost |
+| 4096 | official Python NumPy API | 15 | 1.016x | user-facing API-owned output cost |
+| 65536 | Owned Compact Output | 15 | 1.306x | API-owned compact allocation included |
+| 65536 | caller-owned Rust/C kernel | 15 | 1.263x | primary comparable kernel seam |
+| 65536 | Prepared reuse | 15 | 1.254x | preparation and caller output allocation excluded |
+| 65536 | Streaming reset plus ticks | 15 | 3.186x | separate stateful execution cost |
+| 65536 | official Python NumPy API | 15 | 1.006x | user-facing API-owned output cost |
 
 Targeted optimization effects
 
@@ -107,30 +115,30 @@ The before values below are parsed from the committed evidence TSV. Issue 56 did
 
 | Definition | Input | Evidence stage | Source | Before Rust/C | Final Rust/C | Ratio change | Disposition |
 |---|---:|---|---|---:|---:|---:|---|
-| ADX | 256 | issue-56 pre-target | issue-57 retained raw rows | 1.504x | 1.026x | -31.8% | practical improvement |
-| ADX | 4096 | issue-56 pre-target | issue-57 retained raw rows | 1.487x | 1.068x | -28.2% | practical improvement |
-| ADX | 65536 | issue-56 pre-target | issue-57 retained raw rows | 1.476x | 1.026x | -30.5% | practical improvement |
-| ATR | 256 | issue-56 pre-target | issue-60 retained raw rows | 1.155x | 0.990x | -14.3% | practical improvement |
-| ATR | 4096 | issue-56 pre-target | issue-60 retained raw rows | 1.109x | 1.018x | -8.2% | practical improvement |
-| ATR | 65536 | issue-56 pre-target | issue-60 retained raw rows | 1.169x | 1.018x | -12.9% | practical improvement |
-| CDL3BLACKCROWS | 256 | issue-56 pre-target | issue-59 retained raw rows | 8.315x | 3.181x | -61.7% | practical improvement |
-| CDL3BLACKCROWS | 4096 | issue-56 pre-target | issue-59 retained raw rows | 9.443x | 3.644x | -61.4% | practical improvement |
-| CDL3BLACKCROWS | 65536 | issue-56 pre-target | issue-59 retained raw rows | 9.212x | 3.564x | -61.3% | practical improvement |
-| CDLDOJI | 256 | issue-56 pre-target | issue-59 retained raw rows | 2.033x | 1.495x | -26.5% | practical improvement |
-| CDLDOJI | 4096 | issue-56 pre-target | issue-59 retained raw rows | 2.155x | 2.565x | +19.0% | documented cross-run worsening above 5% |
-| CDLDOJI | 65536 | issue-56 pre-target | issue-59 retained raw rows | 2.233x | 2.634x | +18.0% | documented cross-run worsening above 5% |
-| CDLENGULFING | 256 | issue-56 pre-target | issue-59 retained raw rows | 10.053x | 1.770x | -82.4% | practical improvement |
-| CDLENGULFING | 4096 | issue-56 pre-target | issue-59 retained raw rows | 11.548x | 2.130x | -81.6% | practical improvement |
-| CDLENGULFING | 65536 | issue-56 pre-target | issue-59 retained raw rows | 11.880x | 2.146x | -81.9% | practical improvement |
-| HT_DCPHASE | 256 | issue-56 pre-target | issue-61 retained raw rows | 1.231x | 1.240x | +0.7% | within the 5% cross-run band |
-| HT_DCPHASE | 4096 | issue-56 pre-target | issue-61 retained raw rows | 1.192x | 1.221x | +2.4% | within the 5% cross-run band |
-| HT_DCPHASE | 65536 | issue-56 pre-target | issue-61 retained raw rows | 1.248x | 1.244x | -0.3% | within the 5% cross-run band |
-| MACD | 256 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.540x | 0.494x | -8.6% | post-fusion stability only; no retained pre-fusion measurement |
-| MACD | 4096 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.510x | 0.463x | -9.3% | post-fusion stability only; no retained pre-fusion measurement |
-| MACD | 65536 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.514x | 0.455x | -11.4% | post-fusion stability only; no retained pre-fusion measurement |
-| TYPPRICE | 256 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 3.961x | 1.877x | -52.6% | practical improvement |
-| TYPPRICE | 4096 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 7.193x | 2.973x | -58.7% | practical improvement |
-| TYPPRICE | 65536 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 5.128x | 2.299x | -55.2% | practical improvement |
+| ADX | 256 | issue-56 pre-target | issue-57 retained raw rows | 1.504x | 1.088x | -27.6% | practical improvement |
+| ADX | 4096 | issue-56 pre-target | issue-57 retained raw rows | 1.487x | 1.067x | -28.3% | practical improvement |
+| ADX | 65536 | issue-56 pre-target | issue-57 retained raw rows | 1.476x | 1.058x | -28.3% | practical improvement |
+| ATR | 256 | issue-56 pre-target | issue-60 retained raw rows | 1.155x | 0.986x | -14.7% | practical improvement |
+| ATR | 4096 | issue-56 pre-target | issue-60 retained raw rows | 1.109x | 0.944x | -14.9% | practical improvement |
+| ATR | 65536 | issue-56 pre-target | issue-60 retained raw rows | 1.169x | 1.015x | -13.2% | practical improvement |
+| CDL3BLACKCROWS | 256 | issue-56 pre-target | issue-59 retained raw rows | 8.315x | unavailable | unavailable | final comparable row absent |
+| CDL3BLACKCROWS | 4096 | issue-56 pre-target | issue-59 retained raw rows | 9.443x | unavailable | unavailable | final comparable row absent |
+| CDL3BLACKCROWS | 65536 | issue-56 pre-target | issue-59 retained raw rows | 9.212x | unavailable | unavailable | final comparable row absent |
+| CDLDOJI | 256 | issue-56 pre-target | issue-59 retained raw rows | 2.033x | 2.248x | +10.6% | documented cross-run worsening above 5% |
+| CDLDOJI | 4096 | issue-56 pre-target | issue-59 retained raw rows | 2.155x | 2.553x | +18.4% | documented cross-run worsening above 5% |
+| CDLDOJI | 65536 | issue-56 pre-target | issue-59 retained raw rows | 2.233x | 2.432x | +8.9% | documented cross-run worsening above 5% |
+| CDLENGULFING | 256 | issue-56 pre-target | issue-59 retained raw rows | 10.053x | 1.823x | -81.9% | practical improvement |
+| CDLENGULFING | 4096 | issue-56 pre-target | issue-59 retained raw rows | 11.548x | 2.112x | -81.7% | practical improvement |
+| CDLENGULFING | 65536 | issue-56 pre-target | issue-59 retained raw rows | 11.880x | 2.310x | -80.6% | practical improvement |
+| HT_DCPHASE | 256 | issue-56 pre-target | issue-61 retained raw rows | 1.231x | 1.162x | -5.6% | practical improvement |
+| HT_DCPHASE | 4096 | issue-56 pre-target | issue-61 retained raw rows | 1.192x | 1.229x | +3.1% | within the 5% cross-run band |
+| HT_DCPHASE | 65536 | issue-56 pre-target | issue-61 retained raw rows | 1.248x | 1.324x | +6.1% | documented cross-run worsening above 5% |
+| MACD | 256 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.540x | 0.495x | -8.4% | post-fusion stability only; no retained pre-fusion measurement |
+| MACD | 4096 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.510x | 0.461x | -9.6% | post-fusion stability only; no retained pre-fusion measurement |
+| MACD | 65536 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.514x | 0.461x | -10.4% | post-fusion stability only; no retained pre-fusion measurement |
+| TYPPRICE | 256 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 3.961x | 1.764x | -55.5% | practical improvement |
+| TYPPRICE | 4096 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 7.193x | 2.965x | -58.8% | practical improvement |
+| TYPPRICE | 65536 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 5.128x | 2.117x | -58.7% | practical improvement |
 
 Preserved diagnostic baseline comparison and regression dispositions
 
@@ -138,51 +146,51 @@ Comparison source: commit b156ac1ec5c781af0a386c4deab4769a4c5479c1 (dirty: true)
 
 | Definition | Input | Diagnostic Rust/C | Final Rust/C | Change | Explicit disposition |
 |---|---:|---:|---:|---:|---|
-| ADD | 256 | 4.063x | 1.732x | -57.4% | directional improvement; dirty cross-run predecessor |
-| ADD | 4096 | 7.703x | 2.290x | -70.3% | directional improvement; dirty cross-run predecessor |
-| ADD | 65536 | 4.442x | 2.191x | -50.7% | directional improvement; dirty cross-run predecessor |
-| ADX | 256 | 1.208x | 1.026x | -15.1% | directional improvement; dirty cross-run predecessor |
-| ADX | 4096 | 1.188x | 1.068x | -10.1% | directional improvement; dirty cross-run predecessor |
-| ADX | 65536 | 1.179x | 1.026x | -13.0% | directional improvement; dirty cross-run predecessor |
-| ATR | 256 | 1.153x | 0.990x | -14.1% | directional improvement; dirty cross-run predecessor |
-| ATR | 4096 | 1.199x | 1.018x | -15.1% | directional improvement; dirty cross-run predecessor |
-| ATR | 65536 | 1.142x | 1.018x | -10.9% | directional improvement; dirty cross-run predecessor |
+| ADD | 256 | 4.063x | 1.721x | -57.6% | directional improvement; dirty cross-run predecessor |
+| ADD | 4096 | 7.703x | 2.396x | -68.9% | directional improvement; dirty cross-run predecessor |
+| ADD | 65536 | 4.442x | 1.878x | -57.7% | directional improvement; dirty cross-run predecessor |
+| ADX | 256 | 1.208x | 1.088x | -9.9% | directional improvement; dirty cross-run predecessor |
+| ADX | 4096 | 1.188x | 1.067x | -10.2% | directional improvement; dirty cross-run predecessor |
+| ADX | 65536 | 1.179x | 1.058x | -10.2% | directional improvement; dirty cross-run predecessor |
+| ATR | 256 | 1.153x | 0.986x | -14.5% | directional improvement; dirty cross-run predecessor |
+| ATR | 4096 | 1.199x | 0.944x | -21.3% | directional improvement; dirty cross-run predecessor |
+| ATR | 65536 | 1.142x | 1.015x | -11.1% | directional improvement; dirty cross-run predecessor |
 | BBANDS | 256 | 0.976x | 0.834x | -14.5% | directional improvement; dirty cross-run predecessor |
-| BBANDS | 4096 | 0.975x | 0.852x | -12.6% | directional improvement; dirty cross-run predecessor |
-| BBANDS | 65536 | 0.735x | 0.639x | -13.1% | directional improvement; dirty cross-run predecessor |
-| CDL3BLACKCROWS | 256 | 3.755x | 3.181x | -15.3% | directional improvement; dirty cross-run predecessor |
-| CDL3BLACKCROWS | 4096 | 4.271x | 3.644x | -14.7% | directional improvement; dirty cross-run predecessor |
-| CDL3BLACKCROWS | 65536 | 4.246x | 3.564x | -16.1% | directional improvement; dirty cross-run predecessor |
-| CDLDOJI | 256 | 3.031x | 1.495x | -50.7% | directional improvement; dirty cross-run predecessor |
-| CDLDOJI | 4096 | 3.383x | 2.565x | -24.2% | directional improvement; dirty cross-run predecessor |
-| CDLDOJI | 65536 | 3.193x | 2.634x | -17.5% | directional improvement; dirty cross-run predecessor |
-| CDLENGULFING | 256 | 2.912x | 1.770x | -39.2% | directional improvement; dirty cross-run predecessor |
-| CDLENGULFING | 4096 | 3.433x | 2.130x | -38.0% | directional improvement; dirty cross-run predecessor |
-| CDLENGULFING | 65536 | 3.361x | 2.146x | -36.1% | directional improvement; dirty cross-run predecessor |
-| HT_DCPHASE | 256 | 1.215x | 1.240x | +2.0% | within 5% normalized cross-run band |
-| HT_DCPHASE | 4096 | 1.220x | 1.221x | +0.1% | within 5% normalized cross-run band |
-| HT_DCPHASE | 65536 | 1.251x | 1.244x | -0.6% | within 5% normalized cross-run band |
-| LINEARREG | 256 | 1.015x | 0.818x | -19.4% | directional improvement; dirty cross-run predecessor |
-| LINEARREG | 4096 | 0.958x | 0.951x | -0.7% | within 5% normalized cross-run band |
-| LINEARREG | 65536 | 1.014x | 0.930x | -8.3% | directional improvement; dirty cross-run predecessor |
-| MACD | 256 | 0.540x | 0.494x | -8.6% | directional improvement; dirty cross-run predecessor |
-| MACD | 4096 | 0.510x | 0.463x | -9.3% | directional improvement; dirty cross-run predecessor |
-| MACD | 65536 | 0.514x | 0.455x | -11.4% | directional improvement; dirty cross-run predecessor |
-| OBV | 256 | 1.757x | 1.166x | -33.6% | directional improvement; dirty cross-run predecessor |
-| OBV | 4096 | 1.842x | 1.285x | -30.2% | directional improvement; dirty cross-run predecessor |
-| OBV | 65536 | 1.893x | 1.291x | -31.8% | directional improvement; dirty cross-run predecessor |
-| RSI | 256 | 0.943x | 0.909x | -3.6% | within 5% normalized cross-run band |
-| RSI | 4096 | 0.976x | 0.931x | -4.6% | within 5% normalized cross-run band |
-| RSI | 65536 | 0.987x | 0.928x | -5.9% | directional improvement; dirty cross-run predecessor |
-| SIN | 256 | 1.090x | 1.005x | -7.9% | directional improvement; dirty cross-run predecessor |
-| SIN | 4096 | 1.003x | 1.049x | +4.6% | within 5% normalized cross-run band |
-| SIN | 65536 | 1.139x | 1.038x | -8.9% | directional improvement; dirty cross-run predecessor |
-| SMA | 256 | 0.699x | 0.532x | -23.8% | directional improvement; dirty cross-run predecessor |
-| SMA | 4096 | 5.348x | 0.595x | -88.9% | directional improvement; dirty cross-run predecessor |
-| SMA | 65536 | 0.726x | 0.591x | -18.6% | directional improvement; dirty cross-run predecessor |
-| TYPPRICE | 256 | 3.961x | 1.877x | -52.6% | directional improvement; dirty cross-run predecessor |
-| TYPPRICE | 4096 | 7.193x | 2.973x | -58.7% | directional improvement; dirty cross-run predecessor |
-| TYPPRICE | 65536 | 5.128x | 2.299x | -55.2% | directional improvement; dirty cross-run predecessor |
+| BBANDS | 4096 | 0.975x | 0.842x | -13.7% | directional improvement; dirty cross-run predecessor |
+| BBANDS | 65536 | 0.735x | 0.682x | -7.2% | directional improvement; dirty cross-run predecessor |
+| CDL3WHITESOLDIERS | 256 | unavailable | 4.255x | unavailable | no matching diagnostic row |
+| CDL3WHITESOLDIERS | 4096 | unavailable | 4.029x | unavailable | no matching diagnostic row |
+| CDL3WHITESOLDIERS | 65536 | unavailable | 4.642x | unavailable | no matching diagnostic row |
+| CDLDOJI | 256 | 3.031x | 2.248x | -25.8% | directional improvement; dirty cross-run predecessor |
+| CDLDOJI | 4096 | 3.383x | 2.553x | -24.6% | directional improvement; dirty cross-run predecessor |
+| CDLDOJI | 65536 | 3.193x | 2.432x | -23.8% | directional improvement; dirty cross-run predecessor |
+| CDLENGULFING | 256 | 2.912x | 1.823x | -37.4% | directional improvement; dirty cross-run predecessor |
+| CDLENGULFING | 4096 | 3.433x | 2.112x | -38.5% | directional improvement; dirty cross-run predecessor |
+| CDLENGULFING | 65536 | 3.361x | 2.310x | -31.2% | directional improvement; dirty cross-run predecessor |
+| HT_DCPHASE | 256 | 1.215x | 1.162x | -4.4% | within 5% normalized cross-run band |
+| HT_DCPHASE | 4096 | 1.220x | 1.229x | +0.7% | within 5% normalized cross-run band |
+| HT_DCPHASE | 65536 | 1.251x | 1.324x | +5.8% | documented >5% worsening; dirty cross-run predecessor cannot establish a source regression |
+| LINEARREG | 256 | 1.015x | 0.969x | -4.5% | within 5% normalized cross-run band |
+| LINEARREG | 4096 | 0.958x | 0.942x | -1.7% | within 5% normalized cross-run band |
+| LINEARREG | 65536 | 1.014x | 0.986x | -2.8% | within 5% normalized cross-run band |
+| MACD | 256 | 0.540x | 0.495x | -8.4% | directional improvement; dirty cross-run predecessor |
+| MACD | 4096 | 0.510x | 0.461x | -9.6% | directional improvement; dirty cross-run predecessor |
+| MACD | 65536 | 0.514x | 0.461x | -10.4% | directional improvement; dirty cross-run predecessor |
+| OBV | 256 | 1.757x | 1.158x | -34.1% | directional improvement; dirty cross-run predecessor |
+| OBV | 4096 | 1.842x | 1.197x | -35.0% | directional improvement; dirty cross-run predecessor |
+| OBV | 65536 | 1.893x | 1.189x | -37.2% | directional improvement; dirty cross-run predecessor |
+| RSI | 256 | 0.943x | 0.912x | -3.3% | within 5% normalized cross-run band |
+| RSI | 4096 | 0.976x | 0.927x | -5.1% | directional improvement; dirty cross-run predecessor |
+| RSI | 65536 | 0.987x | 0.930x | -5.7% | directional improvement; dirty cross-run predecessor |
+| SIN | 256 | 1.090x | 1.004x | -7.9% | directional improvement; dirty cross-run predecessor |
+| SIN | 4096 | 1.003x | 1.035x | +3.3% | within 5% normalized cross-run band |
+| SIN | 65536 | 1.139x | 1.031x | -9.4% | directional improvement; dirty cross-run predecessor |
+| SMA | 256 | 0.699x | 0.562x | -19.6% | directional improvement; dirty cross-run predecessor |
+| SMA | 4096 | 5.348x | 0.592x | -88.9% | directional improvement; dirty cross-run predecessor |
+| SMA | 65536 | 0.726x | 0.639x | -12.0% | directional improvement; dirty cross-run predecessor |
+| TYPPRICE | 256 | 3.961x | 1.764x | -55.5% | directional improvement; dirty cross-run predecessor |
+| TYPPRICE | 4096 | 7.193x | 2.965x | -58.8% | directional improvement; dirty cross-run predecessor |
+| TYPPRICE | 65536 | 5.128x | 2.117x | -58.7% | directional improvement; dirty cross-run predecessor |
 
 Validation and allocation boundaries
 
@@ -194,7 +202,7 @@ The Rust timings retain the public finite-input validation, capacity, Output Ran
 | TA-Lib C | direct C caller-owned | direct TA_ADX call; caller output allocation excluded |
 | TA-Lib C | direct C caller-owned | direct TA_ATR call; caller output allocation excluded |
 | TA-Lib C | direct C caller-owned | direct TA_BBANDS call; caller output allocation excluded |
-| TA-Lib C | direct C caller-owned | direct TA_CDL3BLACKCROWS call; caller output allocation excluded |
+| TA-Lib C | direct C caller-owned | direct TA_CDL3WHITESOLDIERS call; caller output allocation excluded |
 | TA-Lib C | direct C caller-owned | direct TA_CDLDOJI call; caller output allocation excluded |
 | TA-Lib C | direct C caller-owned | direct TA_CDLENGULFING call; caller output allocation excluded |
 | TA-Lib C | direct C caller-owned | direct TA_HT_DCPHASE call; caller output allocation excluded |
@@ -209,7 +217,7 @@ The Rust timings retain the public finite-input validation, capacity, Output Ran
 | TA-Lib Python | official Python NumPy API | direct talib.ADX NumPy API expression including API-owned output; fixture loading excluded |
 | TA-Lib Python | official Python NumPy API | direct talib.ATR NumPy API expression including API-owned output; fixture loading excluded |
 | TA-Lib Python | official Python NumPy API | direct talib.BBANDS NumPy API expression including API-owned output; fixture loading excluded |
-| TA-Lib Python | official Python NumPy API | direct talib.CDL3BLACKCROWS NumPy API expression including API-owned output; fixture loading excluded |
+| TA-Lib Python | official Python NumPy API | direct talib.CDL3WHITESOLDIERS NumPy API expression including API-owned output; fixture loading excluded |
 | TA-Lib Python | official Python NumPy API | direct talib.CDLDOJI NumPy API expression including API-owned output; fixture loading excluded |
 | TA-Lib Python | official Python NumPy API | direct talib.CDLENGULFING NumPy API expression including API-owned output; fixture loading excluded |
 | TA-Lib Python | official Python NumPy API | direct talib.HT_DCPHASE NumPy API expression including API-owned output; fixture loading excluded |
@@ -237,276 +245,276 @@ Detailed raw-row projection
 
 | Definition | Input | Implementation | Mode | Semantic | Comparison | Median | 95% CI | Throughput | Output Range |
 |---|---:|---|---|---|---|---:|---:|---:|---:|
-| ADD | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.066 us | [0.065, 0.066] us | 3901.121 Mobs/s | 0..256 |
-| ADD | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.175 us | [0.175, 0.176] us | 1460.193 Mobs/s | 0..256 |
-| ADD | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.149 us | [0.149, 0.150] us | 1713.316 Mobs/s | 0..256 |
-| ADD | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.111 us | [0.111, 0.112] us | 2303.464 Mobs/s | 0..256 |
-| ADD | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.312 us | [0.312, 0.313] us | 820.325 Mobs/s | 0..256 |
-| ADD | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.114 us | [0.113, 0.114] us | 2252.422 Mobs/s | 0..256 |
-| ADD | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.714 us | [0.688, 0.724] us | 5737.117 Mobs/s | 0..4096 |
-| ADD | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.779 us | [0.746, 0.819] us | 5256.239 Mobs/s | 0..4096 |
-| ADD | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.503 us | [2.424, 2.521] us | 1636.639 Mobs/s | 0..4096 |
-| ADD | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.641 us | [1.619, 1.716] us | 2496.411 Mobs/s | 0..4096 |
-| ADD | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 4.616 us | [4.600, 4.627] us | 887.316 Mobs/s | 0..4096 |
-| ADD | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.635 us | [1.615, 1.723] us | 2505.692 Mobs/s | 0..4096 |
-| ADD | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 13.904 us | [12.858, 14.046] us | 4713.419 Mobs/s | 0..65536 |
-| ADD | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 16.772 us | [16.702, 16.834] us | 3907.358 Mobs/s | 0..65536 |
-| ADD | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 38.639 us | [38.569, 38.715] us | 1696.121 Mobs/s | 0..65536 |
-| ADD | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 30.530 us | [30.477, 30.667] us | 2146.626 Mobs/s | 0..65536 |
-| ADD | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 100.511 us | [100.337, 100.784] us | 652.031 Mobs/s | 0..65536 |
-| ADD | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 30.458 us | [30.377, 30.565] us | 2151.696 Mobs/s | 0..65536 |
-| ADX | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.606 us | [1.605, 1.618] us | 159.407 Mobs/s | 27..256 |
-| ADX | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.674 us | [1.656, 1.679] us | 152.929 Mobs/s | 27..256 |
-| ADX | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.676 us | [1.675, 1.678] us | 152.723 Mobs/s | 27..256 |
-| ADX | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.646 us | [1.643, 1.649] us | 155.547 Mobs/s | 27..256 |
-| ADX | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 3.621 us | [3.618, 3.623] us | 70.704 Mobs/s | 27..256 |
-| ADX | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.648 us | [1.644, 1.655] us | 155.348 Mobs/s | 27..256 |
-| ADX | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 25.883 us | [25.833, 26.001] us | 158.248 Mobs/s | 27..4096 |
-| ADX | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 26.237 us | [26.206, 26.284] us | 156.116 Mobs/s | 27..4096 |
-| ADX | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 28.127 us | [28.107, 28.191] us | 145.627 Mobs/s | 27..4096 |
-| ADX | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 27.750 us | [27.561, 27.944] us | 147.604 Mobs/s | 27..4096 |
-| ADX | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 58.769 us | [58.639, 59.165] us | 69.697 Mobs/s | 27..4096 |
-| ADX | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 27.649 us | [27.555, 28.059] us | 148.142 Mobs/s | 27..4096 |
-| ADX | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 428.206 us | [427.028, 432.606] us | 153.048 Mobs/s | 27..65536 |
-| ADX | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 431.730 us | [428.414, 433.738] us | 151.798 Mobs/s | 27..65536 |
-| ADX | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 450.602 us | [446.685, 461.865] us | 145.441 Mobs/s | 27..65536 |
-| ADX | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 459.400 us | [453.707, 466.648] us | 142.656 Mobs/s | 27..65536 |
-| ADX | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 970.894 us | [961.905, 980.170] us | 67.501 Mobs/s | 27..65536 |
-| ADX | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 439.217 us | [433.937, 440.181] us | 149.211 Mobs/s | 27..65536 |
-| ATR | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.415 us | [1.414, 1.425] us | 180.954 Mobs/s | 14..256 |
-| ATR | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.546 us | [1.543, 1.548] us | 165.599 Mobs/s | 14..256 |
-| ATR | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.435 us | [1.433, 1.438] us | 178.448 Mobs/s | 14..256 |
-| ATR | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.401 us | [1.399, 1.413] us | 182.750 Mobs/s | 14..256 |
-| ATR | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.349 us | [2.336, 2.374] us | 108.983 Mobs/s | 14..256 |
-| ATR | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.401 us | [1.397, 1.404] us | 182.714 Mobs/s | 14..256 |
-| ATR | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 23.103 us | [23.089, 23.127] us | 177.290 Mobs/s | 14..4096 |
-| ATR | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 23.665 us | [23.425, 24.055] us | 173.081 Mobs/s | 14..4096 |
-| ATR | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 23.987 us | [23.955, 24.057] us | 170.757 Mobs/s | 14..4096 |
-| ATR | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 23.503 us | [23.467, 23.629] us | 174.272 Mobs/s | 14..4096 |
-| ATR | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 37.407 us | [37.339, 37.957] us | 109.498 Mobs/s | 14..4096 |
-| ATR | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 23.517 us | [23.494, 23.611] us | 174.173 Mobs/s | 14..4096 |
-| ATR | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 370.752 us | [369.740, 372.265] us | 176.765 Mobs/s | 14..65536 |
-| ATR | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 371.699 us | [365.923, 486.881] us | 176.315 Mobs/s | 14..65536 |
-| ATR | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 381.329 us | [380.511, 382.432] us | 171.862 Mobs/s | 14..65536 |
-| ATR | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 376.863 us | [376.651, 378.237] us | 173.899 Mobs/s | 14..65536 |
-| ATR | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 597.784 us | [596.525, 606.949] us | 109.632 Mobs/s | 14..65536 |
-| ATR | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 377.291 us | [376.702, 378.463] us | 173.702 Mobs/s | 14..65536 |
-| BBANDS | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.043 us | [1.042, 1.046] us | 245.449 Mobs/s | 19..256 |
-| BBANDS | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.446 us | [1.444, 1.448] us | 177.039 Mobs/s | 19..256 |
-| BBANDS | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.993 us | [0.991, 1.001] us | 257.920 Mobs/s | 19..256 |
-| BBANDS | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.869 us | [0.868, 0.872] us | 294.578 Mobs/s | 19..256 |
-| BBANDS | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.218 us | [2.215, 2.223] us | 115.402 Mobs/s | 19..256 |
-| BBANDS | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.870 us | [0.869, 0.876] us | 294.275 Mobs/s | 19..256 |
-| BBANDS | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 17.295 us | [17.239, 17.684] us | 236.829 Mobs/s | 19..4096 |
-| BBANDS | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 19.790 us | [19.726, 19.895] us | 206.977 Mobs/s | 19..4096 |
-| BBANDS | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.441 us | [15.349, 15.748] us | 265.273 Mobs/s | 19..4096 |
-| BBANDS | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 14.616 us | [14.575, 14.670] us | 280.246 Mobs/s | 19..4096 |
-| BBANDS | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 35.703 us | [35.619, 35.893] us | 114.723 Mobs/s | 19..4096 |
-| BBANDS | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 14.731 us | [14.662, 14.856] us | 278.045 Mobs/s | 19..4096 |
-| BBANDS | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 365.164 us | [362.921, 367.261] us | 179.470 Mobs/s | 19..65536 |
-| BBANDS | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 368.410 us | [365.545, 369.259] us | 177.889 Mobs/s | 19..65536 |
-| BBANDS | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 234.259 us | [233.612, 234.772] us | 279.759 Mobs/s | 19..65536 |
-| BBANDS | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 234.040 us | [233.519, 235.131] us | 280.021 Mobs/s | 19..65536 |
-| BBANDS | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 575.075 us | [574.530, 576.627] us | 113.961 Mobs/s | 19..65536 |
-| BBANDS | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 233.418 us | [233.294, 233.855] us | 280.767 Mobs/s | 19..65536 |
-| CDL3BLACKCROWS | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.500 us | [0.495, 0.504] us | 512.386 Mobs/s | 13..256 |
-| CDL3BLACKCROWS | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.628 us | [0.620, 0.646] us | 407.864 Mobs/s | 13..256 |
-| CDL3BLACKCROWS | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.675 us | [1.666, 1.693] us | 152.841 Mobs/s | 13..256 |
-| CDL3BLACKCROWS | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.599 us | [1.590, 1.610] us | 160.054 Mobs/s | 13..256 |
-| CDL3BLACKCROWS | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 4.950 us | [4.926, 4.977] us | 51.716 Mobs/s | 13..256 |
-| CDL3BLACKCROWS | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.589 us | [1.580, 1.601] us | 161.081 Mobs/s | 13..256 |
-| CDL3BLACKCROWS | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 6.987 us | [6.971, 7.016] us | 586.207 Mobs/s | 13..4096 |
-| CDL3BLACKCROWS | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 7.658 us | [7.647, 7.673] us | 534.851 Mobs/s | 13..4096 |
-| CDL3BLACKCROWS | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 26.299 us | [26.257, 26.349] us | 155.748 Mobs/s | 13..4096 |
-| CDL3BLACKCROWS | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 25.473 us | [25.447, 25.500] us | 160.799 Mobs/s | 13..4096 |
-| CDL3BLACKCROWS | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 80.231 us | [80.078, 80.466] us | 51.053 Mobs/s | 13..4096 |
-| CDL3BLACKCROWS | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 25.460 us | [25.442, 25.495] us | 160.879 Mobs/s | 13..4096 |
-| CDL3BLACKCROWS | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 116.156 us | [115.838, 116.464] us | 564.206 Mobs/s | 13..65536 |
-| CDL3BLACKCROWS | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 117.256 us | [116.934, 118.237] us | 558.912 Mobs/s | 13..65536 |
-| CDL3BLACKCROWS | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 423.239 us | [421.773, 425.181] us | 154.844 Mobs/s | 13..65536 |
-| CDL3BLACKCROWS | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 414.503 us | [413.708, 415.285] us | 158.108 Mobs/s | 13..65536 |
-| CDL3BLACKCROWS | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1307.836 us | [1303.255, 1312.307] us | 50.110 Mobs/s | 13..65536 |
-| CDL3BLACKCROWS | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 414.015 us | [413.255, 415.150] us | 158.294 Mobs/s | 13..65536 |
-| CDLDOJI | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.632 us | [0.598, 0.682] us | 404.783 Mobs/s | 10..256 |
-| CDLDOJI | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.529 us | [0.529, 0.531] us | 483.497 Mobs/s | 10..256 |
-| CDLDOJI | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.006 us | [1.004, 1.013] us | 254.468 Mobs/s | 10..256 |
-| CDLDOJI | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.939 us | [0.938, 0.941] us | 272.531 Mobs/s | 10..256 |
-| CDLDOJI | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.714 us | [2.697, 2.722] us | 94.317 Mobs/s | 10..256 |
-| CDLDOJI | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.945 us | [0.941, 0.956] us | 270.828 Mobs/s | 10..256 |
-| CDLDOJI | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 5.874 us | [5.869, 5.888] us | 697.322 Mobs/s | 10..4096 |
-| CDLDOJI | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 6.027 us | [6.015, 6.040] us | 679.648 Mobs/s | 10..4096 |
-| CDLDOJI | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.898 us | [15.884, 15.904] us | 257.649 Mobs/s | 10..4096 |
-| CDLDOJI | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.043 us | [15.034, 15.065] us | 272.288 Mobs/s | 10..4096 |
-| CDLDOJI | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 43.506 us | [43.406, 43.563] us | 94.147 Mobs/s | 10..4096 |
-| CDLDOJI | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 15.065 us | [15.046, 15.083] us | 271.892 Mobs/s | 10..4096 |
-| CDLDOJI | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 92.955 us | [92.804, 93.491] us | 705.029 Mobs/s | 10..65536 |
-| CDLDOJI | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 93.368 us | [93.296, 93.620] us | 701.908 Mobs/s | 10..65536 |
-| CDLDOJI | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 254.153 us | [252.071, 255.262] us | 257.860 Mobs/s | 10..65536 |
-| CDLDOJI | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 304.095 us | [253.301, 367.439] us | 215.511 Mobs/s | 10..65536 |
-| CDLDOJI | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 725.237 us | [714.845, 731.330] us | 90.365 Mobs/s | 10..65536 |
-| CDLDOJI | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 244.815 us | [243.032, 246.303] us | 267.696 Mobs/s | 10..65536 |
-| CDLENGULFING | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.325 us | [0.324, 0.329] us | 787.090 Mobs/s | 2..256 |
-| CDLENGULFING | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.441 us | [0.438, 0.446] us | 580.190 Mobs/s | 2..256 |
-| CDLENGULFING | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.663 us | [0.638, 0.754] us | 385.984 Mobs/s | 2..256 |
-| CDLENGULFING | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.594 us | [0.589, 0.601] us | 431.217 Mobs/s | 2..256 |
-| CDLENGULFING | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.966 us | [2.940, 2.985] us | 86.309 Mobs/s | 2..256 |
-| CDLENGULFING | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.576 us | [0.573, 0.583] us | 444.567 Mobs/s | 2..256 |
-| CDLENGULFING | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 4.196 us | [4.191, 4.199] us | 976.212 Mobs/s | 2..4096 |
-| CDLENGULFING | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 4.312 us | [4.305, 4.317] us | 949.934 Mobs/s | 2..4096 |
-| CDLENGULFING | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 9.657 us | [9.648, 9.663] us | 424.142 Mobs/s | 2..4096 |
-| CDLENGULFING | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 8.937 us | [8.929, 8.953] us | 458.307 Mobs/s | 2..4096 |
-| CDLENGULFING | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 46.843 us | [46.723, 47.017] us | 87.440 Mobs/s | 2..4096 |
-| CDLENGULFING | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 8.936 us | [8.924, 8.946] us | 458.394 Mobs/s | 2..4096 |
-| CDLENGULFING | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 66.252 us | [66.017, 66.405] us | 989.186 Mobs/s | 2..65536 |
-| CDLENGULFING | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 67.075 us | [66.223, 73.531] us | 977.049 Mobs/s | 2..65536 |
-| CDLENGULFING | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 152.925 us | [152.777, 153.096] us | 428.549 Mobs/s | 2..65536 |
-| CDLENGULFING | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 142.350 us | [142.206, 143.118] us | 460.386 Mobs/s | 2..65536 |
-| CDLENGULFING | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 752.731 us | [751.612, 753.920] us | 87.064 Mobs/s | 2..65536 |
-| CDLENGULFING | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 142.183 us | [141.980, 142.584] us | 460.926 Mobs/s | 2..65536 |
-| HT_DCPHASE | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 20.742 us | [20.706, 20.852] us | 12.342 Mobs/s | 63..256 |
-| HT_DCPHASE | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 21.111 us | [21.032, 21.184] us | 12.127 Mobs/s | 63..256 |
-| HT_DCPHASE | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 25.253 us | [25.129, 25.346] us | 10.137 Mobs/s | 63..256 |
-| HT_DCPHASE | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 25.849 us | [25.739, 25.939] us | 9.904 Mobs/s | 63..256 |
-| HT_DCPHASE | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 24.897 us | [24.824, 24.947] us | 10.282 Mobs/s | 63..256 |
-| HT_DCPHASE | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 25.720 us | [25.644, 25.854] us | 9.953 Mobs/s | 63..256 |
-| HT_DCPHASE | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 387.429 us | [384.014, 389.079] us | 10.572 Mobs/s | 63..4096 |
-| HT_DCPHASE | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 378.864 us | [376.233, 381.184] us | 10.811 Mobs/s | 63..4096 |
-| HT_DCPHASE | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 479.517 us | [474.542, 487.641] us | 8.542 Mobs/s | 63..4096 |
-| HT_DCPHASE | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 473.712 us | [472.086, 475.413] us | 8.647 Mobs/s | 63..4096 |
-| HT_DCPHASE | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 459.117 us | [458.083, 461.898] us | 8.921 Mobs/s | 63..4096 |
-| HT_DCPHASE | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 473.130 us | [472.326, 473.970] us | 8.657 Mobs/s | 63..4096 |
-| HT_DCPHASE | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 6323.667 us | [6291.896, 6377.292] us | 10.364 Mobs/s | 63..65536 |
-| HT_DCPHASE | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 6494.906 us | [6404.156, 6748.125] us | 10.090 Mobs/s | 63..65536 |
-| HT_DCPHASE | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 7909.979 us | [7883.354, 7950.333] us | 8.285 Mobs/s | 63..65536 |
-| HT_DCPHASE | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 7834.490 us | [7789.719, 7881.010] us | 8.365 Mobs/s | 63..65536 |
-| HT_DCPHASE | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 7552.521 us | [7509.739, 7625.979] us | 8.677 Mobs/s | 63..65536 |
-| HT_DCPHASE | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 7867.969 us | [7831.895, 7883.146] us | 8.329 Mobs/s | 63..65536 |
-| LINEARREG | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.933 us | [1.819, 2.136] us | 132.406 Mobs/s | 13..256 |
-| LINEARREG | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.779 us | [1.737, 1.834] us | 143.913 Mobs/s | 13..256 |
-| LINEARREG | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.628 us | [1.606, 1.641] us | 157.273 Mobs/s | 13..256 |
-| LINEARREG | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.521 us | [1.519, 1.527] us | 168.352 Mobs/s | 13..256 |
-| LINEARREG | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.562 us | [1.539, 4.192] us | 163.945 Mobs/s | 13..256 |
-| LINEARREG | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.581 us | [1.539, 1.970] us | 161.957 Mobs/s | 13..256 |
-| LINEARREG | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 25.193 us | [25.124, 25.249] us | 162.587 Mobs/s | 13..4096 |
-| LINEARREG | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 25.375 us | [25.309, 25.413] us | 161.421 Mobs/s | 13..4096 |
-| LINEARREG | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 24.542 us | [24.516, 24.594] us | 166.895 Mobs/s | 13..4096 |
-| LINEARREG | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 24.166 us | [24.135, 24.195] us | 169.497 Mobs/s | 13..4096 |
-| LINEARREG | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 24.028 us | [23.949, 24.108] us | 170.468 Mobs/s | 13..4096 |
-| LINEARREG | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 23.955 us | [23.907, 23.984] us | 170.990 Mobs/s | 13..4096 |
-| LINEARREG | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 417.973 us | [416.925, 420.648] us | 156.795 Mobs/s | 13..65536 |
-| LINEARREG | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 416.954 us | [416.607, 418.615] us | 157.178 Mobs/s | 13..65536 |
-| LINEARREG | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 396.658 us | [395.825, 397.724] us | 165.220 Mobs/s | 13..65536 |
-| LINEARREG | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 393.738 us | [392.687, 395.029] us | 166.446 Mobs/s | 13..65536 |
-| LINEARREG | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 388.925 us | [387.944, 390.688] us | 168.505 Mobs/s | 13..65536 |
-| LINEARREG | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 388.782 us | [387.796, 389.345] us | 168.567 Mobs/s | 13..65536 |
-| MACD | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.617 us | [1.616, 1.621] us | 158.285 Mobs/s | 33..256 |
-| MACD | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.991 us | [1.968, 2.015] us | 128.602 Mobs/s | 33..256 |
-| MACD | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.917 us | [0.915, 0.919] us | 279.030 Mobs/s | 33..256 |
-| MACD | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.799 us | [0.796, 0.804] us | 320.572 Mobs/s | 33..256 |
-| MACD | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 3.940 us | [3.922, 3.972] us | 64.977 Mobs/s | 33..256 |
-| MACD | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.798 us | [0.797, 0.802] us | 320.617 Mobs/s | 33..256 |
-| MACD | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 29.371 us | [29.354, 29.388] us | 139.457 Mobs/s | 33..4096 |
-| MACD | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 29.742 us | [29.695, 29.793] us | 137.720 Mobs/s | 33..4096 |
-| MACD | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 14.948 us | [14.937, 14.965] us | 274.019 Mobs/s | 33..4096 |
-| MACD | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 13.577 us | [13.566, 13.592] us | 301.686 Mobs/s | 33..4096 |
-| MACD | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 64.360 us | [64.251, 64.472] us | 63.642 Mobs/s | 33..4096 |
-| MACD | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 13.588 us | [13.579, 13.612] us | 301.443 Mobs/s | 33..4096 |
-| MACD | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 473.651 us | [472.673, 474.524] us | 138.364 Mobs/s | 33..65536 |
-| MACD | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 477.477 us | [476.611, 480.899] us | 137.255 Mobs/s | 33..65536 |
-| MACD | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 227.373 us | [226.351, 228.295] us | 288.232 Mobs/s | 33..65536 |
-| MACD | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 218.108 us | [217.813, 218.338] us | 300.474 Mobs/s | 33..65536 |
-| MACD | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1051.273 us | [1049.825, 1053.179] us | 62.340 Mobs/s | 33..65536 |
-| MACD | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 215.638 us | [214.968, 216.674] us | 303.916 Mobs/s | 33..65536 |
-| OBV | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.257 us | [0.257, 0.257] us | 996.011 Mobs/s | 0..256 |
-| OBV | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.360 us | [0.358, 0.363] us | 710.164 Mobs/s | 0..256 |
-| OBV | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.335 us | [0.335, 0.336] us | 763.232 Mobs/s | 0..256 |
-| OBV | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.299 us | [0.299, 0.300] us | 855.954 Mobs/s | 0..256 |
-| OBV | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.687 us | [1.684, 1.690] us | 151.706 Mobs/s | 0..256 |
-| OBV | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.300 us | [0.300, 0.301] us | 854.095 Mobs/s | 0..256 |
-| OBV | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 3.795 us | [3.777, 3.806] us | 1079.365 Mobs/s | 0..4096 |
-| OBV | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 3.925 us | [3.919, 3.937] us | 1043.556 Mobs/s | 0..4096 |
-| OBV | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 5.430 us | [5.410, 5.462] us | 754.370 Mobs/s | 0..4096 |
-| OBV | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 4.871 us | [4.863, 4.878] us | 840.910 Mobs/s | 0..4096 |
-| OBV | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 26.454 us | [26.382, 26.487] us | 154.834 Mobs/s | 0..4096 |
-| OBV | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 4.877 us | [4.860, 4.886] us | 839.944 Mobs/s | 0..4096 |
-| OBV | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 61.716 us | [61.567, 62.256] us | 1061.896 Mobs/s | 0..65536 |
-| OBV | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 62.073 us | [61.969, 62.277] us | 1055.791 Mobs/s | 0..65536 |
-| OBV | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 83.828 us | [83.607, 84.041] us | 781.795 Mobs/s | 0..65536 |
-| OBV | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 79.553 us | [79.477, 80.372] us | 823.799 Mobs/s | 0..65536 |
-| OBV | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 431.743 us | [430.726, 434.042] us | 151.794 Mobs/s | 0..65536 |
-| OBV | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 79.648 us | [79.514, 79.795] us | 822.822 Mobs/s | 0..65536 |
-| RSI | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.481 us | [1.472, 1.483] us | 172.850 Mobs/s | 14..256 |
-| RSI | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.593 us | [1.590, 1.602] us | 160.722 Mobs/s | 14..256 |
-| RSI | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.387 us | [1.384, 1.388] us | 184.606 Mobs/s | 14..256 |
-| RSI | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.349 us | [1.347, 1.352] us | 189.797 Mobs/s | 14..256 |
-| RSI | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.327 us | [2.321, 2.336] us | 109.991 Mobs/s | 14..256 |
-| RSI | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.346 us | [1.343, 1.349] us | 190.197 Mobs/s | 14..256 |
-| RSI | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 24.322 us | [24.307, 24.368] us | 168.409 Mobs/s | 14..4096 |
-| RSI | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 24.459 us | [24.429, 24.477] us | 167.466 Mobs/s | 14..4096 |
-| RSI | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 23.068 us | [23.020, 23.141] us | 177.565 Mobs/s | 14..4096 |
-| RSI | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 22.745 us | [22.669, 22.881] us | 180.082 Mobs/s | 14..4096 |
-| RSI | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 38.417 us | [38.348, 38.625] us | 106.619 Mobs/s | 14..4096 |
-| RSI | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 22.641 us | [22.626, 22.699] us | 180.911 Mobs/s | 14..4096 |
-| RSI | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 391.309 us | [390.567, 391.734] us | 167.479 Mobs/s | 14..65536 |
-| RSI | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 391.095 us | [390.520, 391.744] us | 167.570 Mobs/s | 14..65536 |
-| RSI | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 367.932 us | [367.208, 369.141] us | 178.120 Mobs/s | 14..65536 |
-| RSI | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 364.196 us | [363.116, 366.693] us | 179.947 Mobs/s | 14..65536 |
-| RSI | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 618.783 us | [618.096, 620.203] us | 105.911 Mobs/s | 14..65536 |
-| RSI | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 363.153 us | [362.632, 364.088] us | 180.464 Mobs/s | 14..65536 |
-| SIN | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.948 us | [0.945, 0.953] us | 269.964 Mobs/s | 0..256 |
-| SIN | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.075 us | [1.071, 1.081] us | 238.151 Mobs/s | 0..256 |
-| SIN | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.991 us | [0.987, 0.999] us | 258.292 Mobs/s | 0..256 |
-| SIN | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.949 us | [0.947, 0.953] us | 269.666 Mobs/s | 0..256 |
-| SIN | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.002 us | [1.001, 1.004] us | 255.463 Mobs/s | 0..256 |
-| SIN | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.953 us | [0.950, 0.955] us | 268.735 Mobs/s | 0..256 |
-| SIN | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 14.270 us | [14.223, 14.303] us | 287.034 Mobs/s | 0..4096 |
-| SIN | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 14.482 us | [14.433, 14.538] us | 282.827 Mobs/s | 0..4096 |
-| SIN | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.344 us | [15.307, 15.401] us | 266.951 Mobs/s | 0..4096 |
-| SIN | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.018 us | [14.962, 15.129] us | 272.746 Mobs/s | 0..4096 |
-| SIN | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.268 us | [15.237, 15.332] us | 268.279 Mobs/s | 0..4096 |
-| SIN | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 14.963 us | [14.919, 15.000] us | 273.740 Mobs/s | 0..4096 |
-| SIN | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 236.441 us | [236.178, 236.891] us | 277.177 Mobs/s | 0..65536 |
-| SIN | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 238.425 us | [238.123, 241.691] us | 274.870 Mobs/s | 0..65536 |
-| SIN | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 248.062 us | [247.919, 248.203] us | 264.192 Mobs/s | 0..65536 |
-| SIN | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 245.581 us | [245.139, 246.824] us | 266.861 Mobs/s | 0..65536 |
-| SIN | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 253.913 us | [253.570, 254.634] us | 258.104 Mobs/s | 0..65536 |
-| SIN | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 245.321 us | [244.978, 245.772] us | 267.144 Mobs/s | 0..65536 |
-| SMA | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.489 us | [0.488, 0.489] us | 523.698 Mobs/s | 13..256 |
-| SMA | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.598 us | [0.597, 0.599] us | 427.982 Mobs/s | 13..256 |
-| SMA | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.295 us | [0.294, 0.296] us | 867.731 Mobs/s | 13..256 |
-| SMA | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.271 us | [0.269, 0.271] us | 946.388 Mobs/s | 13..256 |
-| SMA | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.366 us | [1.364, 1.371] us | 187.374 Mobs/s | 13..256 |
-| SMA | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.260 us | [0.260, 0.261] us | 983.829 Mobs/s | 13..256 |
-| SMA | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 7.861 us | [7.850, 7.888] us | 521.080 Mobs/s | 13..4096 |
-| SMA | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 7.987 us | [7.979, 7.998] us | 512.828 Mobs/s | 13..4096 |
-| SMA | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 5.166 us | [5.115, 5.195] us | 792.886 Mobs/s | 13..4096 |
-| SMA | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 4.644 us | [4.634, 4.651] us | 881.955 Mobs/s | 13..4096 |
-| SMA | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 21.805 us | [21.767, 21.884] us | 187.849 Mobs/s | 13..4096 |
-| SMA | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 4.674 us | [4.663, 4.685] us | 876.266 Mobs/s | 13..4096 |
-| SMA | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 118.893 us | [118.534, 119.298] us | 551.219 Mobs/s | 13..65536 |
-| SMA | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 119.587 us | [119.351, 120.064] us | 548.021 Mobs/s | 13..65536 |
-| SMA | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 74.340 us | [74.188, 74.521] us | 881.573 Mobs/s | 13..65536 |
-| SMA | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 70.173 us | [70.049, 70.407] us | 933.918 Mobs/s | 13..65536 |
-| SMA | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 329.187 us | [328.942, 330.000] us | 199.085 Mobs/s | 13..65536 |
-| SMA | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 70.297 us | [70.152, 70.513] us | 932.277 Mobs/s | 13..65536 |
-| TYPPRICE | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.104 us | [0.104, 0.104] us | 2455.783 Mobs/s | 0..256 |
-| TYPPRICE | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.205 us | [0.203, 0.207] us | 1246.578 Mobs/s | 0..256 |
-| TYPPRICE | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.237 us | [0.232, 0.241] us | 1078.250 Mobs/s | 0..256 |
-| TYPPRICE | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.212 us | [0.190, 0.230] us | 1207.361 Mobs/s | 0..256 |
-| TYPPRICE | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.098 us | [2.095, 2.106] us | 122.001 Mobs/s | 0..256 |
-| TYPPRICE | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.196 us | [0.188, 0.238] us | 1308.019 Mobs/s | 0..256 |
-| TYPPRICE | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.883 us | [0.878, 0.887] us | 4637.757 Mobs/s | 0..4096 |
-| TYPPRICE | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.975 us | [0.973, 0.980] us | 4199.891 Mobs/s | 0..4096 |
-| TYPPRICE | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 3.167 us | [3.129, 3.200] us | 1293.523 Mobs/s | 0..4096 |
-| TYPPRICE | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.635 us | [2.627, 2.649] us | 1554.523 Mobs/s | 0..4096 |
-| TYPPRICE | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 32.775 us | [32.709, 32.843] us | 124.974 Mobs/s | 0..4096 |
-| TYPPRICE | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 2.626 us | [2.620, 2.631] us | 1560.062 Mobs/s | 0..4096 |
-| TYPPRICE | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 20.122 us | [20.042, 20.206] us | 3256.921 Mobs/s | 0..65536 |
-| TYPPRICE | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 20.177 us | [20.088, 20.387] us | 3248.135 Mobs/s | 0..65536 |
-| TYPPRICE | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 51.155 us | [50.932, 51.314] us | 1281.123 Mobs/s | 0..65536 |
-| TYPPRICE | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 46.340 us | [46.189, 46.944] us | 1414.249 Mobs/s | 0..65536 |
-| TYPPRICE | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 543.262 us | [541.969, 545.011] us | 120.634 Mobs/s | 0..65536 |
-| TYPPRICE | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 46.258 us | [46.186, 46.510] us | 1416.764 Mobs/s | 0..65536 |
+| ADD | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.061 us | [0.061, 0.061] us | 4177.809 Mobs/s | 0..256 |
+| ADD | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.163 us | [0.162, 0.164] us | 1570.763 Mobs/s | 0..256 |
+| ADD | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.138 us | [0.138, 0.139] us | 1855.927 Mobs/s | 0..256 |
+| ADD | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.103 us | [0.103, 0.103] us | 2477.982 Mobs/s | 0..256 |
+| ADD | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.291 us | [0.290, 0.292] us | 878.266 Mobs/s | 0..256 |
+| ADD | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.105 us | [0.105, 0.106] us | 2428.021 Mobs/s | 0..256 |
+| ADD | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.716 us | [0.694, 0.734] us | 5719.849 Mobs/s | 0..4096 |
+| ADD | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.798 us | [0.780, 0.834] us | 5133.956 Mobs/s | 0..4096 |
+| ADD | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.351 us | [2.303, 2.381] us | 1742.196 Mobs/s | 0..4096 |
+| ADD | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.627 us | [1.608, 1.645] us | 2516.818 Mobs/s | 0..4096 |
+| ADD | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 4.565 us | [4.543, 4.576] us | 897.244 Mobs/s | 0..4096 |
+| ADD | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.716 us | [1.707, 1.733] us | 2386.801 Mobs/s | 0..4096 |
+| ADD | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 15.446 us | [15.418, 15.521] us | 4243.020 Mobs/s | 0..65536 |
+| ADD | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 15.619 us | [15.512, 15.670] us | 4195.871 Mobs/s | 0..65536 |
+| ADD | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 36.564 us | [36.484, 36.660] us | 1792.345 Mobs/s | 0..65536 |
+| ADD | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 28.633 us | [28.566, 28.832] us | 2288.789 Mobs/s | 0..65536 |
+| ADD | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 95.100 us | [94.852, 95.485] us | 689.130 Mobs/s | 0..65536 |
+| ADD | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 29.001 us | [28.754, 29.166] us | 2259.786 Mobs/s | 0..65536 |
+| ADX | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.431 us | [1.426, 1.436] us | 178.846 Mobs/s | 27..256 |
+| ADX | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.584 us | [1.582, 1.589] us | 161.640 Mobs/s | 27..256 |
+| ADX | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.591 us | [1.584, 1.599] us | 160.948 Mobs/s | 27..256 |
+| ADX | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.553 us | [1.549, 1.560] us | 164.882 Mobs/s | 27..256 |
+| ADX | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 3.366 us | [3.358, 3.373] us | 76.051 Mobs/s | 27..256 |
+| ADX | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.558 us | [1.553, 1.560] us | 164.346 Mobs/s | 27..256 |
+| ADX | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 24.465 us | [24.396, 24.531] us | 167.425 Mobs/s | 27..4096 |
+| ADX | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 26.652 us | [26.479, 26.748] us | 153.683 Mobs/s | 27..4096 |
+| ADX | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 28.253 us | [28.043, 28.459] us | 144.976 Mobs/s | 27..4096 |
+| ADX | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 25.983 us | [25.927, 26.062] us | 157.643 Mobs/s | 27..4096 |
+| ADX | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 54.491 us | [54.399, 54.703] us | 75.169 Mobs/s | 27..4096 |
+| ADX | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 26.097 us | [26.045, 26.162] us | 156.955 Mobs/s | 27..4096 |
+| ADX | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 394.128 us | [393.047, 395.333] us | 166.281 Mobs/s | 27..65536 |
+| ADX | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 395.648 us | [394.543, 397.141] us | 165.642 Mobs/s | 27..65536 |
+| ADX | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 423.899 us | [421.451, 426.308] us | 154.603 Mobs/s | 27..65536 |
+| ADX | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 416.514 us | [414.830, 417.295] us | 157.344 Mobs/s | 27..65536 |
+| ADX | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 871.116 us | [868.969, 873.050] us | 75.232 Mobs/s | 27..65536 |
+| ADX | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 417.057 us | [414.948, 418.114] us | 157.139 Mobs/s | 27..65536 |
+| ATR | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.346 us | [1.342, 1.352] us | 190.172 Mobs/s | 14..256 |
+| ATR | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.462 us | [1.459, 1.468] us | 175.071 Mobs/s | 14..256 |
+| ATR | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.457 us | [1.452, 1.463] us | 175.714 Mobs/s | 14..256 |
+| ATR | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.325 us | [1.322, 1.330] us | 193.213 Mobs/s | 14..256 |
+| ATR | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.222 us | [2.218, 2.228] us | 115.218 Mobs/s | 14..256 |
+| ATR | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.327 us | [1.323, 1.335] us | 192.945 Mobs/s | 14..256 |
+| ATR | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 23.586 us | [23.532, 23.687] us | 173.659 Mobs/s | 14..4096 |
+| ATR | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 21.871 us | [21.846, 21.953] us | 187.280 Mobs/s | 14..4096 |
+| ATR | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 22.870 us | [22.825, 23.864] us | 179.099 Mobs/s | 14..4096 |
+| ATR | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 22.234 us | [22.176, 22.356] us | 184.220 Mobs/s | 14..4096 |
+| ATR | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 37.819 us | [37.552, 37.953] us | 108.304 Mobs/s | 14..4096 |
+| ATR | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 22.256 us | [22.176, 22.318] us | 184.043 Mobs/s | 14..4096 |
+| ATR | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 351.629 us | [350.051, 353.546] us | 186.378 Mobs/s | 14..65536 |
+| ATR | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 352.591 us | [351.398, 353.717] us | 185.870 Mobs/s | 14..65536 |
+| ATR | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 359.999 us | [359.637, 360.851] us | 182.045 Mobs/s | 14..65536 |
+| ATR | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 355.658 us | [354.657, 356.724] us | 184.267 Mobs/s | 14..65536 |
+| ATR | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 565.196 us | [564.118, 566.271] us | 115.953 Mobs/s | 14..65536 |
+| ATR | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 356.862 us | [356.198, 358.017] us | 183.645 Mobs/s | 14..65536 |
+| BBANDS | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.982 us | [0.980, 0.987] us | 260.646 Mobs/s | 19..256 |
+| BBANDS | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.326 us | [1.323, 1.334] us | 193.072 Mobs/s | 19..256 |
+| BBANDS | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.933 us | [0.931, 0.937] us | 274.335 Mobs/s | 19..256 |
+| BBANDS | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.823 us | [0.822, 0.824] us | 311.042 Mobs/s | 19..256 |
+| BBANDS | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.086 us | [2.083, 2.091] us | 122.697 Mobs/s | 19..256 |
+| BBANDS | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.819 us | [0.817, 0.821] us | 312.582 Mobs/s | 19..256 |
+| BBANDS | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 16.315 us | [16.269, 16.335] us | 251.052 Mobs/s | 19..4096 |
+| BBANDS | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 18.674 us | [18.613, 18.714] us | 219.337 Mobs/s | 19..4096 |
+| BBANDS | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.150 us | [15.129, 15.184] us | 270.362 Mobs/s | 19..4096 |
+| BBANDS | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 13.791 us | [13.735, 13.854] us | 297.015 Mobs/s | 19..4096 |
+| BBANDS | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 33.665 us | [33.488, 33.718] us | 121.670 Mobs/s | 19..4096 |
+| BBANDS | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 13.732 us | [13.715, 13.793] us | 298.288 Mobs/s | 19..4096 |
+| BBANDS | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 346.126 us | [344.841, 347.328] us | 189.342 Mobs/s | 19..65536 |
+| BBANDS | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 348.546 us | [348.126, 349.868] us | 188.027 Mobs/s | 19..65536 |
+| BBANDS | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 231.730 us | [230.659, 232.583] us | 282.812 Mobs/s | 19..65536 |
+| BBANDS | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 236.148 us | [224.745, 245.675] us | 277.521 Mobs/s | 19..65536 |
+| BBANDS | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 589.016 us | [585.652, 591.810] us | 111.263 Mobs/s | 19..65536 |
+| BBANDS | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 236.136 us | [228.258, 239.063] us | 277.535 Mobs/s | 19..65536 |
+| CDL3WHITESOLDIERS | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.287 us | [1.284, 1.290] us | 198.961 Mobs/s | 12..256 |
+| CDL3WHITESOLDIERS | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.384 us | [1.380, 1.390] us | 185.030 Mobs/s | 12..256 |
+| CDL3WHITESOLDIERS | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 5.524 us | [5.516, 5.546] us | 46.339 Mobs/s | 12..256 |
+| CDL3WHITESOLDIERS | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 5.433 us | [5.425, 5.451] us | 47.117 Mobs/s | 12..256 |
+| CDL3WHITESOLDIERS | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 5.932 us | [5.922, 5.976] us | 43.152 Mobs/s | 12..256 |
+| CDL3WHITESOLDIERS | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 5.475 us | [5.460, 5.486] us | 46.760 Mobs/s | 12..256 |
+| CDL3WHITESOLDIERS | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 21.911 us | [21.678, 22.071] us | 186.937 Mobs/s | 12..4096 |
+| CDL3WHITESOLDIERS | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 20.354 us | [20.267, 21.639] us | 201.235 Mobs/s | 12..4096 |
+| CDL3WHITESOLDIERS | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 88.933 us | [88.767, 89.859] us | 46.057 Mobs/s | 12..4096 |
+| CDL3WHITESOLDIERS | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 88.731 us | [88.158, 91.171] us | 46.162 Mobs/s | 12..4096 |
+| CDL3WHITESOLDIERS | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 97.816 us | [97.505, 98.085] us | 41.875 Mobs/s | 12..4096 |
+| CDL3WHITESOLDIERS | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 88.271 us | [87.961, 88.811] us | 46.403 Mobs/s | 12..4096 |
+| CDL3WHITESOLDIERS | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 322.342 us | [321.089, 323.534] us | 203.312 Mobs/s | 12..65536 |
+| CDL3WHITESOLDIERS | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 345.727 us | [344.311, 347.162] us | 189.560 Mobs/s | 12..65536 |
+| CDL3WHITESOLDIERS | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1427.466 us | [1424.005, 1429.078] us | 45.911 Mobs/s | 12..65536 |
+| CDL3WHITESOLDIERS | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1512.494 us | [1503.836, 1520.583] us | 43.330 Mobs/s | 12..65536 |
+| CDL3WHITESOLDIERS | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1674.182 us | [1656.542, 1693.128] us | 39.145 Mobs/s | 12..65536 |
+| CDL3WHITESOLDIERS | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1496.309 us | [1424.997, 1509.580] us | 43.798 Mobs/s | 12..65536 |
+| CDLDOJI | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.392 us | [0.392, 0.394] us | 652.317 Mobs/s | 10..256 |
+| CDLDOJI | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.501 us | [0.500, 0.503] us | 510.622 Mobs/s | 10..256 |
+| CDLDOJI | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.950 us | [0.946, 0.954] us | 269.363 Mobs/s | 10..256 |
+| CDLDOJI | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.882 us | [0.881, 0.884] us | 290.183 Mobs/s | 10..256 |
+| CDLDOJI | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.595 us | [2.585, 2.601] us | 98.668 Mobs/s | 10..256 |
+| CDLDOJI | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.882 us | [0.881, 0.889] us | 290.214 Mobs/s | 10..256 |
+| CDLDOJI | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 5.597 us | [5.578, 5.611] us | 731.834 Mobs/s | 10..4096 |
+| CDLDOJI | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 5.698 us | [5.678, 5.708] us | 718.826 Mobs/s | 10..4096 |
+| CDLDOJI | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.144 us | [15.111, 15.183] us | 270.476 Mobs/s | 10..4096 |
+| CDLDOJI | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.108 us | [14.384, 15.265] us | 271.120 Mobs/s | 10..4096 |
+| CDLDOJI | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 44.497 us | [44.300, 44.642] us | 92.050 Mobs/s | 10..4096 |
+| CDLDOJI | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 14.287 us | [14.253, 14.311] us | 286.704 Mobs/s | 10..4096 |
+| CDLDOJI | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 93.944 us | [88.785, 95.305] us | 697.608 Mobs/s | 10..65536 |
+| CDLDOJI | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 94.827 us | [94.589, 95.163] us | 691.109 Mobs/s | 10..65536 |
+| CDLDOJI | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 255.995 us | [255.252, 256.630] us | 256.005 Mobs/s | 10..65536 |
+| CDLDOJI | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 247.015 us | [245.788, 247.894] us | 265.312 Mobs/s | 10..65536 |
+| CDLDOJI | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 665.191 us | [664.232, 667.005] us | 98.522 Mobs/s | 10..65536 |
+| CDLDOJI | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 228.498 us | [227.687, 228.877] us | 286.812 Mobs/s | 10..65536 |
+| CDLENGULFING | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.297 us | [0.296, 0.298] us | 861.711 Mobs/s | 2..256 |
+| CDLENGULFING | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.406 us | [0.404, 0.406] us | 631.206 Mobs/s | 2..256 |
+| CDLENGULFING | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.608 us | [0.605, 0.609] us | 421.067 Mobs/s | 2..256 |
+| CDLENGULFING | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.539 us | [0.538, 0.542] us | 474.946 Mobs/s | 2..256 |
+| CDLENGULFING | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.740 us | [2.731, 2.748] us | 93.414 Mobs/s | 2..256 |
+| CDLENGULFING | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.542 us | [0.540, 0.543] us | 472.638 Mobs/s | 2..256 |
+| CDLENGULFING | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 4.005 us | [3.973, 4.023] us | 1022.642 Mobs/s | 2..4096 |
+| CDLENGULFING | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 4.090 us | [4.078, 4.103] us | 1001.582 Mobs/s | 2..4096 |
+| CDLENGULFING | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 9.814 us | [9.725, 9.913] us | 417.376 Mobs/s | 2..4096 |
+| CDLENGULFING | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 8.579 us | [8.525, 9.026] us | 477.447 Mobs/s | 2..4096 |
+| CDLENGULFING | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 44.272 us | [44.131, 44.348] us | 92.520 Mobs/s | 2..4096 |
+| CDLENGULFING | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 8.460 us | [8.440, 8.478] us | 484.167 Mobs/s | 2..4096 |
+| CDLENGULFING | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 62.847 us | [62.635, 63.017] us | 1042.790 Mobs/s | 2..65536 |
+| CDLENGULFING | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 63.370 us | [63.046, 63.620] us | 1034.178 Mobs/s | 2..65536 |
+| CDLENGULFING | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 145.047 us | [144.548, 145.480] us | 451.825 Mobs/s | 2..65536 |
+| CDLENGULFING | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 134.521 us | [134.184, 134.664] us | 487.179 Mobs/s | 2..65536 |
+| CDLENGULFING | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 713.607 us | [708.503, 717.632] us | 91.838 Mobs/s | 2..65536 |
+| CDLENGULFING | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 145.206 us | [144.815, 145.557] us | 451.330 Mobs/s | 2..65536 |
+| HT_DCPHASE | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 20.914 us | [19.978, 21.105] us | 12.241 Mobs/s | 63..256 |
+| HT_DCPHASE | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 19.697 us | [19.637, 19.772] us | 12.997 Mobs/s | 63..256 |
+| HT_DCPHASE | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 24.397 us | [24.320, 24.506] us | 10.493 Mobs/s | 63..256 |
+| HT_DCPHASE | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 24.106 us | [24.057, 24.162] us | 10.620 Mobs/s | 63..256 |
+| HT_DCPHASE | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 26.721 us | [26.590, 26.971] us | 9.580 Mobs/s | 63..256 |
+| HT_DCPHASE | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 24.294 us | [24.198, 24.375] us | 10.537 Mobs/s | 63..256 |
+| HT_DCPHASE | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 364.826 us | [364.304, 365.790] us | 11.227 Mobs/s | 63..4096 |
+| HT_DCPHASE | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 360.931 us | [358.829, 361.912] us | 11.348 Mobs/s | 63..4096 |
+| HT_DCPHASE | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 448.377 us | [447.379, 449.707] us | 9.135 Mobs/s | 63..4096 |
+| HT_DCPHASE | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 450.340 us | [448.805, 452.042] us | 9.095 Mobs/s | 63..4096 |
+| HT_DCPHASE | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 464.454 us | [463.611, 465.631] us | 8.819 Mobs/s | 63..4096 |
+| HT_DCPHASE | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 448.245 us | [446.648, 449.245] us | 9.138 Mobs/s | 63..4096 |
+| HT_DCPHASE | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 5878.031 us | [5860.417, 5897.000] us | 11.149 Mobs/s | 63..65536 |
+| HT_DCPHASE | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 5799.469 us | [5782.063, 5809.167] us | 11.300 Mobs/s | 63..65536 |
+| HT_DCPHASE | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 7208.542 us | [7191.042, 7221.896] us | 9.091 Mobs/s | 63..65536 |
+| HT_DCPHASE | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 7209.927 us | [7194.198, 7222.427] us | 9.090 Mobs/s | 63..65536 |
+| HT_DCPHASE | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 6972.781 us | [6958.657, 7171.688] us | 9.399 Mobs/s | 63..65536 |
+| HT_DCPHASE | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 7785.375 us | [7746.531, 7806.708] us | 8.418 Mobs/s | 63..65536 |
+| LINEARREG | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.497 us | [1.493, 1.503] us | 171.011 Mobs/s | 13..256 |
+| LINEARREG | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.583 us | [1.578, 1.585] us | 161.768 Mobs/s | 13..256 |
+| LINEARREG | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.491 us | [1.488, 1.495] us | 171.723 Mobs/s | 13..256 |
+| LINEARREG | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.440 us | [1.436, 1.442] us | 177.832 Mobs/s | 13..256 |
+| LINEARREG | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.405 us | [1.401, 1.410] us | 182.171 Mobs/s | 13..256 |
+| LINEARREG | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.451 us | [1.449, 1.456] us | 176.421 Mobs/s | 13..256 |
+| LINEARREG | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 26.019 us | [25.494, 26.208] us | 157.422 Mobs/s | 13..4096 |
+| LINEARREG | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 24.369 us | [24.323, 24.470] us | 168.079 Mobs/s | 13..4096 |
+| LINEARREG | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 23.328 us | [23.257, 23.399] us | 175.579 Mobs/s | 13..4096 |
+| LINEARREG | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 22.929 us | [22.865, 23.001] us | 178.642 Mobs/s | 13..4096 |
+| LINEARREG | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 22.742 us | [22.624, 22.811] us | 180.110 Mobs/s | 13..4096 |
+| LINEARREG | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 24.501 us | [24.385, 24.648] us | 167.173 Mobs/s | 13..4096 |
+| LINEARREG | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 391.444 us | [390.613, 392.906] us | 167.421 Mobs/s | 13..65536 |
+| LINEARREG | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 387.687 us | [387.080, 390.138] us | 169.044 Mobs/s | 13..65536 |
+| LINEARREG | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 393.420 us | [373.609, 398.312] us | 166.580 Mobs/s | 13..65536 |
+| LINEARREG | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 368.481 us | [367.382, 369.869] us | 177.855 Mobs/s | 13..65536 |
+| LINEARREG | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 397.650 us | [393.212, 401.547] us | 164.808 Mobs/s | 13..65536 |
+| LINEARREG | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 385.779 us | [366.726, 390.212] us | 169.880 Mobs/s | 13..65536 |
+| MACD | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.522 us | [1.518, 1.530] us | 168.146 Mobs/s | 33..256 |
+| MACD | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.915 us | [1.894, 1.920] us | 133.682 Mobs/s | 33..256 |
+| MACD | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.853 us | [0.850, 0.854] us | 300.154 Mobs/s | 33..256 |
+| MACD | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.749 us | [0.748, 0.751] us | 341.914 Mobs/s | 33..256 |
+| MACD | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 3.639 us | [3.632, 3.652] us | 70.345 Mobs/s | 33..256 |
+| MACD | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.754 us | [0.751, 0.757] us | 339.632 Mobs/s | 33..256 |
+| MACD | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 27.775 us | [27.684, 27.871] us | 147.472 Mobs/s | 33..4096 |
+| MACD | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 27.959 us | [27.911, 28.096] us | 146.500 Mobs/s | 33..4096 |
+| MACD | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 14.078 us | [14.033, 14.137] us | 290.956 Mobs/s | 33..4096 |
+| MACD | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 12.864 us | [12.843, 12.901] us | 318.404 Mobs/s | 33..4096 |
+| MACD | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 60.315 us | [60.082, 60.387] us | 67.911 Mobs/s | 33..4096 |
+| MACD | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 12.796 us | [12.777, 12.851] us | 320.094 Mobs/s | 33..4096 |
+| MACD | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 448.060 us | [447.051, 449.547] us | 146.266 Mobs/s | 33..65536 |
+| MACD | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 449.690 us | [448.545, 451.252] us | 145.736 Mobs/s | 33..65536 |
+| MACD | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 215.467 us | [215.039, 216.010] us | 304.158 Mobs/s | 33..65536 |
+| MACD | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 205.955 us | [205.399, 206.882] us | 318.205 Mobs/s | 33..65536 |
+| MACD | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 987.068 us | [985.795, 989.352] us | 66.395 Mobs/s | 33..65536 |
+| MACD | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 206.358 us | [205.858, 206.691] us | 317.585 Mobs/s | 33..65536 |
+| OBV | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.244 us | [0.243, 0.244] us | 1051.141 Mobs/s | 0..256 |
+| OBV | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.354 us | [0.353, 0.354] us | 723.562 Mobs/s | 0..256 |
+| OBV | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.316 us | [0.315, 0.318] us | 808.866 Mobs/s | 0..256 |
+| OBV | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.281 us | [0.281, 0.282] us | 910.587 Mobs/s | 0..256 |
+| OBV | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.592 us | [1.588, 1.600] us | 160.791 Mobs/s | 0..256 |
+| OBV | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.282 us | [0.281, 0.282] us | 907.822 Mobs/s | 0..256 |
+| OBV | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 3.942 us | [3.928, 3.953] us | 1039.065 Mobs/s | 0..4096 |
+| OBV | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 3.783 us | [3.759, 3.800] us | 1082.751 Mobs/s | 0..4096 |
+| OBV | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 5.323 us | [5.284, 5.367] us | 769.429 Mobs/s | 0..4096 |
+| OBV | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 4.810 us | [4.747, 5.034] us | 851.473 Mobs/s | 0..4096 |
+| OBV | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 25.886 us | [25.688, 27.512] us | 158.235 Mobs/s | 0..4096 |
+| OBV | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 4.718 us | [4.707, 4.730] us | 868.229 Mobs/s | 0..4096 |
+| OBV | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 63.183 us | [62.970, 63.277] us | 1037.234 Mobs/s | 0..65536 |
+| OBV | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 58.722 us | [58.624, 58.831] us | 1116.042 Mobs/s | 0..65536 |
+| OBV | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 80.052 us | [79.379, 80.738] us | 818.670 Mobs/s | 0..65536 |
+| OBV | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 83.020 us | [81.300, 84.408] us | 789.401 Mobs/s | 0..65536 |
+| OBV | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 440.522 us | [438.844, 441.708] us | 148.769 Mobs/s | 0..65536 |
+| OBV | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 75.109 us | [74.960, 75.429] us | 872.544 Mobs/s | 0..65536 |
+| RSI | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 1.399 us | [1.397, 1.407] us | 182.982 Mobs/s | 14..256 |
+| RSI | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 1.518 us | [1.510, 1.526] us | 168.628 Mobs/s | 14..256 |
+| RSI | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.311 us | [1.309, 1.313] us | 195.258 Mobs/s | 14..256 |
+| RSI | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.280 us | [1.276, 1.282] us | 200.053 Mobs/s | 14..256 |
+| RSI | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.205 us | [2.200, 2.208] us | 116.074 Mobs/s | 14..256 |
+| RSI | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 1.275 us | [1.269, 1.280] us | 200.736 Mobs/s | 14..256 |
+| RSI | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 23.016 us | [22.978, 23.057] us | 177.963 Mobs/s | 14..4096 |
+| RSI | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 23.136 us | [23.094, 23.184] us | 177.039 Mobs/s | 14..4096 |
+| RSI | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 21.865 us | [21.788, 21.973] us | 187.331 Mobs/s | 14..4096 |
+| RSI | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 21.424 us | [21.388, 21.459] us | 191.191 Mobs/s | 14..4096 |
+| RSI | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 36.366 us | [36.258, 36.422] us | 112.632 Mobs/s | 14..4096 |
+| RSI | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 21.325 us | [21.269, 21.426] us | 192.071 Mobs/s | 14..4096 |
+| RSI | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 367.934 us | [366.902, 369.953] us | 178.119 Mobs/s | 14..65536 |
+| RSI | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 369.489 us | [368.644, 370.447] us | 177.369 Mobs/s | 14..65536 |
+| RSI | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 347.168 us | [346.197, 348.062] us | 188.773 Mobs/s | 14..65536 |
+| RSI | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 342.975 us | [342.385, 344.288] us | 191.081 Mobs/s | 14..65536 |
+| RSI | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 582.467 us | [580.723, 584.047] us | 112.515 Mobs/s | 14..65536 |
+| RSI | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 342.299 us | [341.576, 342.931] us | 191.458 Mobs/s | 14..65536 |
+| SIN | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.882 us | [0.880, 0.885] us | 290.372 Mobs/s | 0..256 |
+| SIN | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.983 us | [0.978, 0.986] us | 260.410 Mobs/s | 0..256 |
+| SIN | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.919 us | [0.915, 0.923] us | 278.585 Mobs/s | 0..256 |
+| SIN | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.879 us | [0.876, 0.882] us | 291.345 Mobs/s | 0..256 |
+| SIN | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.938 us | [0.934, 0.941] us | 273.002 Mobs/s | 0..256 |
+| SIN | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.885 us | [0.883, 0.887] us | 289.209 Mobs/s | 0..256 |
+| SIN | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 13.972 us | [13.930, 14.007] us | 293.163 Mobs/s | 0..4096 |
+| SIN | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 14.074 us | [14.030, 14.116] us | 291.041 Mobs/s | 0..4096 |
+| SIN | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 16.115 us | [16.057, 16.173] us | 254.170 Mobs/s | 0..4096 |
+| SIN | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 14.476 us | [14.414, 14.524] us | 282.951 Mobs/s | 0..4096 |
+| SIN | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 15.024 us | [14.967, 15.078] us | 272.639 Mobs/s | 0..4096 |
+| SIN | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 14.464 us | [14.422, 14.504] us | 283.187 Mobs/s | 0..4096 |
+| SIN | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 225.051 us | [224.445, 225.603] us | 291.205 Mobs/s | 0..65536 |
+| SIN | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 240.153 us | [227.422, 240.721] us | 272.893 Mobs/s | 0..65536 |
+| SIN | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 235.257 us | [234.454, 235.982] us | 278.572 Mobs/s | 0..65536 |
+| SIN | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 232.510 us | [232.018, 233.297] us | 281.863 Mobs/s | 0..65536 |
+| SIN | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 241.286 us | [240.851, 242.414] us | 271.611 Mobs/s | 0..65536 |
+| SIN | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 232.133 us | [231.429, 232.884] us | 282.321 Mobs/s | 0..65536 |
+| SMA | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.459 us | [0.459, 0.460] us | 557.824 Mobs/s | 13..256 |
+| SMA | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.580 us | [0.579, 0.582] us | 441.220 Mobs/s | 13..256 |
+| SMA | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.290 us | [0.289, 0.292] us | 882.859 Mobs/s | 13..256 |
+| SMA | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.256 us | [0.256, 0.257] us | 999.716 Mobs/s | 13..256 |
+| SMA | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.272 us | [1.268, 1.278] us | 201.200 Mobs/s | 13..256 |
+| SMA | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.258 us | [0.257, 0.259] us | 993.435 Mobs/s | 13..256 |
+| SMA | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 7.328 us | [7.308, 7.359] us | 558.952 Mobs/s | 13..4096 |
+| SMA | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 7.458 us | [7.436, 7.477] us | 549.216 Mobs/s | 13..4096 |
+| SMA | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 4.780 us | [4.767, 4.792] us | 856.917 Mobs/s | 13..4096 |
+| SMA | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 4.333 us | [4.318, 4.342] us | 945.328 Mobs/s | 13..4096 |
+| SMA | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 20.409 us | [20.349, 20.470] us | 200.700 Mobs/s | 13..4096 |
+| SMA | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 4.341 us | [4.332, 4.351] us | 943.513 Mobs/s | 13..4096 |
+| SMA | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 117.646 us | [116.950, 118.025] us | 557.062 Mobs/s | 13..65536 |
+| SMA | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 117.727 us | [117.278, 117.995] us | 556.679 Mobs/s | 13..65536 |
+| SMA | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 73.667 us | [73.538, 74.078] us | 889.631 Mobs/s | 13..65536 |
+| SMA | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 69.842 us | [69.703, 69.996] us | 938.351 Mobs/s | 13..65536 |
+| SMA | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 353.419 us | [352.097, 354.888] us | 185.434 Mobs/s | 13..65536 |
+| SMA | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 75.163 us | [74.897, 75.475] us | 871.916 Mobs/s | 13..65536 |
+| TYPPRICE | 256 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.097 us | [0.097, 0.098] us | 2627.083 Mobs/s | 0..256 |
+| TYPPRICE | 256 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.190 us | [0.190, 0.191] us | 1345.300 Mobs/s | 0..256 |
+| TYPPRICE | 256 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.207 us | [0.206, 0.207] us | 1239.455 Mobs/s | 0..256 |
+| TYPPRICE | 256 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 0.173 us | [0.172, 0.173] us | 1482.741 Mobs/s | 0..256 |
+| TYPPRICE | 256 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 1.949 us | [1.945, 1.954] us | 131.369 Mobs/s | 0..256 |
+| TYPPRICE | 256 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 0.172 us | [0.172, 0.172] us | 1488.907 Mobs/s | 0..256 |
+| TYPPRICE | 4096 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 0.855 us | [0.850, 0.859] us | 4789.084 Mobs/s | 0..4096 |
+| TYPPRICE | 4096 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 0.943 us | [0.940, 0.949] us | 4343.348 Mobs/s | 0..4096 |
+| TYPPRICE | 4096 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 3.094 us | [3.079, 3.105] us | 1323.832 Mobs/s | 0..4096 |
+| TYPPRICE | 4096 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 2.540 us | [2.536, 2.545] us | 1612.864 Mobs/s | 0..4096 |
+| TYPPRICE | 4096 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 31.050 us | [30.901, 31.185] us | 131.918 Mobs/s | 0..4096 |
+| TYPPRICE | 4096 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 2.536 us | [2.529, 2.545] us | 1615.054 Mobs/s | 0..4096 |
+| TYPPRICE | 65536 | TA-Lib C | direct C caller-owned | verified | comparable: primary caller-owned Rust/C kernel | 20.543 us | [20.473, 20.676] us | 3190.243 Mobs/s | 0..65536 |
+| TYPPRICE | 65536 | TA-Lib Python | official Python NumPy API | verified | unavailable: user-facing Python API cost; not aggregated with caller-owned kernels | 20.639 us | [20.593, 20.695] us | 3175.312 Mobs/s | 0..65536 |
+| TYPPRICE | 65536 | fast-ta | Owned Compact Output | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 50.172 us | [49.800, 50.680] us | 1306.222 Mobs/s | 0..65536 |
+| TYPPRICE | 65536 | fast-ta | Prepared Batch Runner | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 43.161 us | [43.144, 43.249] us | 1518.398 Mobs/s | 0..65536 |
+| TYPPRICE | 65536 | fast-ta | Streaming Computation | verified | unavailable: separate Rust execution cost; not aggregated with the direct C kernel | 494.505 us | [493.556, 495.533] us | 132.528 Mobs/s | 0..65536 |
+| TYPPRICE | 65536 | fast-ta | caller-owned Batch Computation | verified | comparable: primary caller-owned Rust/C kernel | 43.482 us | [43.363, 43.573] us | 1507.181 Mobs/s | 0..65536 |
 
 Suppressed or unavailable results
 
