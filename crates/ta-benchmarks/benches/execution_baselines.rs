@@ -9,6 +9,8 @@ mod composite_momentum;
 mod hilbert_overlap;
 mod moving_average_momentum;
 mod range_position;
+#[path = "support/rolling_overlap.rs"]
+mod rolling_overlap;
 mod support;
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
@@ -26,45 +28,39 @@ use ta_core::{
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
         MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXValuesMut, MINMAXValuesMut,
-        MULTConfig, SUBConfig, SUMConfig, ADD, DIV, MAX, MAXINDEX, MIN, MININDEX, MINMAX,
-        MINMAXINDEX, MULT, SUB, SUM,
+        MULTConfig, SUBConfig, SUMConfig,
     },
     math_transform::{
         ACOSConfig, ASINConfig, ATANConfig, CEILConfig, COSConfig, COSHConfig, EXPConfig,
-        FLOORConfig, LNConfig, LOG10Config, SINConfig, SINHConfig, SQRTConfig, TANConfig,
-        TANHConfig, ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN,
-        TANH,
+        FLOORConfig, LNConfig, LOG10Config, SINConfig, SINHConfig, SQRTConfig,
     },
     momentum::{
         ADXConfig, ADXRConfig, CMOConfig, DXConfig, DirectionalInput, DirectionalTick, IMIConfig,
         IMIInput, IMITick, MINUS_DIConfig, MINUS_DMConfig, MOMConfig, PLUS_DIConfig, PLUS_DMConfig,
-        ROCConfig, ROCPConfig, ROCR100Config, ROCRConfig, RSIConfig, CMO, IMI, RSI,
+        ROCConfig, ROCPConfig, ROCR100Config, ROCRConfig, RSIConfig,
     },
     overlap::{
-        ACCBANDSConfig, ACCBANDSInput, ACCBANDSTick, ACCBANDSValuesMut, BBANDSConfig,
-        BBANDSValuesMut, DEMAConfig, EMAConfig, KAMAConfig, MAConfig, MAVPConfig, MAVPInput,
-        MAVPTick, MIDPOINTConfig, MIDPRICEConfig, MIDPRICEInput, MIDPRICETick, PeriodMAType,
-        SARConfig, SAREXTConfig, SARInput, SARTick, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
-        WMAConfig, DEMA, EMA, KAMA, MA, MIDPOINT, SAR, SAREXT, SMA, T3, TEMA, TRIMA, WMA,
+        DEMAConfig, EMAConfig, KAMAConfig, MAConfig, MAVPConfig, MAVPInput, MAVPTick,
+        MIDPOINTConfig, MIDPRICEConfig, MIDPRICEInput, MIDPRICETick, PeriodMAType, SARConfig,
+        SAREXTConfig, SARInput, SARTick, SMAConfig, T3Config, TEMAConfig, TRIMAConfig, WMAConfig,
+        KAMA, MA,
     },
     price_transform::{
         AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
-        WCLPRICETick, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
+        WCLPRICETick,
     },
     statistic::{
         BETAConfig, CORRELConfig, LINEARREGConfig, LINEARREG_ANGLEConfig,
         LINEARREG_INTERCEPTConfig, LINEARREG_SLOPEConfig, PairInput, PairTick, STDDEVConfig,
-        TSFConfig, VARConfig, BETA, CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT,
-        LINEARREG_SLOPE, STDDEV, TSF, VAR,
+        TSFConfig, VARConfig,
     },
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
-        TRANGETick, ATR, NATR, TRANGE,
+        TRANGETick,
     },
     volume::{
-        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
-        OBVTick, AD, ADOSC, OBV,
+        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
     },
     Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
 };
@@ -5493,6 +5489,7 @@ criterion_group!(
     composite_momentum::bench_composite_momentum_execution,
     moving_average_momentum::bench_moving_average_momentum_execution,
     range_position::bench_range_position_execution,
+    bench_mom_execution,
     bench_roc_execution,
     bench_rocp_execution,
     bench_rocr_execution,
@@ -5547,7 +5544,7 @@ criterion_group!(
     bench_midprice_qualified_matrix,
     bench_midprice_repeated_and_streaming,
     bench_midprice_parameter_sweep,
-    support::rolling_overlap::bench_bands,
+    rolling_overlap::bench_bands,
     bench_kama_mavp_execution,
     hilbert_overlap::bench_hilbert_overlap_execution,
     bench_minmax_repeated_and_streaming,

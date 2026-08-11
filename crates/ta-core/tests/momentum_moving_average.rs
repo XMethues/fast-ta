@@ -1,3 +1,5 @@
+// The shared generated oracle retains exact f64 values and entries used by other consumers.
+#[allow(dead_code, clippy::excessive_precision)]
 #[path = "fixtures/moving_average_momentum_reference.rs"]
 mod reference;
 

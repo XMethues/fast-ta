@@ -1,3 +1,5 @@
+// Pinned f64 oracle values intentionally retain more precision than f32 builds consume.
+#[allow(clippy::excessive_precision)]
 #[path = "fixtures/momentum_change_reference.rs"]
 mod reference;
 
@@ -128,12 +130,10 @@ fn family_scaling_invariants_share_one_source_position_relationship() {
     let rocr = ROCRConfig::new(PERIOD).unwrap().compute(INPUT).unwrap();
     let rocr100 = ROCR100Config::new(PERIOD).unwrap().compute(INPUT).unwrap();
 
-    for output_idx in 0..mom.values().len() {
-        let source_idx = PERIOD + output_idx;
-        assert_close(
-            mom.values()[output_idx],
-            INPUT[source_idx] - INPUT[output_idx],
-        );
+    for (output_idx, (&previous, &current)) in
+        INPUT.iter().zip(INPUT.iter().skip(PERIOD)).enumerate()
+    {
+        assert_close(mom.values()[output_idx], current - previous);
         if INPUT[output_idx] != 0.0 as Float {
             assert_close(
                 roc.values()[output_idx],

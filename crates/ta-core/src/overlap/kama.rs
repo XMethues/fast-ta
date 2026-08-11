@@ -77,14 +77,14 @@ pub(super) fn kama_kernel(
     previous = (real[timeperiod] - previous).mul_add(smoothing, previous);
     out_real[0] = previous;
 
-    for output_idx in 1..count {
+    for (output_idx, output_value) in out_real.iter_mut().enumerate().take(count).skip(1) {
         let source_idx = lookback + output_idx;
         volatility -= (real[source_idx - timeperiod] - real[source_idx - timeperiod - 1]).abs();
         volatility += (real[source_idx] - real[source_idx - 1]).abs();
         let change = real[source_idx] - real[source_idx - timeperiod];
         let smoothing = smoothing_constant(change, volatility);
         previous = (real[source_idx] - previous).mul_add(smoothing, previous);
-        out_real[output_idx] = previous;
+        *output_value = previous;
     }
 
     OutputRange::new(lookback, count)

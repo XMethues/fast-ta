@@ -70,14 +70,14 @@ pub(super) fn money_flow_volume(high: Float, low: Float, close: Float, volume: F
 }
 fn ad_kernel(input: ADInput<'_>, len: usize, output: &mut [Float]) -> OutputRange {
     let mut cumulative = 0.0 as Float;
-    for idx in 0..len {
+    for (idx, output_value) in output.iter_mut().enumerate().take(len) {
         cumulative += money_flow_volume(
             input.high[idx],
             input.low[idx],
             input.close[idx],
             input.volume[idx],
         );
-        output[idx] = cumulative;
+        *output_value = cumulative;
     }
     OutputRange::new(0, len)
 }

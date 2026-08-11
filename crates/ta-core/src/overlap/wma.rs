@@ -46,12 +46,12 @@ pub(super) fn wma_kernel(
         .sum::<Float>();
     out_real[0] = weighted_sum / denominator;
 
-    for output_idx in 1..count {
+    for (output_idx, output_value) in out_real.iter_mut().enumerate().take(count).skip(1) {
         let new_idx = output_idx + timeperiod - 1;
         let old_idx = output_idx - 1;
         weighted_sum = weighted_sum - window_sum + timeperiod as Float * real[new_idx];
         window_sum += real[new_idx] - real[old_idx];
-        out_real[output_idx] = weighted_sum / denominator;
+        *output_value = weighted_sum / denominator;
     }
 
     OutputRange::new(lookback, count)

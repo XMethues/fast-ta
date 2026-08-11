@@ -269,6 +269,7 @@ impl MABatchRunner {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone)]
 enum MAStreamInner {
     SMA(super::sma::SMAStream),

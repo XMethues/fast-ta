@@ -749,7 +749,7 @@ fn regression_matches_pinned_rolling_fma_oracle() {
     let expected_endpoint = [14.1, 14.5, 17.5, 17.5, 19.8];
     let expected_slope = [1.4, 1.0, 2.0, 1.0, 1.7];
     let expected_intercept = [9.9, 11.5, 11.5, 14.5, 14.7];
-    let expected_angle = [
+    let expected_angle: [f64; 5] = [
         54.46232220802562,
         45.0,
         63.43494882292202,
@@ -762,7 +762,7 @@ fn regression_matches_pinned_rolling_fma_oracle() {
         assert_close(endpoint[idx], expected_endpoint[idx]);
         assert_close(slope[idx], expected_slope[idx]);
         assert_close(intercept[idx], expected_intercept[idx]);
-        assert_close(angle[idx], expected_angle[idx]);
+        assert_close(angle[idx], expected_angle[idx] as Float);
         assert_close(forecast[idx], expected_forecast[idx]);
     }
 

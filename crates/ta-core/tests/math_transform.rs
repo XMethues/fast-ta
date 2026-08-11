@@ -3,6 +3,8 @@ use ta_core::math_transform::{
 };
 use ta_core::{Float, IndicatorConfig, OutputRange};
 
+type TransformFn = fn(&[Float], &mut [Float]) -> ta_core::Result<OutputRange>;
+
 fn assert_close(actual: Float, expected: Float) {
     assert!(
         (actual - expected).abs() <= 1e-10 as Float,
@@ -36,7 +38,7 @@ fn all_math_transform_functions_are_exported() {
     let real = [0.5 as Float];
     let mut output = [0.0 as Float; 1];
 
-    let funcs: [fn(&[Float], &mut [Float]) -> ta_core::Result<OutputRange>; 13] = [
+    let funcs: [TransformFn; 13] = [
         ACOS, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN, TANH,
     ];
 

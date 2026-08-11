@@ -8,6 +8,8 @@ use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 
+// Pinned f64 oracle values intentionally retain more precision than f32 builds consume.
+#[allow(clippy::excessive_precision)]
 mod reference {
     include!("fixtures/momentum_range_position_reference.rs");
 }

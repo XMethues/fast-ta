@@ -1,5 +1,7 @@
 //! Non-blocking construction and throughput baselines for representative Pattern Recognition definitions.
 
+// This benchmark reuses only the OHLC fixture from the shared benchmark support module.
+#[allow(dead_code)]
 mod support;
 
 use std::hint::black_box;

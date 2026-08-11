@@ -1,5 +1,7 @@
 #![allow(clippy::type_complexity)]
 
+// Pinned f64 oracle values intentionally retain more precision than f32 builds consume.
+#[allow(clippy::excessive_precision)]
 #[path = "fixtures/overlap_rolling_reference.rs"]
 mod reference;
 

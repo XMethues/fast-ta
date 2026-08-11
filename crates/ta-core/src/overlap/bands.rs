@@ -464,9 +464,9 @@ pub struct BBANDSValue {
 fn validate_deviation(name: &str, value: Float) -> Result<()> {
     if !value.is_finite() {
         return Err(TalibError::invalid_parameter(
-            format!("{name}"),
+            name.into(),
             format!("{value}"),
-            format!("finite number"),
+            "finite number".into(),
         ));
     }
     Ok(())

@@ -34,8 +34,8 @@ fn validate_medprice_input(input: MEDPRICEInput<'_>) -> Result<usize> {
 }
 
 fn medprice_kernel(input: MEDPRICEInput<'_>, len: usize, output: &mut [Float]) -> OutputRange {
-    for idx in 0..len {
-        output[idx] = (input.high[idx] + input.low[idx]) / 2.0 as Float;
+    for (idx, output_value) in output.iter_mut().enumerate().take(len) {
+        *output_value = (input.high[idx] + input.low[idx]) / 2.0 as Float;
     }
     OutputRange::new(0, len)
 }

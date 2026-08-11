@@ -311,23 +311,6 @@ macro_rules! define_wilder_indicator {
             }
         }
 
-        impl $runner {
-            /// Runs the kernel that already prepared a scratch without
-            /// re-checking capacity. Used by indicators that compose Wilder
-            /// smoothing into their own prepared runner.
-            #[inline]
-            pub(crate) fn compute_into_bounded<'a>(
-                &mut self,
-                input: <$config as IndicatorConfig>::Input<'a>,
-                output: <$config as IndicatorConfig>::OutputMut<'a>,
-            ) -> Result<OutputRange>
-            where
-                $config: 'a,
-            {
-                IndicatorConfig::compute_into(&self.config, input, output)
-            }
-        }
-
         #[doc = concat!("Independent Streaming Computation state for ", $display, ".")]
         #[derive(Debug, Clone)]
         pub struct $stream {
@@ -372,6 +355,21 @@ define_wilder_indicator!(
     Projection::Rsi,
     "RSI"
 );
+
+impl RSIBatchRunner {
+    /// Runs the kernel after a composed indicator has checked capacity.
+    #[inline]
+    pub(crate) fn compute_into_bounded<'a>(
+        &mut self,
+        input: <RSIConfig as IndicatorConfig>::Input<'a>,
+        output: <RSIConfig as IndicatorConfig>::OutputMut<'a>,
+    ) -> Result<OutputRange>
+    where
+        RSIConfig: 'a,
+    {
+        IndicatorConfig::compute_into(&self.config, input, output)
+    }
+}
 define_wilder_indicator!(
     CMOConfig,
     CMOBatchRunner,
@@ -433,7 +431,7 @@ fn imi_kernel(
     }
     out_real[0] = project(totals, Projection::Imi);
 
-    for output_idx in 1..count {
+    for (output_idx, output_value) in out_real.iter_mut().enumerate().take(count).skip(1) {
         let incoming_idx = lookback + output_idx;
         let outgoing_idx = incoming_idx - timeperiod;
         let outgoing = GainLoss::from_movement(intraday_movement(
@@ -445,7 +443,7 @@ fn imi_kernel(
             input.close[incoming_idx],
         ));
         totals.replace(outgoing, incoming);
-        out_real[output_idx] = project(totals, Projection::Imi);
+        *output_value = project(totals, Projection::Imi);
     }
 
     OutputRange::new(lookback, count)

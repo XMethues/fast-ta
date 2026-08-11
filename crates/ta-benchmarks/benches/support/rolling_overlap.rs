@@ -1,8 +1,9 @@
-use super::{
+use crate::support::{
     ohlc_fixture, series_fixture, PERIOD, REPEATED_SERIES_LEN, STREAM_INSTRUMENTS, SWEEP_PERIODS,
     UNIVERSE_INSTRUMENTS, WORKERS,
 };
-use criterion::{black_box, BatchSize, Criterion, Throughput};
+use criterion::{BatchSize, Criterion, Throughput};
+use std::hint::black_box;
 use ta_core::overlap::{
     ACCBANDSConfig, ACCBANDSInput, ACCBANDSTick, ACCBANDSValuesMut, BBANDSConfig, BBANDSValuesMut,
     PeriodMAType,

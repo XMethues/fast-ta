@@ -29,14 +29,12 @@ use ta_core::{
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
         MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXValuesMut, MINMAXValuesMut,
-        MULTConfig, SUBConfig, SUMConfig, ADD, DIV, MAX, MAXINDEX, MIN, MININDEX, MINMAX,
-        MINMAXINDEX, MULT, SUB, SUM,
+        MULTConfig, SUBConfig, SUMConfig,
     },
     math_transform::{
         ACOSConfig, ASINConfig, ATANConfig, CEILConfig, COSConfig, COSHConfig, EXPConfig,
         FLOORConfig, LNConfig, LOG10Config, SINConfig, SINHConfig, SQRTConfig, TANConfig,
-        TANHConfig, ACOS, ASIN, ATAN, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN,
-        TANH,
+        TANHConfig,
     },
     momentum::{
         ADXConfig, ADXRConfig, CMOConfig, DXConfig, DirectionalInput, DirectionalTick, IMIConfig,
@@ -48,26 +46,24 @@ use ta_core::{
         BBANDSValuesMut, DEMAConfig, EMAConfig, KAMAConfig, MAConfig, MAVPConfig, MAVPInput,
         MAVPTick, MIDPOINTConfig, MIDPRICEConfig, MIDPRICEInput, MIDPRICETick, PeriodMAType,
         SARConfig, SAREXTConfig, SARInput, SARTick, SMAConfig, T3Config, TEMAConfig, TRIMAConfig,
-        WMAConfig, DEMA, EMA, MA, SMA, T3, TEMA, TRIMA, WMA,
+        WMAConfig,
     },
     price_transform::{
         AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, AVGPRICETick, MEDPRICEConfig, MEDPRICEInput,
         MEDPRICETick, TYPPRICEConfig, TYPPRICEInput, TYPPRICETick, WCLPRICEConfig, WCLPRICEInput,
-        WCLPRICETick, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
+        WCLPRICETick,
     },
     statistic::{
         BETAConfig, CORRELConfig, LINEARREGConfig, LINEARREG_ANGLEConfig,
         LINEARREG_INTERCEPTConfig, LINEARREG_SLOPEConfig, PairInput, PairTick, STDDEVConfig,
-        TSFConfig, VARConfig, BETA, CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT,
-        LINEARREG_SLOPE, STDDEV, TSF, VAR,
+        TSFConfig, VARConfig,
     },
     volatility::{
         ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
-        TRANGETick, ATR, NATR, TRANGE,
+        TRANGETick,
     },
     volume::{
-        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput,
-        OBVTick, AD, ADOSC, OBV,
+        ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
     },
     Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
 };

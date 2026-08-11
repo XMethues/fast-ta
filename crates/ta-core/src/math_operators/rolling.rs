@@ -45,8 +45,7 @@ where
         return Ok(OutputRange::empty());
     }
 
-    let mut deque = Vec::new();
-    deque.reserve(real.len());
+    let mut deque = Vec::with_capacity(real.len());
     let mut head = 0usize;
 
     for idx in 0..real.len() {
@@ -95,11 +94,11 @@ fn sum_kernel(
 
     let mut window_sum: Float = real[..period].iter().copied().sum();
     output[0] = window_sum;
-    for output_idx in 1..count {
+    for (output_idx, output_value) in output.iter_mut().enumerate().take(count).skip(1) {
         let new_idx = output_idx + period - 1;
         let old_idx = output_idx - 1;
         window_sum += real[new_idx] - real[old_idx];
-        output[output_idx] = window_sum;
+        *output_value = window_sum;
     }
     OutputRange::new(lookback, count)
 }

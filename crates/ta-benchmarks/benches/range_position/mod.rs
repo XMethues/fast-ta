@@ -320,12 +320,14 @@ pub(crate) fn bench_range_position_execution(c: &mut Criterion) {
                     .collect::<Vec<AROONStream>>()
             },
             |mut streams| {
-                for tick_index in 0..REPEATED_SERIES_LEN {
-                    for (instrument, stream) in streams.iter_mut().enumerate() {
+                for inputs in (0..REPEATED_SERIES_LEN)
+                    .map(|tick_index| stream_inputs.iter().map(move |series| series[tick_index]))
+                {
+                    for (stream, input) in streams.iter_mut().zip(inputs) {
                         black_box(
                             StreamingComputation::<AROONConfig>::next(
                                 black_box(stream),
-                                black_box(stream_inputs[instrument][tick_index]),
+                                black_box(input),
                             )
                             .unwrap(),
                         );

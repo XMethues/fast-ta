@@ -1,3 +1,5 @@
+// This shared generated input fixture contains provenance fields used by sibling suites.
+#[allow(dead_code)]
 #[path = "fixtures/ht_dcperiod_reference.rs"]
 mod inputs;
 #[path = "fixtures/ht_hilbert_outputs_reference.rs"]
@@ -28,6 +30,17 @@ const REL_TOLERANCE: Float = 1.0e-12;
 
 fn as_float(values: &[f64]) -> Vec<Float> {
     values.iter().map(|&value| value as Float).collect()
+}
+
+fn as_f64(value: Float) -> f64 {
+    #[cfg(feature = "f32")]
+    {
+        f64::from(value)
+    }
+    #[cfg(not(feature = "f32"))]
+    {
+        value
+    }
 }
 
 fn assert_value_close(actual: Float, expected: f64, context: &str) {
@@ -389,12 +402,12 @@ fn phase_units_wrap_and_sine_relationships_are_explicit() {
         let radians = phase_degrees * core::f64::consts::PI as Float / 180.0 as Float;
         assert_value_close(
             actual_sine,
-            radians.sin() as f64,
+            as_f64(radians.sin()),
             &format!("Sine relationship at {index}"),
         );
         assert_value_close(
             actual_lead,
-            (radians + core::f64::consts::FRAC_PI_4 as Float).sin() as f64,
+            as_f64((radians + core::f64::consts::FRAC_PI_4 as Float).sin()),
             &format!("LeadSine relationship at {index}"),
         );
     }

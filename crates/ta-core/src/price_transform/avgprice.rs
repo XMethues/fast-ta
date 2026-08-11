@@ -61,8 +61,8 @@ fn avgprice_tick(input: AVGPRICETick) -> Result<Float> {
 }
 
 fn avgprice_kernel(input: AVGPRICEInput<'_>, len: usize, output: &mut [Float]) -> OutputRange {
-    for idx in 0..len {
-        output[idx] =
+    for (idx, output_value) in output.iter_mut().enumerate().take(len) {
+        *output_value =
             (input.open[idx] + input.high[idx] + input.low[idx] + input.close[idx]) / 4.0 as Float;
     }
     OutputRange::new(0, len)

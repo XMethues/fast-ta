@@ -46,8 +46,8 @@ fn validate_wclprice_input(input: WCLPRICEInput<'_>) -> Result<usize> {
 }
 
 fn wclprice_kernel(input: WCLPRICEInput<'_>, len: usize, output: &mut [Float]) -> OutputRange {
-    for idx in 0..len {
-        output[idx] =
+    for (idx, output_value) in output.iter_mut().enumerate().take(len) {
+        *output_value =
             (input.high[idx] + input.low[idx] + 2.0 as Float * input.close[idx]) / 4.0 as Float;
     }
     OutputRange::new(0, len)

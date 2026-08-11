@@ -14,6 +14,17 @@ fn prices(values: &[f64]) -> Vec<Float> {
     values.iter().map(|&value| value as Float).collect()
 }
 
+fn as_f64(value: Float) -> f64 {
+    #[cfg(feature = "f32")]
+    {
+        f64::from(value)
+    }
+    #[cfg(not(feature = "f32"))]
+    {
+        value
+    }
+}
+
 fn tolerance(expected: f64) -> Float {
     #[cfg(feature = "f32")]
     {
@@ -200,7 +211,7 @@ fn sarext_is_not_a_shallow_sar_alias() {
     assert_eq!(sar.len(), sarext_default.len());
     assert!(sarext_default.iter().any(|value| *value < 0.0 as Float));
     for (&sar, &signed_sarext) in sar.iter().zip(&sarext_default) {
-        assert!((sar - signed_sarext.abs()).abs() <= tolerance(sar as f64));
+        assert!((sar - signed_sarext.abs()).abs() <= tolerance(as_f64(sar)));
     }
 
     let custom = SAREXTConfig::new(

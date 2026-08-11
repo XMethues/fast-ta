@@ -75,7 +75,7 @@ fn natr_kernel(
         normalize(atr, input.close[lookback])
     };
 
-    for output_idx in 1..count {
+    for (output_idx, output_value) in output.iter_mut().enumerate().take(count).skip(1) {
         let input_idx = lookback + output_idx;
         let range = super::trange::true_range(
             input.high[input_idx],
@@ -83,7 +83,7 @@ fn natr_kernel(
             input.close[input_idx - 1],
         );
         atr = super::atr::wilder_smooth(atr, range, timeperiod);
-        output[output_idx] = if timeperiod == 1 {
+        *output_value = if timeperiod == 1 {
             atr
         } else {
             normalize(atr, input.close[input_idx])

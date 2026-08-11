@@ -76,7 +76,7 @@ fn atr_kernel(
     atr /= timeperiod as Float;
     output[0] = atr;
 
-    for output_idx in 1..count {
+    for (output_idx, output_value) in output.iter_mut().enumerate().take(count).skip(1) {
         let input_idx = lookback + output_idx;
         let range = super::trange::true_range(
             input.high[input_idx],
@@ -84,7 +84,7 @@ fn atr_kernel(
             input.close[input_idx - 1],
         );
         atr = wilder_smooth(atr, range, timeperiod);
-        output[output_idx] = atr;
+        *output_value = atr;
     }
 
     OutputRange::new(lookback, count)

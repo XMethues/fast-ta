@@ -197,9 +197,11 @@ pub(crate) fn bench_moving_average_momentum_execution(c: &mut Criterion) {
             .map(|_| config.stream().unwrap())
             .collect();
         b.iter(|| {
-            for index in 0..REPEATED_SERIES_LEN {
-                for (instrument, stream) in streams.iter_mut().enumerate() {
-                    black_box(stream.next(black_box(universe[instrument][index])).unwrap());
+            for inputs in (0..REPEATED_SERIES_LEN)
+                .map(|index| universe.iter().map(move |series| series[index]))
+            {
+                for (stream, input) in streams.iter_mut().zip(inputs) {
+                    black_box(stream.next(black_box(input)).unwrap());
                 }
             }
             for stream in &mut streams {

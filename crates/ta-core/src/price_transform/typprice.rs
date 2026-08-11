@@ -46,8 +46,8 @@ fn validate_typprice_input(input: TYPPRICEInput<'_>) -> Result<usize> {
 }
 
 fn typprice_kernel(input: TYPPRICEInput<'_>, len: usize, output: &mut [Float]) -> OutputRange {
-    for idx in 0..len {
-        output[idx] = (input.high[idx] + input.low[idx] + input.close[idx]) / 3.0 as Float;
+    for (idx, output_value) in output.iter_mut().enumerate().take(len) {
+        *output_value = (input.high[idx] + input.low[idx] + input.close[idx]) / 3.0 as Float;
     }
     OutputRange::new(0, len)
 }

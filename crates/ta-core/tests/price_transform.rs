@@ -31,8 +31,8 @@ fn avgprice_medprice_typprice_wclprice_compute_expected_values() {
     assert_close(output[2], 3.0);
 
     TYPPRICE(&high, &low, &close, &mut output).unwrap();
-    assert_close(output[0], 1.1666666666666667);
-    assert_close(output[2], 3.1666666666666665);
+    assert_close(output[0], 7.0 as Float / 6.0 as Float);
+    assert_close(output[2], 19.0 as Float / 6.0 as Float);
 
     WCLPRICE(&high, &low, &close, &mut output).unwrap();
     assert_close(output[0], 1.25);

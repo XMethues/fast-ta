@@ -54,9 +54,9 @@ fn trange_kernel(input: TRANGEInput<'_>, count: usize, output: &mut [Float]) -> 
         return OutputRange::empty();
     }
 
-    for output_idx in 0..count {
+    for (output_idx, output_value) in output.iter_mut().enumerate().take(count) {
         let input_idx = output_idx + 1;
-        output[output_idx] = true_range(
+        *output_value = true_range(
             input.high[input_idx],
             input.low[input_idx],
             input.close[input_idx - 1],

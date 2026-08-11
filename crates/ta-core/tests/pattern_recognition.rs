@@ -113,7 +113,10 @@ impl Series {
 
 fn expected_codes(f64_codes: &[i32], f32_codes: &[i32]) -> Vec<PatternSignal> {
     #[cfg(feature = "f32")]
-    let codes = f32_codes;
+    let codes = {
+        let _ = f64_codes;
+        f32_codes
+    };
     #[cfg(not(feature = "f32"))]
     let codes = {
         let _ = f32_codes;
@@ -3952,7 +3955,17 @@ fn prepared_and_streaming_hikkake_state_is_isolated_retained_reset_and_retry_saf
 
 #[test]
 fn hikkake_evidence_rows_cover_pinned_state_predicates_boundaries_and_transitions() {
-    const ROWS: [(&str, &str, &str, &str, &str, &str, usize, usize); 2] = [
+    type EvidenceRow = (
+        &'static str,
+        &'static str,
+        &'static str,
+        &'static str,
+        &'static str,
+        &'static str,
+        usize,
+        usize,
+    );
+    const ROWS: [EvidenceRow; 2] = [
         (
             "CDLHIKKAKE",
             "cdlhikkake/cdlhikkake.c",

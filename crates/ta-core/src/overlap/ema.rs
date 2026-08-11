@@ -53,10 +53,10 @@ pub(super) fn ema_kernel(
     let mut ema = ema_seed(real, timeperiod);
     out_real[0] = ema;
 
-    for output_idx in 1..count {
+    for (output_idx, output_value) in out_real.iter_mut().enumerate().take(count).skip(1) {
         let input_idx = lookback + output_idx;
         ema = ema_step(ema, real[input_idx], multiplier);
-        out_real[output_idx] = ema;
+        *output_value = ema;
     }
 
     OutputRange::new(lookback, count)

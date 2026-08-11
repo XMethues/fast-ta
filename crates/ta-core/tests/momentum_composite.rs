@@ -11,6 +11,8 @@ use ta_core::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 
+type Ohlcv = (Vec<Float>, Vec<Float>, Vec<Float>, Vec<Float>, Vec<Float>);
+
 fn floats(values: &[f64]) -> Vec<Float> {
     values.iter().map(|&value| value as Float).collect()
 }
@@ -36,7 +38,7 @@ fn assert_close(actual: &[Float], expected: &[f64]) {
     }
 }
 
-fn ordinary() -> (Vec<Float>, Vec<Float>, Vec<Float>, Vec<Float>, Vec<Float>) {
+fn ordinary() -> Ohlcv {
     (
         floats(reference::OPEN),
         floats(reference::HIGH),

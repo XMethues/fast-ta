@@ -1,3 +1,5 @@
+// This shared generated input fixture contains provenance fields used by sibling suites.
+#[allow(dead_code)]
 #[path = "fixtures/ht_dcperiod_reference.rs"]
 mod inputs;
 #[path = "fixtures/hilbert_overlap_reference.rs"]

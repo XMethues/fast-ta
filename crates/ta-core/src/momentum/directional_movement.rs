@@ -208,7 +208,7 @@ impl DirectionalState {
             self.plus_dm = raw_plus;
             self.minus_dm = raw_minus;
             self.true_range = raw_range;
-        } else if self.movement_count <= self.period - 1 {
+        } else if self.movement_count < self.period {
             self.plus_dm += raw_plus;
             self.minus_dm += raw_minus;
             self.true_range += raw_range;
@@ -523,6 +523,7 @@ macro_rules! directional_indicator {
     ) => {
         #[doc = $config_doc]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[allow(non_camel_case_types)]
         pub struct $config {
             period: usize,
         }
@@ -599,6 +600,7 @@ macro_rules! directional_indicator {
 
         #[doc = $runner_doc]
         #[derive(Debug, Clone)]
+        #[allow(non_camel_case_types)]
         pub struct $runner {
             config: $config,
             max_input_len: usize,
@@ -632,6 +634,7 @@ macro_rules! directional_indicator {
 
         #[doc = $stream_doc]
         #[derive(Debug, Clone)]
+        #[allow(non_camel_case_types)]
         pub struct $stream {
             core: StreamCore,
         }

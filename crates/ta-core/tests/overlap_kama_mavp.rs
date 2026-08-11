@@ -1,3 +1,5 @@
+// Pinned f64 oracle values intentionally retain more precision than f32 builds consume.
+#[allow(clippy::excessive_precision)]
 #[path = "fixtures/kama_mavp_reference.rs"]
 mod reference;
 
