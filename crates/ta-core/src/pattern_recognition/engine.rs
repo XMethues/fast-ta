@@ -1,8 +1,8 @@
 //! Crate-private generic execution engine for Pattern Recognition definitions.
 
 use super::{
-    Candle, CandleInput, CandleRangeKind, CandleSettingType, CandleSettings, PatternDirection,
-    PatternSignal,
+    Candle, CandleInput, CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings,
+    PatternDirection, PatternSignal,
 };
 use crate::{common::validate_finite_value, TalibError};
 use crate::{
@@ -88,7 +88,7 @@ impl Candle {
     }
 
     #[inline]
-    fn lower_shadow(self) -> PatternFloat {
+    pub(crate) fn lower_shadow(self) -> PatternFloat {
         let body_low = if self.close >= self.open {
             self.open
         } else {
@@ -103,7 +103,7 @@ impl Candle {
     }
 
     #[inline]
-    fn color(self) -> CandleColor {
+    pub(crate) fn color(self) -> CandleColor {
         if self.close >= self.open {
             CandleColor::White
         } else {
@@ -176,7 +176,7 @@ pub(crate) struct RecognitionContext<'a> {
 
 impl RecognitionContext<'_> {
     #[inline]
-    fn raw_candle(&self, offset: usize) -> Candle {
+    pub(crate) fn raw_candle(&self, offset: usize) -> Candle {
         self.history.frame(offset).candle
     }
 
@@ -296,6 +296,64 @@ pub(crate) fn maximum_average_period(
         .map(|&setting_type| settings.setting(setting_type).average_period())
         .max()
         .unwrap_or(0)
+}
+
+/// Runs a one-Candle-Setting rolling batch while retaining only averages used by the predicate.
+///
+/// `AVERAGE_HISTORY` is the number of source-aligned Candle Averages the local predicate
+/// references, with offset zero denoting the current source position.
+#[inline]
+pub(crate) fn compute_single_setting_batch_into<const AVERAGE_HISTORY: usize>(
+    input: CandleInput<'_>,
+    output: &mut [PatternSignal],
+    lookback: usize,
+    setting: CandleSetting,
+    mut transition: impl FnMut(usize, Candle, [PatternFloat; AVERAGE_HISTORY]) -> PatternSignal,
+) {
+    assert!(
+        AVERAGE_HISTORY > 0,
+        "single-setting batch requires Average history"
+    );
+
+    let period = setting.average_period();
+    if input.len() < period {
+        return;
+    }
+
+    let range_kind = setting.range_kind();
+    let factor = widen(setting.factor());
+    let divisor = if range_kind == CandleRangeKind::Shadows {
+        2.0
+    } else {
+        1.0
+    };
+    let mut total = (0..period)
+        .map(|source_index| input.candle(source_index).range(range_kind))
+        .sum::<PatternFloat>();
+    let mut recent = [0.0; AVERAGE_HISTORY];
+
+    for source_index in period..input.len() {
+        let candle = input.candle(source_index);
+        let range = if period == 0 {
+            candle.range(range_kind)
+        } else {
+            total / period as PatternFloat
+        };
+        let newest = source_index % AVERAGE_HISTORY;
+        recent[newest] = factor * range / divisor;
+
+        if source_index >= lookback {
+            let averages = core::array::from_fn(|offset| {
+                recent[(newest + AVERAGE_HISTORY - offset) % AVERAGE_HISTORY]
+            });
+            output[source_index - lookback] = transition(source_index, candle, averages);
+        }
+
+        if period != 0 {
+            total +=
+                candle.range(range_kind) - input.candle(source_index - period).range(range_kind);
+        }
+    }
 }
 
 /// Static, crate-owned definition seam. Predicates and formulas stay local.

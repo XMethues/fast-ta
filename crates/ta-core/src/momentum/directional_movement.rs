@@ -139,6 +139,48 @@ fn validate_tick(input: DirectionalTick) -> Result<()> {
     ])
 }
 
+#[inline]
+fn qualified_movement(
+    high: Float,
+    low: Float,
+    previous_high: Float,
+    previous_low: Float,
+) -> (Float, Float) {
+    let up = high - previous_high;
+    let down = previous_low - low;
+    if up > 0.0 as Float && up > down {
+        (up, 0.0 as Float)
+    } else if down > 0.0 as Float && down > up {
+        (0.0 as Float, down)
+    } else {
+        (0.0 as Float, 0.0 as Float)
+    }
+}
+
+#[inline]
+fn directional_indices(
+    plus_dm: Float,
+    minus_dm: Float,
+    true_range: Float,
+) -> (Float, Float, Float, bool) {
+    if true_range == 0.0 as Float {
+        return (0.0 as Float, 0.0 as Float, 0.0 as Float, false);
+    }
+    let plus_di = 100.0 as Float * plus_dm / true_range;
+    let minus_di = 100.0 as Float * minus_dm / true_range;
+    let di_sum = plus_di + minus_di;
+    if di_sum == 0.0 as Float {
+        (plus_di, minus_di, 0.0 as Float, false)
+    } else {
+        (
+            plus_di,
+            minus_di,
+            100.0 as Float * (plus_di - minus_di).abs() / di_sum,
+            true,
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct DirectionalPoint {
     plus_dm: Float,
@@ -187,18 +229,8 @@ impl DirectionalState {
             return None;
         };
 
-        let up = tick.high - previous.high;
-        let down = previous.low - tick.low;
-        let raw_plus = if up > 0.0 as Float && up > down {
-            up
-        } else {
-            0.0 as Float
-        };
-        let raw_minus = if down > 0.0 as Float && down > up {
-            down
-        } else {
-            0.0 as Float
-        };
+        let (raw_plus, raw_minus) =
+            qualified_movement(tick.high, tick.low, previous.high, previous.low);
         let raw_range =
             super::super::volatility::directional_true_range(tick.high, tick.low, previous.close);
         self.previous = Some(tick);
@@ -221,20 +253,10 @@ impl DirectionalState {
 
         let dm_ready = self.period == 1 || self.movement_count >= self.period - 1;
         let di_ready = self.period == 1 || self.movement_count >= self.period;
-        let (plus_di, minus_di) = if di_ready && self.true_range != 0.0 as Float {
-            (
-                100.0 as Float * self.plus_dm / self.true_range,
-                100.0 as Float * self.minus_dm / self.true_range,
-            )
+        let (plus_di, minus_di, dx, dx_defined) = if di_ready {
+            directional_indices(self.plus_dm, self.minus_dm, self.true_range)
         } else {
-            (0.0 as Float, 0.0 as Float)
-        };
-        let di_sum = plus_di + minus_di;
-        let dx_defined = di_ready && self.true_range != 0.0 as Float && di_sum != 0.0 as Float;
-        let dx = if dx_defined {
-            100.0 as Float * (plus_di - minus_di).abs() / di_sum
-        } else {
-            0.0 as Float
+            (0.0 as Float, 0.0 as Float, 0.0 as Float, false)
         };
 
         Some(DirectionalPoint {
@@ -306,6 +328,116 @@ fn tick_at(input: DirectionalInput<'_>, index: usize) -> DirectionalTick {
     }
 }
 
+// Batch ADX has three fixed phases. Keeping those phases explicit avoids the
+// per-tick readiness/Option state machine while reusing the qualified movement,
+// true-range, and DI/DX formulas used by streaming and neighboring definitions.
+struct AdxBatchState {
+    period: Float,
+    previous: DirectionalTick,
+    plus_dm: Float,
+    minus_dm: Float,
+    true_range: Float,
+}
+
+impl AdxBatchState {
+    #[inline]
+    fn new(period: usize, first: DirectionalTick) -> Self {
+        Self {
+            period: period as Float,
+            previous: first,
+            plus_dm: 0.0 as Float,
+            minus_dm: 0.0 as Float,
+            true_range: 0.0 as Float,
+        }
+    }
+
+    #[inline]
+    fn accumulate(&mut self, tick: DirectionalTick) {
+        let (raw_plus, raw_minus) =
+            qualified_movement(tick.high, tick.low, self.previous.high, self.previous.low);
+        self.plus_dm += raw_plus;
+        self.minus_dm += raw_minus;
+        self.true_range += super::super::volatility::directional_true_range(
+            tick.high,
+            tick.low,
+            self.previous.close,
+        );
+        self.previous = tick;
+    }
+
+    #[inline]
+    fn smooth_dx(&mut self, tick: DirectionalTick) -> (Float, bool) {
+        let (raw_plus, raw_minus) =
+            qualified_movement(tick.high, tick.low, self.previous.high, self.previous.low);
+        let raw_range = super::super::volatility::directional_true_range(
+            tick.high,
+            tick.low,
+            self.previous.close,
+        );
+        self.plus_dm = self.plus_dm - self.plus_dm / self.period + raw_plus;
+        self.minus_dm = self.minus_dm - self.minus_dm / self.period + raw_minus;
+        self.true_range = self.true_range - self.true_range / self.period + raw_range;
+        self.previous = tick;
+        let (_, _, dx, dx_defined) =
+            directional_indices(self.plus_dm, self.minus_dm, self.true_range);
+        (dx, dx_defined)
+    }
+}
+
+fn adx_batch_kernel(
+    input: DirectionalInput<'_>,
+    period: usize,
+    count: usize,
+    output: &mut [Float],
+) {
+    let mut ticks = input
+        .high
+        .iter()
+        .copied()
+        .zip(input.low.iter().copied())
+        .zip(input.close.iter().copied())
+        .map(|((high, low), close)| DirectionalTick { high, low, close });
+    let mut state = AdxBatchState::new(
+        period,
+        ticks
+            .next()
+            .expect("non-empty ADX input after lookback validation"),
+    );
+
+    for _ in 1..period {
+        state.accumulate(
+            ticks
+                .next()
+                .expect("ADX input contains the initial Directional Movement span"),
+        );
+    }
+
+    let mut dx_sum = 0.0 as Float;
+    for _ in 0..period {
+        let (dx, _) = state.smooth_dx(
+            ticks
+                .next()
+                .expect("ADX input contains the initial Directional Index span"),
+        );
+        dx_sum += dx;
+    }
+
+    let mut adx = dx_sum / period as Float;
+    output[0] = adx;
+    let period_minus_one = (period - 1) as Float;
+    for slot in &mut output[1..count] {
+        let (dx, dx_defined) = state.smooth_dx(
+            ticks
+                .next()
+                .expect("validated ADX output count matches the input"),
+        );
+        if dx_defined {
+            adx = (adx * period_minus_one + dx) / period as Float;
+        }
+        *slot = adx;
+    }
+}
+
 fn kernel(
     input: DirectionalInput<'_>,
     definition: Definition,
@@ -319,16 +451,7 @@ fn kernel(
     }
 
     match definition {
-        Definition::Adx => {
-            let mut state = AdxState::new(period);
-            let mut output_index = 0;
-            for index in 0..input.high.len() {
-                if let Some(value) = state.update(tick_at(input, index)) {
-                    output[output_index] = value;
-                    output_index += 1;
-                }
-            }
-        }
+        Definition::Adx => adx_batch_kernel(input, period, count, output),
         Definition::Adxr => {
             let lag = period - 1;
             let mut current = AdxState::new(period);

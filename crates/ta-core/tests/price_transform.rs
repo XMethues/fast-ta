@@ -129,3 +129,141 @@ fn prepared_capacity_precedes_price_transform_input_alignment() {
         capacity_error
     );
 }
+
+#[test]
+fn typprice_public_batch_matches_scalar_at_simd_boundaries() {
+    let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+    let lengths = [
+        0,
+        1,
+        lane_width - 1,
+        lane_width,
+        lane_width + 1,
+        lane_width * 2 + 1,
+        65_537,
+    ];
+    let config = TYPPRICEConfig::new();
+    const SENTINEL: Float = -12_345.0 as Float;
+
+    for len in lengths {
+        let high: Vec<Float> = (0..len)
+            .map(|index| index as Float * 0.5 as Float + 3.25 as Float)
+            .collect();
+        let low: Vec<Float> = (0..len)
+            .map(|index| index as Float * 0.25 as Float - 1.5 as Float)
+            .collect();
+        let close: Vec<Float> = (0..len)
+            .map(|index| index as Float * 0.125 as Float + 0.75 as Float)
+            .collect();
+        let expected: Vec<Float> = (0..len)
+            .map(|index| (high[index] + low[index] + close[index]) / 3.0 as Float)
+            .collect();
+        let input = TYPPRICEInput {
+            high: &high,
+            low: &low,
+            close: &close,
+        };
+
+        let owned = config.compute(input).unwrap();
+        assert_eq!(owned.range(), OutputRange::new(0, len), "owned len {len}");
+        assert_eq!(owned.values(), expected.as_slice(), "owned len {len}");
+
+        let mut caller_owned = vec![SENTINEL; len + 1];
+        assert_eq!(
+            config.compute_into(input, &mut caller_owned).unwrap(),
+            OutputRange::new(0, len),
+            "caller-owned len {len}"
+        );
+        assert_eq!(
+            &caller_owned[..len],
+            expected.as_slice(),
+            "caller-owned len {len}"
+        );
+        assert_eq!(caller_owned[len], SENTINEL, "caller-owned tail len {len}");
+
+        let mut prepared = config.prepare_batch(len).unwrap();
+        let mut prepared_output = vec![SENTINEL; len + 1];
+        assert_eq!(
+            prepared.compute_into(input, &mut prepared_output).unwrap(),
+            OutputRange::new(0, len),
+            "prepared len {len}"
+        );
+        assert_eq!(
+            &prepared_output[..len],
+            expected.as_slice(),
+            "prepared len {len}"
+        );
+        assert_eq!(prepared_output[len], SENTINEL, "prepared tail len {len}");
+    }
+}
+
+#[test]
+fn typprice_validates_all_input_before_simd_output_mutation() {
+    let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+    let len = lane_width * 2 + 1;
+    let mut high = vec![3.0 as Float; len];
+    let low = vec![1.0 as Float; len];
+    let close = vec![2.0 as Float; len];
+    high[lane_width + 1] = Float::NAN;
+    let mut output = vec![-12_345.0 as Float; len];
+
+    assert!(TYPPRICEConfig::new()
+        .compute_into(
+            TYPPRICEInput {
+                high: &high,
+                low: &low,
+                close: &close,
+            },
+            &mut output,
+        )
+        .is_err());
+    assert_eq!(output, vec![-12_345.0 as Float; len]);
+}
+
+#[test]
+fn typprice_non_finite_errors_preserve_named_slice_order_index_value_and_output() {
+    let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+    let len = lane_width * 4 + 3;
+    const SENTINEL: Float = -12_345.0 as Float;
+
+    for (name, index, value) in [
+        ("high", 0, Float::NAN),
+        ("low", lane_width * 4 - 1, Float::INFINITY),
+        ("close", len - 1, Float::NEG_INFINITY),
+    ] {
+        let mut high = vec![3.0 as Float; len];
+        let mut low = vec![1.0 as Float; len];
+        let mut close = vec![2.0 as Float; len];
+        match name {
+            "high" => high[index] = value,
+            "low" => low[index] = value,
+            "close" => close[index] = value,
+            _ => unreachable!(),
+        }
+        let mut output = vec![SENTINEL; len];
+
+        assert_eq!(
+            TYPPRICE(&high, &low, &close, &mut output).unwrap_err(),
+            TalibError::invalid_input(format!("{name}[{index}] must be finite, got {value}"))
+        );
+        assert_eq!(output, vec![SENTINEL; len]);
+    }
+
+    let mut high = vec![3.0 as Float; len];
+    let mut low = vec![1.0 as Float; len];
+    let mut close = vec![2.0 as Float; len];
+    high[len - 1] = Float::INFINITY;
+    low[0] = Float::NAN;
+    close[0] = Float::NEG_INFINITY;
+    let mut output = vec![SENTINEL; len];
+
+    assert_eq!(
+        TYPPRICE(&high, &low, &close, &mut output).unwrap_err(),
+        TalibError::invalid_input(format!(
+            "high[{}] must be finite, got {}",
+            len - 1,
+            Float::INFINITY
+        ))
+    );
+    assert_eq!(output, vec![SENTINEL; len]);
+}

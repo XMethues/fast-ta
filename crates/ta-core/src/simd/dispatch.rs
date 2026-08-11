@@ -184,6 +184,41 @@ pub fn get_dispatch() -> &'static DispatchTable {
     }
 }
 
+/// Returns the index of the first non-finite value, if any.
+///
+/// AArch64 `std` builds use an explicit NEON all-finite scan and recover the
+/// exact first invalid lane on failure. Other targets and `no_std` builds use
+/// the portable scalar fallback.
+#[inline]
+pub(crate) fn first_non_finite(values: &[Float]) -> Option<usize> {
+    #[cfg(all(feature = "std", target_arch = "aarch64"))]
+    {
+        // SAFETY: NEON is part of the AArch64 baseline. The implementation
+        // performs unaligned loads only where a complete vector fits.
+        unsafe { aarch64::neon::first_non_finite(values) }
+    }
+
+    #[cfg(not(all(feature = "std", target_arch = "aarch64")))]
+    scalar::first_non_finite(values)
+}
+
+/// Computes Typical Price into a caller-provided output buffer.
+///
+/// AArch64 `std` builds use explicit NEON arithmetic. Other targets and
+/// `no_std` builds retain the portable scalar implementation.
+#[inline]
+pub(crate) fn typical_price(high: &[Float], low: &[Float], close: &[Float], output: &mut [Float]) {
+    #[cfg(all(feature = "std", target_arch = "aarch64"))]
+    {
+        // SAFETY: NEON is part of the AArch64 baseline, and the validated
+        // Indicator seam guarantees equal input lengths and sufficient output.
+        unsafe { aarch64::neon::typical_price(high, low, close, output) }
+    }
+
+    #[cfg(not(all(feature = "std", target_arch = "aarch64")))]
+    scalar::typical_price(high, low, close, output);
+}
+
 /// Calculate the sum of all elements in a slice.
 ///
 /// This function automatically dispatches to the best available SIMD implementation.
@@ -368,6 +403,81 @@ mod tests {
         let dot_result =
             (table.dot_product)(&[1.0 as Float, 2.0 as Float], &[3.0 as Float, 4.0 as Float]);
         assert!((dot_result - 11.0 as Float).abs() < Float::from(1e-10));
+    }
+
+    #[test]
+    fn first_non_finite_dispatch_matches_scalar_for_short_vectors_tails_and_failures() {
+        let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+        for len in [
+            0,
+            1,
+            lane_width - 1,
+            lane_width,
+            lane_width + 1,
+            lane_width * 4 - 1,
+            lane_width * 4,
+            lane_width * 4 + 1,
+            257,
+        ] {
+            let values = vec![1.0 as Float; len];
+            assert_eq!(first_non_finite(&values), None, "all-finite length {len}");
+            assert_eq!(
+                first_non_finite(&values),
+                scalar::first_non_finite(&values),
+                "scalar parity length {len}"
+            );
+        }
+
+        let len = lane_width * 4 + 3;
+        for (invalid_index, invalid_value) in [
+            (0, Float::NAN),
+            (lane_width - 1, Float::INFINITY),
+            (lane_width, Float::NEG_INFINITY),
+            (lane_width * 4 - 1, Float::NAN),
+            (lane_width * 4, Float::INFINITY),
+            (len - 1, Float::NEG_INFINITY),
+        ] {
+            let mut values = vec![1.0 as Float; len];
+            values[invalid_index] = invalid_value;
+            assert_eq!(
+                first_non_finite(&values),
+                Some(invalid_index),
+                "invalid index {invalid_index}"
+            );
+            assert_eq!(
+                first_non_finite(&values),
+                scalar::first_non_finite(&values),
+                "scalar parity at invalid index {invalid_index}"
+            );
+        }
+
+        let mut values = vec![1.0 as Float; len];
+        values[lane_width * 4 + 1] = Float::INFINITY;
+        values[1] = Float::NAN;
+        assert_eq!(first_non_finite(&values), Some(1));
+    }
+
+    #[test]
+    fn typical_price_dispatch_matches_scalar_fallback() {
+        let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+        for len in [0, 1, lane_width, lane_width + 1, lane_width * 2 + 1, 257] {
+            let high: Vec<Float> = (0..len)
+                .map(|index| index as Float + 3.0 as Float)
+                .collect();
+            let low: Vec<Float> = (0..len)
+                .map(|index| index as Float * 0.5 as Float - 2.0 as Float)
+                .collect();
+            let close: Vec<Float> = (0..len)
+                .map(|index| index as Float * 0.25 as Float + 1.0 as Float)
+                .collect();
+            let mut expected = vec![0.0 as Float; len];
+            let mut actual = vec![0.0 as Float; len];
+
+            scalar::typical_price(&high, &low, &close, &mut expected);
+            typical_price(&high, &low, &close, &mut actual);
+
+            assert_eq!(actual, expected, "length {len}");
+        }
     }
 }
 

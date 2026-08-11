@@ -1,28 +1,29 @@
-//! # SIMD Accelerated Technical Analysis
+//! # SIMD support and indicator dispatch
 //!
-//! This module provides SIMD-accelerated implementations of technical analysis operations.
-//! It automatically selects the best available SIMD instruction set based on the target platform
-//! and provides a scalar fallback for unsupported platforms.
+//! This module exposes the existing standalone reduction APIs and contains the
+//! architecture dispatch used by integrated Indicator batch kernels.
 //!
-//! ## Usage
+//! [`crate::price_transform::TYPPRICEConfig`] is the first integrated Indicator
+//! path: with `std` on AArch64, its Owned, caller-owned, and Prepared batch
+//! executions use explicit NEON vector arithmetic. Other architectures and
+//! `no_std` builds use the scalar fallback, and streaming execution remains
+//! scalar because it processes one tick at a time.
 //!
-//! The module provides a unified API for all SIMD levels. Functions are automatically
-//! dispatched to the best available implementation at runtime (x86_64) or compile-time.
+//! ## Standalone API
+//!
+//! The existing [`sum`] and [`dot_product`] functions retain their unified
+//! dispatch API:
 //!
 //! ```rust
 //! use ta_core::{simd, Float};
 //!
 //! let data: Vec<Float> = vec![1.0 as Float, 2.0 as Float, 3.0 as Float, 4.0 as Float];
-//! let result = simd::sum(&data);  // Auto-dispatched to AVX2/AVX-512/NEON/SIMD128/Scalar
+//! let result = simd::sum(&data);
 //! assert_eq!(result, 10.0 as Float);
 //! ```
 //!
-//! ## Performance Considerations
-//!
-//! - SIMD implementations require aligned data for optimal performance
-//! - For very small arrays, scalar operations may be faster due to SIMD overhead
-//! - Use the `dispatch` module for runtime-dispatched operations (recommended)
-//! - Direct platform-specific modules are available via `arch` submodule
+//! Architecture-specific implementation modules remain private; callers use
+//! Indicator configurations or these architecture-neutral standalone APIs.
 use crate::Float;
 use wide;
 pub mod scalar;

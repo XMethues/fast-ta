@@ -74,6 +74,20 @@ pub fn dot_product(a: &[Float], b: &[Float]) -> Float {
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
 }
 
+/// Finds the first non-finite value using the portable scalar fallback.
+#[inline]
+pub(crate) fn first_non_finite(values: &[Float]) -> Option<usize> {
+    values.iter().position(|value| !value.is_finite())
+}
+
+#[cfg_attr(all(feature = "std", target_arch = "aarch64"), allow(dead_code))]
+#[inline]
+pub(crate) fn typical_price(high: &[Float], low: &[Float], close: &[Float], output: &mut [Float]) {
+    for index in 0..high.len() {
+        output[index] = (high[index] + low[index] + close[index]) / 3.0 as Float;
+    }
+}
+
 /// Calculate rolling sums with a specified window size using scalar operations.
 ///
 /// This is fallback implementation when no SIMD acceleration is available.

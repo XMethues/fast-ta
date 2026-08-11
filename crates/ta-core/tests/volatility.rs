@@ -174,6 +174,105 @@ fn atr_config_implements_indicator_compute() {
 }
 
 #[test]
+#[cfg_attr(feature = "f32", allow(clippy::excessive_precision))]
+fn atr_long_recurrence_matches_oracle_across_batch_and_streaming_modes() {
+    let high = [
+        11.0 as Float,
+        13.0,
+        17.0,
+        15.0,
+        16.0,
+        21.0,
+        19.0,
+        19.0,
+        25.0,
+        23.0,
+        24.0,
+        25.0,
+    ];
+    let low = [
+        9.0 as Float,
+        9.0,
+        15.0,
+        13.0,
+        13.0,
+        19.0,
+        16.0,
+        15.0,
+        23.0,
+        18.0,
+        16.0,
+        23.0,
+    ];
+    let close = [
+        10.0 as Float,
+        12.0,
+        16.0,
+        14.0,
+        15.0,
+        20.0,
+        17.0,
+        18.0,
+        24.0,
+        20.0,
+        22.0,
+        24.0,
+    ];
+    let expected = [
+        3.75 as Float,
+        4.3125,
+        4.234375,
+        4.17578125,
+        4.8818359375,
+        5.161376953125,
+        5.87103271484375,
+        5.1532745361328125,
+    ];
+    let input = ATRInput {
+        high: &high,
+        low: &low,
+        close: &close,
+    };
+    let config = ATRConfig::new(4).unwrap();
+
+    let owned = IndicatorConfig::compute(&config, input).unwrap();
+    assert_eq!(owned.range(), OutputRange::new(4, expected.len()));
+    assert_eq!(owned.values().as_slice(), expected);
+
+    let mut output = [-1.0 as Float; 10];
+    let range = IndicatorConfig::compute_into(&config, input, &mut output).unwrap();
+    assert_eq!(range, owned.range());
+    assert_eq!(&output[..expected.len()], expected);
+    assert_eq!(&output[expected.len()..], &[-1.0 as Float; 2]);
+
+    let mut runner = IndicatorConfig::prepare_batch(&config, high.len()).unwrap();
+    output.fill(-1.0 as Float);
+    let prepared =
+        PreparedBatchRunner::<ATRConfig>::compute_into(&mut runner, input, &mut output).unwrap();
+    assert_eq!(prepared, owned.range());
+    assert_eq!(&output[..expected.len()], expected);
+    assert_eq!(&output[expected.len()..], &[-1.0 as Float; 2]);
+
+    let mut stream = IndicatorConfig::stream(&config).unwrap();
+    let mut streamed = Vec::with_capacity(expected.len());
+    for index in 0..high.len() {
+        if let Some(value) = StreamingComputation::<ATRConfig>::next(
+            &mut stream,
+            ATRTick {
+                high: high[index],
+                low: low[index],
+                close: close[index],
+            },
+        )
+        .unwrap()
+        {
+            streamed.push(value);
+        }
+    }
+    assert_eq!(streamed, expected);
+}
+
+#[test]
 fn atr_streaming_next_and_reset_are_safe() {
     let config = ATRConfig::new(3).unwrap();
     let mut stream = IndicatorConfig::stream(&config).unwrap();

@@ -16,17 +16,17 @@ use alloc::vec::Vec;
 use std::vec::Vec;
 
 #[inline]
-pub(super) fn ema_multiplier(timeperiod: usize) -> Float {
+pub(crate) fn ema_multiplier(timeperiod: usize) -> Float {
     2.0 as Float / (timeperiod as Float + 1.0 as Float)
 }
 
 #[inline]
-pub(super) fn ema_seed(real: &[Float], timeperiod: usize) -> Float {
+pub(crate) fn ema_seed(real: &[Float], timeperiod: usize) -> Float {
     real[..timeperiod].iter().copied().sum::<Float>() / timeperiod as Float
 }
 
 #[inline]
-pub(super) fn ema_step(previous: Float, input: Float, multiplier: Float) -> Float {
+pub(crate) fn ema_step(previous: Float, input: Float, multiplier: Float) -> Float {
     (input - previous) * multiplier + previous
 }
 

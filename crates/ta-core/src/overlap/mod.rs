@@ -22,6 +22,7 @@ pub use bands::{
     BBANDS_DEFAULT_NBDEV_DOWN, BBANDS_DEFAULT_NBDEV_UP,
 };
 pub use dema::{DEMABatchRunner, DEMAConfig, DEMAStream, DEMA};
+pub(crate) use ema::{ema_multiplier, ema_seed, ema_step};
 pub use ema::{EMABatchRunner, EMAConfig, EMAStream, EMA};
 pub use hilbert::{
     HT_TRENDLINEBatchRunner, HT_TRENDLINEConfig, HT_TRENDLINEStream, MAMABatchRunner, MAMAConfig,

@@ -65,24 +65,16 @@ fn atr_kernel(
         return OutputRange::empty();
     }
 
+    let mut ranges = super::trange::true_ranges(input.high, input.low, input.close);
     let mut atr = 0.0 as Float;
-    for input_idx in 1..=timeperiod {
-        atr += super::trange::true_range(
-            input.high[input_idx],
-            input.low[input_idx],
-            input.close[input_idx - 1],
-        );
+    for range in ranges.by_ref().take(timeperiod) {
+        atr += range;
     }
     atr /= timeperiod as Float;
-    output[0] = atr;
 
-    for (output_idx, output_value) in output.iter_mut().enumerate().take(count).skip(1) {
-        let input_idx = lookback + output_idx;
-        let range = super::trange::true_range(
-            input.high[input_idx],
-            input.low[input_idx],
-            input.close[input_idx - 1],
-        );
+    let output = &mut output[..count];
+    output[0] = atr;
+    for (output_value, range) in output[1..].iter_mut().zip(ranges) {
         atr = wilder_smooth(atr, range, timeperiod);
         *output_value = atr;
     }

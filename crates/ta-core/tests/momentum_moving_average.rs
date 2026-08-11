@@ -531,6 +531,102 @@ fn every_definition_has_prepared_streaming_and_reset_parity() {
     assert_macd_paths!(MACDFIXConfig::new(4).unwrap());
 }
 
+#[test]
+fn ema_macd_modes_match_on_long_series_and_boundary_periods() {
+    let real: Vec<Float> = (0..4_096)
+        .map(|index| {
+            75.0 as Float
+                + index as Float * 0.015 as Float
+                + ((index * 17) % 29) as Float * 0.07 as Float
+        })
+        .collect();
+
+    for (fast_period, slow_period, signal_period) in
+        [(2, 3, 1), (5, 11, 4), (12, 26, 9), (37, 101, 29)]
+    {
+        let config = MACDConfig::new(fast_period, slow_period, signal_period).unwrap();
+        let expected_range = OutputRange::new(config.lookback(), real.len() - config.lookback());
+        let owned = config.compute(&real).unwrap();
+        assert_eq!(owned.range(), expected_range);
+
+        let count = expected_range.nb_element;
+        let mut caller = (
+            vec![0.0 as Float; count],
+            vec![0.0 as Float; count],
+            vec![0.0 as Float; count],
+        );
+        let caller_range = config
+            .compute_into(
+                &real,
+                MACDValuesMut {
+                    macd: &mut caller.0,
+                    signal: &mut caller.1,
+                    histogram: &mut caller.2,
+                },
+            )
+            .unwrap();
+        assert_eq!(caller_range, expected_range);
+        assert_eq!(caller.0, owned.values().macd);
+        assert_eq!(caller.1, owned.values().signal);
+        assert_eq!(caller.2, owned.values().histogram);
+
+        let mut prepared = config.prepare_batch(real.len()).unwrap();
+        let mut replay = (
+            vec![0.0 as Float; count],
+            vec![0.0 as Float; count],
+            vec![0.0 as Float; count],
+        );
+        let prepared_range = prepared
+            .compute_into(
+                &real,
+                MACDValuesMut {
+                    macd: &mut replay.0,
+                    signal: &mut replay.1,
+                    histogram: &mut replay.2,
+                },
+            )
+            .unwrap();
+        assert_eq!(prepared_range, expected_range);
+        assert_eq!(replay, caller);
+
+        let mut stream = config.stream().unwrap();
+        let mut stream_count = 0;
+        for value in real
+            .iter()
+            .copied()
+            .filter_map(|input| stream.next(input).unwrap())
+        {
+            assert_eq!(value.macd, caller.0[stream_count]);
+            assert_eq!(value.signal, caller.1[stream_count]);
+            assert_eq!(value.histogram, caller.2[stream_count]);
+            stream_count += 1;
+        }
+        assert_eq!(stream_count, count);
+    }
+
+    let config = MACDConfig::default();
+    let count = real.len() - config.lookback();
+    let mut invalid = real.clone();
+    invalid[real.len() - 1] = Float::NAN;
+    let mut output = (
+        vec![-7.0 as Float; count],
+        vec![-7.0 as Float; count],
+        vec![-7.0 as Float; count],
+    );
+    let before = output.clone();
+    assert!(config
+        .compute_into(
+            &invalid,
+            MACDValuesMut {
+                macd: &mut output.0,
+                signal: &mut output.1,
+                histogram: &mut output.2,
+            },
+        )
+        .is_err());
+    assert_eq!(output, before);
+}
+
 fn collect_macd_stream(config: &MACDConfig, real: &[Float]) -> Vec<(Float, Float, Float)> {
     let mut stream = config.stream().unwrap();
     real.iter()

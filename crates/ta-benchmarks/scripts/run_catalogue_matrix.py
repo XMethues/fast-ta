@@ -40,8 +40,18 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-archive", type=Path, help="use an already downloaded pinned source archive")
     parser.add_argument("--deps-dir", type=Path, default=DEFAULT_ROOT / "deps")
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_ROOT / "results")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--python", default=sys.executable, help="Python used to create the isolated environment")
+    parser.add_argument("--case", help="run one matrix case ID, for example ADX")
+    parser.add_argument(
+        "--input-length",
+        type=int,
+        choices=(256, 4096, 65536),
+        help="run one representative input length",
+    )
+    parser.add_argument("--samples", type=int, help="override timed sample count")
+    parser.add_argument("--warmup-ms", type=int, help="override warm-up duration per variant")
+    parser.add_argument("--sample-ms", type=int, help="override target duration per timed sample")
     return parser.parse_args()
 
 
@@ -202,7 +212,13 @@ def main() -> None:
     args = parse_args()
     python_identity = inspect_python(args.python)
     deps_dir = args.deps_dir.resolve()
-    output_dir = args.output_dir.resolve()
+    if args.output_dir is not None:
+        output_dir = args.output_dir.resolve()
+    elif args.case is not None or args.input_length is not None:
+        focus_name = f"{args.case or 'all'}-{args.input_length or 'all'}".lower()
+        output_dir = (DEFAULT_ROOT / "focused" / focus_name).resolve()
+    else:
+        output_dir = (DEFAULT_ROOT / "results").resolve()
     deps_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -218,23 +234,33 @@ def main() -> None:
     for variable in ("DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"):
         existing = environment.get(variable)
         environment[variable] = library_dir if not existing else library_dir + os.pathsep + existing
+    benchmark_arguments = [
+        "cargo",
+        "run",
+        "--release",
+        "-p",
+        "ta-benchmarks",
+        "--features",
+        "catalogue-matrix",
+        "--bin",
+        "catalogue-matrix",
+        "--",
+        "--python",
+        str(python),
+        "--output-dir",
+        str(output_dir),
+    ]
+    for flag, value in (
+        ("--case", args.case),
+        ("--input-length", args.input_length),
+        ("--samples", args.samples),
+        ("--warmup-ms", args.warmup_ms),
+        ("--sample-ms", args.sample_ms),
+    ):
+        if value is not None:
+            benchmark_arguments.extend((flag, str(value)))
     run(
-        [
-            "cargo",
-            "run",
-            "--release",
-            "-p",
-            "ta-benchmarks",
-            "--features",
-            "catalogue-matrix",
-            "--bin",
-            "catalogue-matrix",
-            "--",
-            "--python",
-            str(python),
-            "--output-dir",
-            str(output_dir),
-        ],
+        benchmark_arguments,
         cwd=REPOSITORY,
         env=environment,
     )

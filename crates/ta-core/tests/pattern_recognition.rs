@@ -229,6 +229,115 @@ fn qualify_pattern_fixture<C>(
     assert_eq!(replay, expected);
 }
 
+fn assert_specialized_batch_contract<C>(config: C, series: &Series)
+where
+    C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
+    for<'a> C:
+        IndicatorConfig<Input<'a> = CandleInput<'a>, OutputMut<'a> = &'a mut [PatternSignal]>,
+    C::BatchRunner: PreparedBatchRunner<C>,
+{
+    let output_count = series.open.len() - config.lookback();
+    let expected_range = OutputRange::new(config.lookback(), output_count);
+    let mut caller_output = vec![PatternSignal::NoMatch; output_count];
+    assert_eq!(
+        allocation_events_during(|| {
+            assert_eq!(
+                config
+                    .compute_into(series.input(), caller_output.as_mut_slice())
+                    .unwrap(),
+                expected_range
+            );
+        }),
+        0
+    );
+
+    let mut prepared = config.prepare_batch(series.open.len()).unwrap();
+    let mut prepared_output = vec![PatternSignal::NoMatch; output_count];
+    assert_eq!(
+        allocation_events_during(|| {
+            for _ in 0..2 {
+                assert_eq!(
+                    prepared
+                        .compute_into(series.input(), prepared_output.as_mut_slice())
+                        .unwrap(),
+                    expected_range
+                );
+            }
+        }),
+        0
+    );
+
+    assert_eq!(
+        allocation_events_during(|| {
+            let owned = config.compute(series.input()).unwrap();
+            assert_eq!(owned.range(), expected_range);
+            assert_eq!(owned.values().as_slice(), caller_output.as_slice());
+        }),
+        1
+    );
+    assert_eq!(
+        allocation_events_during(|| {
+            let empty = config
+                .compute(CandleInput {
+                    open: &[],
+                    high: &[],
+                    low: &[],
+                    close: &[],
+                })
+                .unwrap();
+            assert_eq!(empty.range(), OutputRange::empty());
+            assert!(empty.values().is_empty());
+        }),
+        0
+    );
+
+    let sentinel = PatternSignal::Match {
+        direction: PatternDirection::Bullish,
+        strength: PatternStrength::Confirmed,
+    };
+    let short_len = config.lookback();
+    let short = CandleInput {
+        open: &series.open[..short_len],
+        high: &series.high[..short_len],
+        low: &series.low[..short_len],
+        close: &series.close[..short_len],
+    };
+    let mut short_output = vec![sentinel; output_count];
+    let error = config
+        .compute_into(short, short_output.as_mut_slice())
+        .unwrap_err();
+    assert!(matches!(error, TalibError::InsufficientData { .. }));
+    assert!(short_output.iter().all(|&value| value == sentinel));
+
+    let mut invalid_close = series.close.clone();
+    invalid_close[series.close.len() - 1] = Float::NAN;
+    let invalid = CandleInput {
+        open: &series.open,
+        high: &series.high,
+        low: &series.low,
+        close: &invalid_close,
+    };
+    let mut validation_output = vec![sentinel; output_count];
+    let error = config
+        .compute_into(invalid, validation_output.as_mut_slice())
+        .unwrap_err();
+    assert!(matches!(error, TalibError::InvalidInput { .. }));
+    assert!(validation_output.iter().all(|&value| value == sentinel));
+
+    let mut undersized_output = vec![sentinel; output_count - 1];
+    assert!(config
+        .compute_into(series.input(), undersized_output.as_mut_slice())
+        .is_err());
+    assert!(undersized_output.iter().all(|&value| value == sentinel));
+
+    let mut undersized_prepared = config.prepare_batch(series.open.len() - 1).unwrap();
+    let error = undersized_prepared
+        .compute_into(invalid, validation_output.as_mut_slice())
+        .unwrap_err();
+    assert!(matches!(error, TalibError::PreparedCapacityExceeded { .. }));
+    assert!(validation_output.iter().all(|&value| value == sentinel));
+}
+
 #[test]
 fn candle_settings_defaults_and_validation_match_pinned_talib() {
     use CandleRangeKind::{HighLow, RealBody, Shadows};
@@ -407,6 +516,96 @@ fn independently_reasoned_boundaries_lock_doji_and_engulfing_semantics() {
         CDLENGULFINGConfig::new(inert_settings).unwrap().lookback(),
         2
     );
+}
+
+#[test]
+fn representative_specialized_batches_preserve_zero_period_and_inert_settings_in_all_modes() {
+    let doji_settings = CandleSettings::default().with_setting(
+        CandleSettingType::BodyDoji,
+        CandleSetting::new(CandleRangeKind::Shadows, 0, 1.0 as Float).unwrap(),
+    );
+    let doji_series = Series {
+        open: vec![10.0 as Float, 10.0],
+        high: vec![12.0 as Float, 10.5],
+        low: vec![8.0 as Float, 9.5],
+        close: vec![11.0 as Float, 12.0],
+    };
+    qualify_pattern_fixture(
+        CDLDOJIConfig::new(doji_settings).unwrap(),
+        &doji_series,
+        0,
+        &expected_codes(&[100, 0], &[100, 0]),
+    );
+
+    let inert_settings = CandleSettings::default()
+        .with_setting(
+            CandleSettingType::BodyDoji,
+            CandleSetting::new(CandleRangeKind::HighLow, 0, 99.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::ShadowVeryShort,
+            CandleSetting::new(CandleRangeKind::RealBody, 100_000, 0.0 as Float).unwrap(),
+        );
+    let engulfing_series = Series::from_fixture(
+        reference::ENGULFING_OPEN,
+        reference::ENGULFING_HIGH,
+        reference::ENGULFING_LOW,
+        reference::ENGULFING_CLOSE,
+    );
+    qualify_pattern_fixture(
+        CDLENGULFINGConfig::new(inert_settings).unwrap(),
+        &engulfing_series,
+        reference::ENGULFING_LOOKBACK,
+        &expected_codes(
+            reference::ENGULFING_F64_CODES,
+            reference::ENGULFING_F32_CODES,
+        ),
+    );
+
+    let crows_settings = CandleSettings::default().with_setting(
+        CandleSettingType::ShadowVeryShort,
+        CandleSetting::new(CandleRangeKind::HighLow, 0, 0.1 as Float).unwrap(),
+    );
+    let crows_series = Series::from_fixture(
+        reference::THREE_BLACK_CROWS_OPEN,
+        reference::THREE_BLACK_CROWS_HIGH,
+        reference::THREE_BLACK_CROWS_LOW,
+        reference::THREE_BLACK_CROWS_CLOSE,
+    );
+    let zero_period_codes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -100];
+    qualify_pattern_fixture(
+        CDL3BLACKCROWSConfig::new(crows_settings).unwrap(),
+        &crows_series,
+        3,
+        &expected_codes(&zero_period_codes, &zero_period_codes),
+    );
+}
+
+#[test]
+fn representative_specialized_batches_preserve_allocation_and_validation_contracts() {
+    let doji_series = Series::from_fixture(
+        reference::DOJI_DEFAULT_OPEN,
+        reference::DOJI_DEFAULT_HIGH,
+        reference::DOJI_DEFAULT_LOW,
+        reference::DOJI_DEFAULT_CLOSE,
+    );
+    assert_specialized_batch_contract(CDLDOJIConfig::default(), &doji_series);
+
+    let engulfing_series = Series::from_fixture(
+        reference::ENGULFING_OPEN,
+        reference::ENGULFING_HIGH,
+        reference::ENGULFING_LOW,
+        reference::ENGULFING_CLOSE,
+    );
+    assert_specialized_batch_contract(CDLENGULFINGConfig::default(), &engulfing_series);
+
+    let crows_series = Series::from_fixture(
+        reference::THREE_BLACK_CROWS_OPEN,
+        reference::THREE_BLACK_CROWS_HIGH,
+        reference::THREE_BLACK_CROWS_LOW,
+        reference::THREE_BLACK_CROWS_CLOSE,
+    );
+    assert_specialized_batch_contract(CDL3BLACKCROWSConfig::default(), &crows_series);
 }
 
 #[test]

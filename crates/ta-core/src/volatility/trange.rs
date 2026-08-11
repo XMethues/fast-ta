@@ -43,6 +43,24 @@ pub(super) fn validate_hlc(high: &[Float], low: &[Float], close: &[Float]) -> Re
     validate_finite_slices(&[("high", high), ("low", low), ("close", close)])?;
     Ok(len)
 }
+
+/// Iterates aligned batch true ranges without per-observation slice indexing.
+///
+/// The caller must validate that the slices have equal lengths and contain at
+/// least two observations before constructing the iterator.
+#[inline]
+pub(super) fn true_ranges<'a>(
+    high: &'a [Float],
+    low: &'a [Float],
+    close: &'a [Float],
+) -> impl Iterator<Item = Float> + 'a {
+    high[1..]
+        .iter()
+        .zip(&low[1..])
+        .zip(close)
+        .map(|((&high, &low), &previous_close)| true_range(high, low, previous_close))
+}
+
 fn validate_trange_input(input: TRANGEInput<'_>) -> Result<(usize, usize)> {
     let len = validate_hlc(input.high, input.low, input.close)?;
     let count = validate_input_len(len, 1)?;
@@ -54,13 +72,12 @@ fn trange_kernel(input: TRANGEInput<'_>, count: usize, output: &mut [Float]) -> 
         return OutputRange::empty();
     }
 
-    for (output_idx, output_value) in output.iter_mut().enumerate().take(count) {
-        let input_idx = output_idx + 1;
-        *output_value = true_range(
-            input.high[input_idx],
-            input.low[input_idx],
-            input.close[input_idx - 1],
-        );
+    for (output_value, range) in
+        output[..count]
+            .iter_mut()
+            .zip(true_ranges(input.high, input.low, input.close))
+    {
+        *output_value = range;
     }
     OutputRange::new(1, count)
 }

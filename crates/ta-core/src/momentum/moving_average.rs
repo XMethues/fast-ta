@@ -7,7 +7,7 @@
 //! average kind is a [`PeriodMAType`]; MAMA is therefore not selectable.
 
 use crate::common::{validate_finite_value, CompactPayloadLen};
-use crate::overlap::{MAConfig, MAStream, PeriodMAType};
+use crate::overlap::{ema_multiplier, ema_seed, ema_step, MAConfig, MAStream, PeriodMAType};
 use crate::{
     validate_finite_slice, validate_input_len, validate_output_len, CompactOutput, Float,
     IndicatorConfig, OutputRange, PreparedBatchRunner, Result, StreamingComputation, TalibError,
@@ -483,6 +483,13 @@ impl MACDSpec {
             lookback,
         })
     }
+
+    #[inline]
+    fn uses_only_ema(self) -> bool {
+        self.pair.fast.ma_type() == PeriodMAType::EMA
+            && self.pair.slow.ma_type() == PeriodMAType::EMA
+            && self.signal.ma_type() == PeriodMAType::EMA
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -536,12 +543,69 @@ fn validate_macd_outputs(
     Ok(count)
 }
 
-fn compute_macd_validated(
+// Batch validation is complete before this fused path is entered. Keeping the
+// three EMA states as scalars avoids repeating streaming validation, generic MA
+// dispatch, and warm-up `Option` transitions for every observation.
+fn compute_macd_ema_validated(
     real: &[Float],
     spec: MACDSpec,
     output: MACDValuesMut<'_>,
+) -> OutputRange {
+    let output_count = real.len().saturating_sub(spec.lookback);
+    if output_count == 0 {
+        return OutputRange::empty();
+    }
+
+    let fast_period = spec.pair.fast.period();
+    let slow_period = spec.pair.slow.period();
+    let signal_period = spec.signal.period();
+    let pair_lookback = spec.pair.lookback;
+    let fast_start = pair_lookback + 1 - fast_period;
+    let fast_multiplier = ema_multiplier(fast_period);
+    let slow_multiplier = ema_multiplier(slow_period);
+    let signal_multiplier = ema_multiplier(signal_period);
+    let mut fast = ema_seed(&real[fast_start..=pair_lookback], fast_period);
+    let mut slow = ema_seed(real, slow_period);
+    let mut signal_sum = 0.0 as Float;
+    let mut macd = fast - slow;
+    signal_sum += macd;
+
+    for &input in &real[pair_lookback + 1..spec.lookback + 1] {
+        fast = ema_step(fast, input, fast_multiplier);
+        slow = ema_step(slow, input, slow_multiplier);
+        macd = fast - slow;
+        signal_sum += macd;
+    }
+
+    let mut signal = signal_sum / signal_period as Float;
+    output.macd[0] = macd;
+    output.signal[0] = signal;
+    output.histogram[0] = macd - signal;
+
+    for (((macd_output, signal_output), histogram_output), &input) in output.macd[1..output_count]
+        .iter_mut()
+        .zip(&mut output.signal[1..output_count])
+        .zip(&mut output.histogram[1..output_count])
+        .zip(&real[spec.lookback + 1..])
+    {
+        fast = ema_step(fast, input, fast_multiplier);
+        slow = ema_step(slow, input, slow_multiplier);
+        macd = fast - slow;
+        signal = ema_step(signal, macd, signal_multiplier);
+        *macd_output = macd;
+        *signal_output = signal;
+        *histogram_output = macd - signal;
+    }
+
+    OutputRange::new(spec.lookback, output_count)
+}
+
+fn compute_macd_stream_validated(
+    real: &[Float],
+    spec: MACDSpec,
+    core: &mut MACDStreamCore,
+    output: MACDValuesMut<'_>,
 ) -> Result<OutputRange> {
-    let mut core = MACDStreamCore::new(spec)?;
     let mut output_index = 0;
     for input in real.iter().copied() {
         if let Some(value) = core.next(input)? {
@@ -557,6 +621,18 @@ fn compute_macd_validated(
     } else {
         OutputRange::new(spec.lookback, output_index)
     })
+}
+
+fn compute_macd_validated(
+    real: &[Float],
+    spec: MACDSpec,
+    output: MACDValuesMut<'_>,
+) -> Result<OutputRange> {
+    if spec.uses_only_ema() {
+        return Ok(compute_macd_ema_validated(real, spec, output));
+    }
+    let mut core = MACDStreamCore::new(spec)?;
+    compute_macd_stream_validated(real, spec, &mut core, output)
 }
 
 fn compute_macd_into(
@@ -838,24 +914,12 @@ macro_rules! define_macd_execution {
                         input.len(),
                     ));
                 }
-                let count =
-                    validate_macd_outputs(input, self.config.spec.lookback, $title, &output)?;
-                self.core.reset();
-                let mut output_index = 0;
-                for input in input.iter().copied() {
-                    if let Some(value) = self.core.next(input)? {
-                        output.macd[output_index] = value.macd;
-                        output.signal[output_index] = value.signal;
-                        output.histogram[output_index] = value.histogram;
-                        output_index += 1;
-                    }
+                validate_macd_outputs(input, self.config.spec.lookback, $title, &output)?;
+                if self.config.spec.uses_only_ema() {
+                    return Ok(compute_macd_ema_validated(input, self.config.spec, output));
                 }
-                debug_assert_eq!(output_index, count);
-                Ok(if count == 0 {
-                    OutputRange::empty()
-                } else {
-                    OutputRange::new(self.config.spec.lookback, count)
-                })
+                self.core.reset();
+                compute_macd_stream_validated(input, self.config.spec, &mut self.core, output)
             }
         }
 

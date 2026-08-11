@@ -1,4 +1,8 @@
 //! Typical Price (TYPPRICE).
+//!
+//! Batch execution uses explicit NEON vector arithmetic on AArch64 with `std`.
+//! Other targets and `no_std` builds use the scalar fallback. Streaming
+//! computation remains scalar because each call processes one tick.
 
 use crate::{
     validate_all_same_len, validate_finite_slices, validate_output_len, CompactOutput, Float,
@@ -46,9 +50,11 @@ fn validate_typprice_input(input: TYPPRICEInput<'_>) -> Result<usize> {
 }
 
 fn typprice_kernel(input: TYPPRICEInput<'_>, len: usize, output: &mut [Float]) -> OutputRange {
-    for (idx, output_value) in output.iter_mut().enumerate().take(len) {
-        *output_value = (input.high[idx] + input.low[idx] + input.close[idx]) / 3.0 as Float;
-    }
+    debug_assert_eq!(input.high.len(), len);
+    debug_assert_eq!(input.low.len(), len);
+    debug_assert_eq!(input.close.len(), len);
+    debug_assert!(output.len() >= len);
+    crate::simd::dispatch::typical_price(input.high, input.low, input.close, output);
     OutputRange::new(0, len)
 }
 

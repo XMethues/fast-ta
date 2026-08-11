@@ -243,6 +243,60 @@ fn sign_range_symmetry_and_dependency_invariants_hold() {
 }
 
 #[test]
+fn adx_batch_specialization_matches_streaming_across_periods_and_regimes() {
+    let mut high = Vec::with_capacity(192);
+    let mut low = Vec::with_capacity(192);
+    let mut close = Vec::with_capacity(192);
+    let mut previous_close = 100.0 as Float;
+    for index in 0..192 {
+        if index % 29 >= 25 {
+            high.push(previous_close);
+            low.push(previous_close);
+            close.push(previous_close);
+            continue;
+        }
+        let trend = index as Float * 0.037 as Float;
+        let cycle = ((index * 17) % 23) as Float * 0.041 as Float;
+        let center = 100.0 as Float + trend + cycle;
+        let next_high = center + (1 + index % 5) as Float * 0.13 as Float;
+        let next_low = center - (1 + index % 7) as Float * 0.11 as Float;
+        let next_close = next_low + (next_high - next_low) * 0.43 as Float;
+        high.push(next_high);
+        low.push(next_low);
+        close.push(next_close);
+        previous_close = next_close;
+    }
+
+    for period in [2, 3, 14, 31] {
+        let config = ADXConfig::new(period).unwrap();
+        let lookback = config.lookback();
+        let mut batch = vec![-1.0 as Float; high.len() - lookback];
+        let range = config
+            .compute_into(
+                DirectionalInput {
+                    high: &high,
+                    low: &low,
+                    close: &close,
+                },
+                &mut batch,
+            )
+            .unwrap();
+        assert_eq!(range, OutputRange::new(lookback, batch.len()));
+
+        let mut stream = config.stream().unwrap();
+        let streamed: Vec<Float> = high
+            .iter()
+            .zip(&low)
+            .zip(&close)
+            .filter_map(|((&high, &low), &close)| {
+                stream.next(DirectionalTick { high, low, close }).unwrap()
+            })
+            .collect();
+        assert_eq!(batch, streamed, "period {period}");
+    }
+}
+
+#[test]
 fn flat_zero_true_range_produces_finite_zero_strength() {
     let values = [42.0 as Float; 20];
     let mut dx = [1.0 as Float; 15];

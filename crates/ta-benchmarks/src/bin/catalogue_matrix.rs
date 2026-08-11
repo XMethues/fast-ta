@@ -205,6 +205,8 @@ struct Args {
     samples: usize,
     warmup_ms: u64,
     sample_ms: u64,
+    case: Option<String>,
+    input_length: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -689,12 +691,25 @@ fn run() -> Result<(), String> {
     let mut matrix_cases = Vec::with_capacity(INPUT_LENGTHS.len() * MATRIX.len());
     let mut python_provenance = None;
     for input_length in INPUT_LENGTHS {
+        if args
+            .input_length
+            .is_some_and(|selected| selected != input_length)
+        {
+            continue;
+        }
         let fixture = catalogue_fixture(input_length);
         fixture.validate()?;
         let fixture_dir = args.output_dir.join(format!("fixture-{input_length}"));
         write_fixture(&fixture_dir, &fixture)?;
         let checksum = fixture_checksum(&fixture);
         for spec in MATRIX {
+            if args
+                .case
+                .as_deref()
+                .is_some_and(|selected| selected != spec.id)
+            {
+                continue;
+            }
             let c_result = c_backend.compute(spec, &fixture);
             let mut variants = Vec::with_capacity(6);
             for mode in RustMode::ALL {
@@ -810,10 +825,74 @@ fn run() -> Result<(), String> {
         .map_err(|error| format!("write {}: {error}", report_path.display()))?;
     println!("raw rows: {}", raw_path.display());
     println!("human report: {}", report_path.display());
+    print_focused_verdict(&rows, &args);
     if failures != 0 {
         return Err(format!("{failures} matrix rows were unavailable or failed semantic verification; timings were suppressed and reasons are recorded in the generated artifacts"));
     }
     Ok(())
+}
+
+fn print_focused_verdict(rows: &[BenchmarkRow], args: &Args) {
+    let Some(case_id) = args.case.as_deref() else {
+        return;
+    };
+    for input_length in INPUT_LENGTHS {
+        if args
+            .input_length
+            .is_some_and(|selected| selected != input_length)
+        {
+            continue;
+        }
+        let case_rows = rows
+            .iter()
+            .filter(|row| row.case_id == case_id && row.input_length == input_length);
+        let semantic_count = case_rows.clone().count();
+        let semantics_verified = semantic_count == 6
+            && case_rows
+                .clone()
+                .all(|row| row.semantic_status == "verified");
+        let rust = case_rows.clone().find(|row| {
+            row.implementation == "fast-ta"
+                && row.mode == RUST_CALLER_MODE
+                && row.timing_status == "measured"
+        });
+        let c = case_rows.clone().find(|row| {
+            row.implementation == "TA-Lib C"
+                && row.mode == C_DIRECT_MODE
+                && row.timing_status == "measured"
+        });
+        let (Some(rust_stats), Some(c_stats)) = (
+            rust.and_then(|row| row.stats.as_ref()),
+            c.and_then(|row| row.stats.as_ref()),
+        ) else {
+            println!(
+                "FOCUSED VERDICT: FAIL; case={case_id}; input_length={input_length}; \
+                 semantic_verified={semantics_verified}; comparable timings unavailable"
+            );
+            continue;
+        };
+        let ratio = rust_stats.median_ns / c_stats.median_ns;
+        let verdict = if semantics_verified && ratio <= 1.05 {
+            "PASS"
+        } else {
+            "FAIL"
+        };
+        println!(
+            "FOCUSED VERDICT: {verdict}; case={case_id}; input_length={input_length}; \
+             semantic_verified={semantics_verified}; fast-ta caller-owned median={:.3} us \
+             ci95=[{:.3}, {:.3}] us throughput={:.3} Mobs/s; TA-Lib C median={:.3} us \
+             ci95=[{:.3}, {:.3}] us throughput={:.3} Mobs/s; rust/c={ratio:.3}x; \
+             pass_threshold<=1.050x",
+            rust_stats.median_ns / 1_000.0,
+            rust_stats.ci95_lower_ns / 1_000.0,
+            rust_stats.ci95_upper_ns / 1_000.0,
+            rust_stats.throughput_observations_per_second / 1.0e6,
+            c_stats.median_ns / 1_000.0,
+            c_stats.ci95_lower_ns / 1_000.0,
+            c_stats.ci95_upper_ns / 1_000.0,
+            c_stats.throughput_observations_per_second / 1.0e6,
+        );
+    }
 }
 
 fn classify(
@@ -2582,6 +2661,8 @@ fn parse_args() -> Result<Args, String> {
     let mut samples = DEFAULT_SAMPLES;
     let mut warmup_ms = DEFAULT_WARMUP_MS;
     let mut sample_ms = DEFAULT_SAMPLE_MS;
+    let mut case = None;
+    let mut input_length = None;
     let mut arguments = std::env::args_os().skip(1);
     while let Some(argument) = arguments.next() {
         match argument.to_str() {
@@ -2590,8 +2671,39 @@ fn parse_args() -> Result<Args, String> {
             Some("--samples") => samples = parse_argument(arguments.next(), "--samples")?,
             Some("--warmup-ms") => warmup_ms = parse_argument(arguments.next(), "--warmup-ms")?,
             Some("--sample-ms") => sample_ms = parse_argument(arguments.next(), "--sample-ms")?,
+            Some("--case") => {
+                let requested: String = parse_argument(arguments.next(), "--case")?;
+                case = Some(requested.to_ascii_uppercase());
+            }
+            Some("--input-length") => {
+                input_length = Some(parse_argument(arguments.next(), "--input-length")?)
+            }
             Some(other) => return Err(format!("unknown argument {other:?}")),
             None => return Err("arguments must be valid UTF-8".to_owned()),
+        }
+    }
+    if let Some(requested) = case.as_deref() {
+        if !MATRIX.iter().any(|spec| spec.id == requested) {
+            return Err(format!(
+                "unknown --case {requested:?}; expected one of {}",
+                MATRIX
+                    .iter()
+                    .map(|spec| spec.id)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    }
+    if let Some(requested) = input_length {
+        if !INPUT_LENGTHS.contains(&requested) {
+            return Err(format!(
+                "unsupported --input-length {requested}; expected one of {}",
+                INPUT_LENGTHS
+                    .iter()
+                    .map(usize::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
         }
     }
     Ok(Args {
@@ -2600,6 +2712,8 @@ fn parse_args() -> Result<Args, String> {
         samples,
         warmup_ms,
         sample_ms,
+        case,
+        input_length,
     })
 }
 

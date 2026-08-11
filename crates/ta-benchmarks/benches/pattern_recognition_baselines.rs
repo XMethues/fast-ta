@@ -12,9 +12,9 @@ use std::sync::Once;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use support::ohlc_fixture;
 use ta_core::pattern_recognition::{
-    CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig, CDLHIKKAKEConfig,
-    CDLHIKKAKEMODConfig, CDLMORNINGSTARConfig, Candle, CandleInput, CandleSetting,
-    CandleSettingType, CandleSettings, PatternSignal, Penetration,
+    CDL3BLACKCROWSConfig, CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig,
+    CDLHIKKAKEConfig, CDLHIKKAKEMODConfig, CDLMORNINGSTARConfig, Candle, CandleInput,
+    CandleSetting, CandleSettingType, CandleSettings, PatternSignal, Penetration,
 };
 use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
@@ -232,6 +232,30 @@ fn bench_pattern_recognition(c: &mut Criterion) {
         "CDLDOJI",
         "period_200",
         CDLDOJIConfig::new(large_period_settings()).expect("valid large-period CDLDOJI"),
+    );
+
+    benchmark_construction(
+        c,
+        "CDL3BLACKCROWS",
+        "default",
+        CDL3BLACKCROWSConfig::default,
+    );
+    benchmark_throughput(
+        c,
+        "CDL3BLACKCROWS",
+        "default",
+        CDL3BLACKCROWSConfig::default(),
+    );
+    benchmark_construction(c, "CDL3BLACKCROWS", "period_200", || {
+        CDL3BLACKCROWSConfig::new(large_period_settings())
+            .expect("valid large-period CDL3BLACKCROWS")
+    });
+    benchmark_throughput(
+        c,
+        "CDL3BLACKCROWS",
+        "period_200",
+        CDL3BLACKCROWSConfig::new(large_period_settings())
+            .expect("valid large-period CDL3BLACKCROWS"),
     );
 
     benchmark_construction(

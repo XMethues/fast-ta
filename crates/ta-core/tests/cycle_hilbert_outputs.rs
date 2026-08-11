@@ -85,6 +85,106 @@ fn assert_phases_close(actual: &[Float], expected: &[f64], context: &str) {
     }
 }
 
+const LONG_PHASE_SOURCE_LEN: usize = 4_096;
+const LONG_PHASE_ORACLE_INDICES: [usize; 8] = [0, 1, 31, 127, 511, 1_023, 2_047, 4_032];
+// Selected compact outputs from the checksum-pinned TA-Lib 0.6.4 C functions
+// over catalogue_fixture_v1; the f32 feature uses TA_S_HT_DCPHASE.
+
+#[cfg(not(feature = "f32"))]
+const LONG_PHASE_ORACLE: [f64; 8] = [
+    260.21125582216257,
+    307.88798701174403,
+    -34.03849402095011,
+    218.8648329912454,
+    206.3619733224249,
+    134.16938554420938,
+    184.15718428019892,
+    68.00605503619721,
+];
+
+#[cfg(feature = "f32")]
+const LONG_PHASE_ORACLE: [f64; 8] = [
+    260.2112592713675,
+    307.88799025499213,
+    -34.03849812173746,
+    218.8648333548112,
+    206.3619686339956,
+    134.16938112475552,
+    184.1571875799217,
+    68.00605342058999,
+];
+
+fn long_catalogue_phase_input() -> Vec<Float> {
+    (0..LONG_PHASE_SOURCE_LEN)
+        .map(|index| (index as f64 * 0.001 + ((index * 37) % 101) as f64 + 1.0) as Float)
+        .collect()
+}
+
+#[test]
+fn dynamic_period_history_matches_long_talib_phase_oracle() {
+    assert_eq!(reference::TALIB_VERSION, "0.6.4");
+    assert_eq!(
+        reference::TALIB_GIT_REVISION,
+        "43f9d5042ecc4bd367941846494ad907bf20ea50"
+    );
+    let input = long_catalogue_phase_input();
+    let output = HT_DCPHASEConfig::new().compute(&input).unwrap();
+    assert_eq!(
+        output.range(),
+        OutputRange::new(
+            HT_DCPHASE_LOOKBACK,
+            LONG_PHASE_SOURCE_LEN - HT_DCPHASE_LOOKBACK,
+        )
+    );
+
+    for (&index, &expected) in LONG_PHASE_ORACLE_INDICES.iter().zip(&LONG_PHASE_ORACLE) {
+        assert_phase_close(
+            output.values()[index],
+            expected,
+            &format!("long TA-Lib phase oracle, compact index {index}"),
+        );
+    }
+}
+
+#[test]
+fn long_phase_history_preserves_execution_state_and_reset() {
+    let input = long_catalogue_phase_input();
+    let config = HT_DCPHASEConfig::new();
+    let owned = config.compute(&input).unwrap();
+
+    let mut caller_owned = vec![0.0 as Float; owned.values().len()];
+    assert_eq!(
+        HT_DCPHASE(&input, &mut caller_owned).unwrap(),
+        owned.range()
+    );
+    assert_eq!(caller_owned.as_slice(), owned.values());
+
+    let mut runner = config.prepare_batch(input.len()).unwrap();
+    let mut prepared = vec![0.0 as Float; owned.values().len()];
+    for _ in 0..2 {
+        assert_eq!(
+            runner.compute_into(&input, &mut prepared).unwrap(),
+            owned.range()
+        );
+        assert_eq!(prepared.as_slice(), owned.values());
+    }
+
+    let mut stream = config.stream().unwrap();
+    let streamed = input
+        .iter()
+        .copied()
+        .filter_map(|tick| stream.next(tick).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(streamed.as_slice(), owned.values());
+    stream.reset();
+    let replayed = input
+        .iter()
+        .copied()
+        .filter_map(|tick| stream.next(tick).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(replayed.as_slice(), owned.values());
+}
+
 #[test]
 fn hilbert_outputs_match_checksum_pinned_talib_vectors_in_every_execution_mode() {
     assert_eq!(reference::TALIB_VERSION, "0.6.4");

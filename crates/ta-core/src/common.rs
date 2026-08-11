@@ -231,10 +231,11 @@ pub(crate) fn validate_finite_value(name: &str, idx: usize, value: Float) -> Res
 
 /// Validates that every input value is finite.
 pub fn validate_finite_slice(name: &str, values: &[Float]) -> Result<()> {
-    for (idx, &value) in values.iter().enumerate() {
-        validate_finite_value(name, idx, value)?;
+    if let Some(idx) = crate::simd::dispatch::first_non_finite(values) {
+        Err(non_finite_value_error(name, idx, values[idx]))
+    } else {
+        Ok(())
     }
-    Ok(())
 }
 
 /// Validates that all named input slices contain only finite values.
