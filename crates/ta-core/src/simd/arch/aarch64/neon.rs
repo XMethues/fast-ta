@@ -20,7 +20,7 @@ pub unsafe fn dot_product(a: &[Float], b: &[Float]) -> Result<Float> {
             message: "Dot product requires vectors of equal length".into(),
         });
     }
-    let mut sum = Float::from(0.0);
+    let mut sum = 0.0 as Float;
     for (&x, &y) in a.iter().zip(b.iter()) {
         sum += x * y;
     }
