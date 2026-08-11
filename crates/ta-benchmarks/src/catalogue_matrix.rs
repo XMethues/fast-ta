@@ -1343,8 +1343,10 @@ pub fn parse_platform_qualification(
         return Err(format!("{artifact} has no measurement records"));
     }
     for measurement in &measurements {
-        if measurement.equivalent_to_scalar
-            && !(measurement.backend == "ta-lib-c" && measurement.mode == "direct C caller-owned")
+        let is_direct_c =
+            measurement.backend == "ta-lib-c" && measurement.mode == "direct C caller-owned";
+        let needs_backend_validation = measurement.equivalent_to_scalar && !is_direct_c;
+        if needs_backend_validation
             && !has_aggregate_validation
             && !validated_backends.contains(&measurement.backend)
         {

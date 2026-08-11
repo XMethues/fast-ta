@@ -8,8 +8,8 @@ use ta_benchmarks::catalogue_matrix::{
     read_criterion_diagnostics, read_cycle_regression, read_diagnostic_evidence,
     read_platform_qualification, read_raw_rows, render_report, render_report_with_comparison,
     timing_stats, validate_outputs, write_raw_rows, BenchmarkRow, CaseKind, OutputValues,
-    TimingStats, VerifiedOutput, C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS, MATRIX, PATTERN_SHAPES,
-    RAW_HEADER, RUST_CALLER_MODE,
+    TimingStats, VerifiedOutput, FIXTURE_ID, INPUT_LENGTHS, MATRIX, PATTERN_SHAPES, RAW_HEADER,
+    RUST_CALLER_MODE,
 };
 
 static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
