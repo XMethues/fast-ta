@@ -262,6 +262,8 @@ pub(super) struct RegressionFit {
     pub(super) intercept: Float,
 }
 
+const REGRESSION_REBASE_INTERVAL: usize = 256;
+
 #[derive(Debug, Clone)]
 pub(super) struct RollingRegression {
     period: usize,
@@ -271,6 +273,7 @@ pub(super) struct RollingRegression {
     buffer: Vec<Float>,
     index: usize,
     count: usize,
+    updates_since_rebase: usize,
     sum_y: Float,
     sum_xy: Float,
 }
@@ -290,6 +293,7 @@ impl RollingRegression {
             buffer,
             index: 0,
             count: 0,
+            updates_since_rebase: 0,
             sum_y: 0.0 as Float,
             sum_xy: 0.0 as Float,
         }
@@ -298,23 +302,35 @@ impl RollingRegression {
     pub(super) fn push(&mut self, input: Float) -> Option<RegressionFit> {
         if self.count < self.period {
             self.buffer[self.index] = input;
+            self.index = (self.index + 1) % self.period;
             self.sum_y += input;
             self.sum_xy += (self.period - 1 - self.count) as Float * input;
             self.count += 1;
-            self.index = (self.index + 1) % self.period;
-
-            if self.count < self.period {
-                return None;
-            }
-            return Some(self.fit());
+            return (self.count == self.period).then(|| self.fit());
         }
 
         let trailing = self.buffer[self.index];
-        self.sum_xy = self.sum_xy + self.sum_y - self.n * trailing;
-        self.sum_y = self.sum_y - trailing + input;
         self.buffer[self.index] = input;
         self.index = (self.index + 1) % self.period;
+        if self.updates_since_rebase + 1 == REGRESSION_REBASE_INTERVAL {
+            self.recompute_sums();
+            self.updates_since_rebase = 0;
+        } else {
+            self.sum_xy = self.sum_xy + self.sum_y - self.n * trailing;
+            self.sum_y = self.sum_y - trailing + input;
+            self.updates_since_rebase += 1;
+        }
         Some(self.fit())
+    }
+
+    fn recompute_sums(&mut self) {
+        self.sum_y = 0.0 as Float;
+        self.sum_xy = 0.0 as Float;
+        for offset in 0..self.period {
+            let value = self.buffer[(self.index + offset) % self.period];
+            self.sum_y += value;
+            self.sum_xy += (self.period - 1 - offset) as Float * value;
+        }
     }
 
     fn fit(&self) -> RegressionFit {
@@ -327,6 +343,7 @@ impl RollingRegression {
         self.buffer.fill(0.0 as Float);
         self.index = 0;
         self.count = 0;
+        self.updates_since_rebase = 0;
         self.sum_y = 0.0 as Float;
         self.sum_xy = 0.0 as Float;
     }

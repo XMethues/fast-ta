@@ -73,27 +73,44 @@ Run benchmarks:
 cargo bench -p ta-benchmarks
 ```
 
-#### Pinned SMA Rust/C/Python comparison (opt-in)
+#### Pinned representative Indicator Catalogue matrix (opt-in)
 
-The permanent three-way tracer is deliberately outside default builds, ordinary
-CI, and `cargo bench`. From the repository root, one unattended command
-downloads and checksum-verifies TA-Lib C 0.6.4, builds revision
-`43f9d5042ecc4bd367941846494ad907bf20ea50`, creates an isolated environment for
-the official `TA-Lib==0.6.4` Python binding and pinned NumPy, then validates and
-times all three implementations:
+The permanent cross-language tracer is deliberately outside default builds,
+ordinary CI, and `cargo bench`; existing Criterion IDs and baselines are
+unchanged. From the repository root, one unattended command downloads and
+checksum-verifies TA-Lib C 0.6.4, builds revision
+`43f9d5042ecc4bd367941846494ad907bf20ea50`, creates an interpreter-keyed isolated
+environment for the official `TA-Lib==0.6.4` Python binding and NumPy 2.2.3, then
+semantically qualifies every execution path before timing:
 
 ```bash
-python3 crates/ta-benchmarks/scripts/run_sma_three_way.py
+python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py
 ```
+
+The matrix runs at 256, 4,096, and 65,536 observations. It contains `SMA(14)`,
+`BBANDS(20, 2, 2, SMA)`, `RSI(14)`, `MACD(12, 26, 9)`, `ATR(14)`, `ADX(14)`,
+`HT_DCPHASE`, `CDLDOJI`, `CDLENGULFING`, `CDL3BLACKCROWS`, `LINEARREG(14)`,
+`TYPPRICE`, `OBV`, `SIN`, and `ADD`. The three Pattern Recognition cases use
+immutable TA-Lib-default Candle Settings. Each case reports fast-ta Owned Compact
+Output, caller-owned Batch Computation, Prepared Batch Runner, and Streaming
+Computation separately, alongside direct caller-owned TA-Lib C and the official
+Python NumPy API. Only caller-owned Rust/C pairs are marked comparable and enter
+same-size geometric summaries; other execution costs are explicitly unavailable
+for that aggregate.
+
 Prerequisites are Python 3.10 or newer with `venv`, a C compiler, `make`, a
 POSIX shell, and the usual TA-Lib `configure` build prerequisites. Network access
-is needed only
-for the first dependency preparation. An already downloaded source archive can
-be selected with `--source-archive PATH`; it must match the recorded SHA-256.
-Dependencies remain under `target/sma-three-way/deps`. Successful runs write
-machine-readable raw rows and the report generated from those rows under
-`target/sma-three-way/results`. A semantic Output Range, count, version, or value
-mismatch exits before timing and removes any stale raw/report files.
+is needed only for the first dependency preparation. An already downloaded
+source archive can be selected with `--source-archive PATH`; it must match the
+recorded SHA-256. Dependencies remain under `target/catalogue-matrix/deps`.
+Successful and semantic-failure runs write stable machine-readable rows to
+`target/catalogue-matrix/results/catalogue-matrix-raw.tsv`; the human report at
+`catalogue-matrix-report.txt` is generated only after rereading those rows.
+Output Range, per-column count, float values, and exact Pattern Signal codes are
+checked before any row for a case is timed. Mismatches suppress that case's
+timings, retain a precise reason in both artifacts, and make the command fail.
+A dirty run is labeled diagnostic; only a clean successful run is a canonical
+baseline candidate.
 
 ## All Workspace Members
 

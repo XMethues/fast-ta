@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare pinned TA-Lib dependencies and run the opt-in SMA tracer unattended."""
+"""Prepare pinned dependencies and run the opt-in Indicator Catalogue matrix."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ BUNDLED_CYTHON_VERSION = "3.0.11"
 MINIMUM_PYTHON = (3, 10)
 
 REPOSITORY = Path(__file__).resolve().parents[3]
-DEFAULT_ROOT = REPOSITORY / "target" / "sma-three-way"
+DEFAULT_ROOT = REPOSITORY / "target" / "catalogue-matrix"
 
 
 def parse_args() -> argparse.Namespace:
@@ -212,7 +212,7 @@ def main() -> None:
 
     environment = os.environ.copy()
     library_dir = str(talib_install / "lib")
-    environment["SMA_TALIB_LIB_DIR"] = library_dir
+    environment["CATALOGUE_TALIB_LIB_DIR"] = library_dir
     environment["TA_INCLUDE_PATH"] = str(talib_install / "include")
     environment["TA_LIBRARY_PATH"] = library_dir
     for variable in ("DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"):
@@ -226,9 +226,9 @@ def main() -> None:
             "-p",
             "ta-benchmarks",
             "--features",
-            "sma-three-way",
+            "catalogue-matrix",
             "--bin",
-            "sma-three-way",
+            "catalogue-matrix",
             "--",
             "--python",
             str(python),

@@ -12,12 +12,12 @@ categories = ["development-tools::profiling", "development-tools::testing"]
 
 [features]
 default = []
-sma-three-way = []
+catalogue-matrix = []
 
 [[bin]]
-name = "sma-three-way"
-path = "src/bin/sma_three_way.rs"
-required-features = ["sma-three-way"]
+name = "catalogue-matrix"
+path = "src/bin/catalogue_matrix.rs"
+required-features = ["catalogue-matrix"]
 
 [[bench]]
 name = "basic"

@@ -36,7 +36,7 @@ fn validate_close_volume(close: &[Float], volume: &[Float]) -> Result<usize> {
 }
 fn validate_obv_input(input: OBVInput<'_>) -> Result<(usize, usize)> {
     let len = validate_close_volume(input.close, input.volume)?;
-    let count = validate_input_len(len, 1)?;
+    let count = validate_input_len(len, 0)?;
     Ok((len, count))
 }
 
@@ -45,14 +45,19 @@ fn obv_kernel(input: OBVInput<'_>, len: usize, count: usize, output: &mut [Float
         return OutputRange::empty();
     }
 
-    let mut value = 0.0 as Float;
+    let mut value = input.volume[0];
+    output[0] = value;
     let mut previous_close = input.close[0];
-    for idx in 1..len {
-        value = update_obv(value, input.close[idx], previous_close, input.volume[idx]);
-        output[idx - 1] = value;
-        previous_close = input.close[idx];
+    for ((output_value, &current_close), &volume) in output[1..len]
+        .iter_mut()
+        .zip(&input.close[1..len])
+        .zip(&input.volume[1..len])
+    {
+        value = update_obv(value, current_close, previous_close, volume);
+        *output_value = value;
+        previous_close = current_close;
     }
-    OutputRange::new(1, count)
+    OutputRange::new(0, count)
 }
 
 #[inline]
@@ -66,7 +71,7 @@ fn update_obv(value: Float, current_close: Float, previous_close: Float, volume:
     }
 }
 
-/// On-Balance Volume batch function using first-observation warm-up.
+/// On-Balance Volume batch function seeded from the first observation's volume.
 #[allow(non_snake_case)]
 pub fn OBV(close: &[Float], volume: &[Float], out_real: &mut [Float]) -> Result<OutputRange> {
     let input = OBVInput { close, volume };
@@ -97,7 +102,7 @@ impl IndicatorConfig for OBVConfig {
 
     #[inline]
     fn lookback(&self) -> usize {
-        1
+        0
     }
 
     fn compute<'a>(&self, input: Self::Input<'a>) -> Result<CompactOutput<Self::Output>> {
@@ -187,7 +192,8 @@ impl StreamingComputation<OBVConfig> for OBVStream {
 
         let Some(previous_close) = self.previous_close else {
             self.previous_close = Some(input.close);
-            return Ok(None);
+            self.value = input.volume;
+            return Ok(Some(self.value));
         };
 
         self.value = update_obv(self.value, input.close, previous_close, input.volume);

@@ -1,0 +1,240 @@
+use std::collections::BTreeSet;
+use std::fs;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use ta_benchmarks::catalogue_matrix::{
+    catalogue_fixture, fixture_checksum, read_raw_rows, render_report, timing_stats,
+    validate_outputs, write_raw_rows, BenchmarkRow, OutputValues, TimingStats, VerifiedOutput,
+    C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS, MATRIX, RUST_CALLER_MODE,
+};
+
+static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
+
+fn row(implementation: &str, mode: &str, input_length: usize, median_ns: f64) -> BenchmarkRow {
+    BenchmarkRow {
+        implementation: implementation.to_owned(),
+        indicator_family: "Overlap Studies".to_owned(),
+        indicator_definition: "SMA: Simple Moving Average".to_owned(),
+        case_id: "SMA".to_owned(),
+        mode: mode.to_owned(),
+        parameters: "timeperiod=14".to_owned(),
+        input_length,
+        output_kind: "float".to_owned(),
+        output_arity: Some(1),
+        stats: Some(TimingStats {
+            median_ns,
+            ci95_lower_ns: median_ns * 0.9,
+            ci95_upper_ns: median_ns * 1.1,
+            throughput_observations_per_second: input_length as f64 * 1.0e9 / median_ns,
+            sample_count: 50,
+            outlier_count: 2,
+            outlier_low_count: 1,
+            outlier_high_count: 1,
+        }),
+        output_begin: Some(13),
+        output_count: Some(input_length - 13),
+        output_checksum: "fnv1a64:5678".to_owned(),
+        semantic_status: "verified".to_owned(),
+        semantic_reason: String::new(),
+        timing_status: "measured".to_owned(),
+        timing_reason: String::new(),
+        comparison_status: "comparable".to_owned(),
+        comparison_reason: "primary caller-owned Rust/C kernel".to_owned(),
+        warmup_iterations: Some(100),
+        iterations_per_sample: Some(10),
+        timed_boundary: "API call only".to_owned(),
+        fixture: FIXTURE_ID.to_owned(),
+        input_checksum: "fnv1a64:1234".to_owned(),
+        ta_lib_version: "0.6.4".to_owned(),
+        ta_lib_revision: "43f9d5042ecc4bd367941846494ad907bf20ea50".to_owned(),
+        python_version: "3.13.2".to_owned(),
+        python_binding_version: "0.6.4".to_owned(),
+        python_ta_lib_version: "0.6.4".to_owned(),
+        numpy_version: "2.2.3".to_owned(),
+        rustc: "rustc test".to_owned(),
+        cpu: "test cpu".to_owned(),
+        os: "test os".to_owned(),
+        arch: "test arch".to_owned(),
+        float_width: 64,
+        features: "default(f64,std),catalogue-matrix".to_owned(),
+        commit: "deadbeef".to_owned(),
+        dirty: false,
+    }
+}
+
+#[test]
+fn matrix_is_the_representative_ticket_catalogue() {
+    let ids = MATRIX.iter().map(|case| case.id).collect::<BTreeSet<_>>();
+    let required = [
+        "SMA",
+        "BBANDS",
+        "RSI",
+        "MACD",
+        "ATR",
+        "ADX",
+        "HT_DCPHASE",
+        "CDLDOJI",
+    ];
+    assert!(required.iter().all(|id| ids.contains(id)));
+    assert_eq!(MATRIX.len(), 15);
+    assert_eq!(
+        MATRIX
+            .iter()
+            .map(|case| case.family)
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            "Overlap Studies",
+            "Momentum Indicators",
+            "Volatility Indicators",
+            "Cycle Indicators",
+            "Pattern Recognition",
+            "Statistic Functions",
+            "Price Transform",
+            "Volume Indicators",
+            "Math Transform",
+            "Math Operators",
+        ])
+    );
+    assert_eq!(INPUT_LENGTHS, [256, 4_096, 65_536]);
+    assert!(MATRIX.iter().all(|case| !case.parameters.is_empty()));
+}
+
+#[test]
+fn shared_fixture_is_finite_prefix_stable_and_ohlcv_valid() {
+    let fixtures = INPUT_LENGTHS.map(catalogue_fixture);
+    for (fixture, expected_length) in fixtures.iter().zip(INPUT_LENGTHS) {
+        assert_eq!(fixture.len(), expected_length);
+        fixture
+            .validate()
+            .expect("valid deterministic OHLCV fixture");
+        assert_eq!(fixture, &catalogue_fixture(expected_length));
+        assert_eq!(
+            fixture_checksum(fixture),
+            fixture_checksum(&catalogue_fixture(expected_length))
+        );
+    }
+    let fields: [for<'a> fn(&'a ta_benchmarks::catalogue_matrix::Fixture) -> &'a [f64]; 6] = [
+        |fixture| fixture.open.as_slice(),
+        |fixture| fixture.high.as_slice(),
+        |fixture| fixture.low.as_slice(),
+        |fixture| fixture.close.as_slice(),
+        |fixture| fixture.volume.as_slice(),
+        |fixture| fixture.auxiliary.as_slice(),
+    ];
+    for field in fields {
+        assert_eq!(
+            &field(&fixtures[1])[..INPUT_LENGTHS[0]],
+            field(&fixtures[0])
+        );
+        assert_eq!(
+            &field(&fixtures[2])[..INPUT_LENGTHS[1]],
+            field(&fixtures[1])
+        );
+    }
+}
+
+#[test]
+fn semantic_gate_checks_range_arity_float_values_and_exact_integer_signals() {
+    let floats = VerifiedOutput {
+        begin: 13,
+        count: 3,
+        values: OutputValues::Float(vec![vec![1.0, 2.0, 3.0]]),
+    };
+    let shifted = VerifiedOutput {
+        begin: 14,
+        ..floats.clone()
+    };
+    assert!(validate_outputs(&floats, "candidate", &shifted)
+        .expect_err("shifted range must fail")
+        .contains("OutputRange mismatch"));
+
+    let wrong_arity = VerifiedOutput {
+        begin: 13,
+        count: 3,
+        values: OutputValues::Float(vec![vec![1.0, 2.0, 3.0], vec![1.0, 2.0, 3.0]]),
+    };
+    assert!(validate_outputs(&floats, "candidate", &wrong_arity)
+        .expect_err("wrong output arity must fail")
+        .contains("output arity mismatch"));
+
+    let wrong_float = VerifiedOutput {
+        begin: 13,
+        count: 3,
+        values: OutputValues::Float(vec![vec![1.0, 2.01, 3.0]]),
+    };
+    assert!(validate_outputs(&floats, "candidate", &wrong_float)
+        .expect_err("out-of-tolerance float must fail")
+        .contains("column 0 compact index 1"));
+
+    let integers = VerifiedOutput {
+        begin: 10,
+        count: 3,
+        values: OutputValues::Integer(vec![vec![0, 100, -100]]),
+    };
+    let wrong_integer = VerifiedOutput {
+        begin: 10,
+        count: 3,
+        values: OutputValues::Integer(vec![vec![0, 80, -100]]),
+    };
+    assert!(validate_outputs(&integers, "candidate", &wrong_integer)
+        .expect_err("Pattern Signal codes must compare exactly")
+        .contains("exact integer mismatch"));
+}
+
+#[test]
+fn statistics_report_median_ci_throughput_samples_and_outliers() {
+    let mut samples = (1..=49).map(|value| value as f64).collect::<Vec<_>>();
+    samples.push(10_000.0);
+    let stats = timing_stats(&samples, 256).expect("valid timing samples");
+    assert_eq!(stats.sample_count, 50);
+    assert_eq!(stats.median_ns, 25.5);
+    assert!(stats.ci95_lower_ns <= stats.median_ns);
+    assert!(stats.ci95_upper_ns >= stats.median_ns);
+    assert_eq!(stats.outlier_count, 1);
+    assert_eq!(stats.outlier_high_count, 1);
+    assert!(stats.throughput_observations_per_second > 0.0);
+}
+
+#[test]
+fn report_is_generated_from_reread_rows_and_separates_comparable_from_unavailable() {
+    let id = NEXT_PATH.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!(
+        "fast-ta-catalogue-matrix-{}-{id}.tsv",
+        std::process::id()
+    ));
+    let mut rows = Vec::new();
+    for input_length in INPUT_LENGTHS {
+        rows.push(row("fast-ta", RUST_CALLER_MODE, input_length, 2_000.0));
+        rows.push(row("TA-Lib C", C_DIRECT_MODE, input_length, 1_000.0));
+    }
+    let mut python = row("TA-Lib Python", "official Python NumPy API", 256, 3_000.0);
+    python.comparison_status = "unavailable".to_owned();
+    python.comparison_reason = "user-facing API is not a caller-owned kernel".to_owned();
+    rows.push(python);
+    let mut mismatch = row("fast-ta", "Streaming Computation", 256, 2_500.0);
+    mismatch.stats = None;
+    mismatch.semantic_status = "mismatch".to_owned();
+    mismatch.semantic_reason = "exact integer mismatch at compact index 7".to_owned();
+    mismatch.timing_status = "suppressed".to_owned();
+    mismatch.timing_reason = "semantic gate failed".to_owned();
+    mismatch.comparison_status = "unavailable".to_owned();
+    mismatch.comparison_reason = "separate Rust execution cost".to_owned();
+    mismatch.warmup_iterations = None;
+    mismatch.iterations_per_sample = None;
+    rows.push(mismatch);
+
+    write_raw_rows(&path, &rows).expect("write raw benchmark rows");
+    let reread = read_raw_rows(&path).expect("read raw benchmark rows");
+    let report = render_report(&reread).expect("render report from reread raw rows");
+    fs::remove_file(&path).expect("remove test raw rows");
+
+    assert_eq!(reread, rows);
+    assert!(report.contains("Pinned representative Indicator Catalogue performance matrix"));
+    assert!(report.contains("Geometric Rust/C latency ratio"));
+    assert!(report.contains("2.000x"));
+    assert!(report.contains("unavailable: user-facing API is not a caller-owned kernel"));
+    assert!(report.contains("exact integer mismatch at compact index 7"));
+    assert!(report.contains("256 | caller-owned Batch Computation vs direct C caller-owned"));
+    assert!(report.contains("4096 | caller-owned Batch Computation vs direct C caller-owned"));
+    assert!(report.contains("65536 | caller-owned Batch Computation vs direct C caller-owned"));
+}

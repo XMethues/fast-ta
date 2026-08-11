@@ -2795,18 +2795,18 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         volume: &volume,
     };
     let config = OBVConfig::new();
-    assert_eq!(IndicatorConfig::lookback(&config), 1);
+    assert_eq!(IndicatorConfig::lookback(&config), 0);
 
     let owned = IndicatorConfig::compute(&config, input).unwrap();
     assert_eq!(owned.source_len(), close.len());
-    assert_eq!(owned.range(), OutputRange::new(1, 4));
-    assert_float_slice_close(owned.values(), &[200.0, 150.0, 450.0, 450.0]);
+    assert_eq!(owned.range(), OutputRange::new(0, 5));
+    assert_float_slice_close(owned.values(), &[100.0, 300.0, 250.0, 550.0, 550.0]);
 
     let mut output = [FLOAT_SENTINEL; 6];
     let range = IndicatorConfig::compute_into(&config, input, &mut output).unwrap();
     assert_eq!(range, owned.range());
-    assert_float_slice_close(&output[..4], owned.values());
-    assert_eq!(&output[4..], &[FLOAT_SENTINEL; 2]);
+    assert_float_slice_close(&output[..5], owned.values());
+    assert_eq!(&output[5..], &[FLOAT_SENTINEL; 1]);
 
     let mut runner = IndicatorConfig::prepare_batch(&config, close.len()).unwrap();
     assert_eq!(
@@ -2817,8 +2817,8 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
     let prepared =
         PreparedBatchRunner::<OBVConfig>::compute_into(&mut runner, input, &mut output).unwrap();
     assert_eq!(prepared, owned.range());
-    assert_float_slice_close(&output[..4], owned.values());
-    assert_eq!(&output[4..], &[FLOAT_SENTINEL; 2]);
+    assert_float_slice_close(&output[..5], owned.values());
+    assert_eq!(&output[5..], &[FLOAT_SENTINEL; 1]);
 
     let second_close = [5.0 as Float, 4.0, 6.0, 6.0];
     let second_volume = [9.0 as Float, 3.0, 7.0, 2.0];
@@ -2832,8 +2832,8 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         PreparedBatchRunner::<OBVConfig>::compute_into(&mut runner, second_input, &mut output)
             .unwrap();
     assert_eq!(second_range, second_owned.range());
-    assert_float_slice_close(&output[..3], second_owned.values());
-    assert_eq!(&output[3..], &[FLOAT_SENTINEL; 3]);
+    assert_float_slice_close(&output[..4], second_owned.values());
+    assert_eq!(&output[4..], &[FLOAT_SENTINEL; 2]);
 
     let oversized = [Float::NAN; 6];
     output.fill(FLOAT_SENTINEL);
@@ -2892,15 +2892,13 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
                 close: &valid_one,
                 volume: &valid_one,
             },
-            &mut output[..0],
+            &mut output[..1],
         )
-        .unwrap_err(),
-        TalibError::InsufficientData {
-            required: 2,
-            actual: 1,
-        }
+        .unwrap(),
+        OutputRange::new(0, 1)
     );
-    assert_eq!(output, [FLOAT_SENTINEL; 6]);
+    assert_float_close(output[0], 1.0);
+    output.fill(FLOAT_SENTINEL);
     assert_eq!(
         IndicatorConfig::compute_into(
             &config,
@@ -2912,7 +2910,7 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         )
         .unwrap_err()
         .to_string(),
-        "Invalid input: OBV output buffer too small: need 1, got 0"
+        "Invalid input: OBV output buffer too small: need 2, got 0"
     );
     assert_eq!(output, [FLOAT_SENTINEL; 6]);
 
@@ -2921,9 +2919,9 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         close: close[0],
         volume: volume[0],
     };
-    assert_eq!(
+    assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(&mut stream, first_tick).unwrap(),
-        None
+        owned.values()[0],
     );
     for idx in 1..close.len() {
         let tick = OBVTick {
@@ -2933,7 +2931,7 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         let configured = StreamingComputation::<OBVConfig>::next(&mut stream, tick)
             .unwrap()
             .unwrap();
-        assert_float_close(configured, owned.values()[idx - 1]);
+        assert_float_close(configured, owned.values()[idx]);
     }
 
     let invalid_tick = OBVTick {
@@ -2947,12 +2945,12 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
     };
     assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(&mut stream, next_tick).unwrap(),
-        460.0,
+        560.0,
     );
 
     let mut left = IndicatorConfig::stream(&config).unwrap();
     let mut right = IndicatorConfig::stream(&config).unwrap();
-    assert_eq!(
+    assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(
             &mut left,
             OBVTick {
@@ -2961,9 +2959,9 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
             },
         )
         .unwrap(),
-        None
+        1.0,
     );
-    assert_eq!(
+    assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(
             &mut right,
             OBVTick {
@@ -2972,7 +2970,7 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
             },
         )
         .unwrap(),
-        None
+        10.0,
     );
     assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(
@@ -2983,7 +2981,7 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
             },
         )
         .unwrap(),
-        2.0,
+        3.0,
     );
     assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(
@@ -2994,7 +2992,7 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
             },
         )
         .unwrap(),
-        -20.0,
+        -10.0,
     );
     assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(
@@ -3005,13 +3003,13 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
             },
         )
         .unwrap(),
-        -1.0,
+        0.0,
     );
 
     StreamingComputation::<OBVConfig>::reset(&mut stream);
-    assert_eq!(
+    assert_some_float_close(
         StreamingComputation::<OBVConfig>::next(&mut stream, first_tick).unwrap(),
-        None
+        owned.values()[0],
     );
     for idx in 1..close.len() {
         let tick = OBVTick {
@@ -3020,7 +3018,7 @@ fn obv_config_covers_owned_caller_prepared_validation_and_independent_streams() 
         };
         assert_some_float_close(
             StreamingComputation::<OBVConfig>::next(&mut stream, tick).unwrap(),
-            owned.values()[idx - 1],
+            owned.values()[idx],
         );
     }
 }

@@ -150,8 +150,8 @@ fn obv_function_writes_compact_outputs() {
 
     let range = OBV(&close, &volume, &mut output).unwrap();
 
-    assert_eq!(range, OutputRange::new(1, 3));
-    for (actual, expected) in output[..3].iter().copied().zip([200.0, 150.0, 450.0]) {
+    assert_eq!(range, OutputRange::new(0, 4));
+    for (actual, expected) in output.into_iter().zip([100.0, 300.0, 250.0, 550.0]) {
         assert_close(actual, expected);
     }
 }
@@ -172,9 +172,9 @@ fn obv_config_implements_indicator_compute() {
     )
     .unwrap();
 
-    assert_eq!(IndicatorConfig::lookback(&config), 1);
-    assert_eq!(range, OutputRange::new(1, 3));
-    assert_close(output[0], 200.0);
+    assert_eq!(IndicatorConfig::lookback(&config), 0);
+    assert_eq!(range, OutputRange::new(0, 4));
+    assert_close(output[0], 100.0);
 }
 
 #[test]
@@ -185,16 +185,7 @@ fn obv_streaming_matches_batch_and_reset() {
     let config = OBVConfig::new();
     let mut stream = IndicatorConfig::stream(&config).unwrap();
 
-    assert!(StreamingComputation::<OBVConfig>::next(
-        &mut stream,
-        OBVTick {
-            close: close[0],
-            volume: volume[0],
-        }
-    )
-    .unwrap()
-    .is_none());
-    for idx in 1..close.len() {
+    for idx in 0..close.len() {
         let streamed = StreamingComputation::<OBVConfig>::next(
             &mut stream,
             OBVTick {
@@ -208,15 +199,18 @@ fn obv_streaming_matches_batch_and_reset() {
     }
 
     StreamingComputation::<OBVConfig>::reset(&mut stream);
-    assert!(StreamingComputation::<OBVConfig>::next(
-        &mut stream,
-        OBVTick {
-            close: close[0],
-            volume: volume[0],
-        }
-    )
-    .unwrap()
-    .is_none());
+    assert_close(
+        StreamingComputation::<OBVConfig>::next(
+            &mut stream,
+            OBVTick {
+                close: close[0],
+                volume: volume[0],
+            },
+        )
+        .unwrap()
+        .unwrap(),
+        batch[0],
+    );
 }
 
 #[test]
@@ -227,9 +221,10 @@ fn obv_flat_close_leaves_value_unchanged() {
 
     let range = OBV(&close, &volume, &mut output).unwrap();
 
-    assert_eq!(range, OutputRange::new(1, 2));
-    assert_close(output[0], 0.0);
-    assert_close(output[1], -25.0);
+    assert_eq!(range, OutputRange::new(0, 3));
+    assert_close(output[0], 100.0);
+    assert_close(output[1], 100.0);
+    assert_close(output[2], 75.0);
 }
 
 #[test]
@@ -237,7 +232,11 @@ fn obv_rejects_bad_inputs() {
     let mut output = [0.0; 4];
     assert!(OBV(&[1.0, 2.0], &[10.0], &mut output).is_err());
     assert!(OBV(&[1.0, Float::NAN], &[10.0, 20.0], &mut output).is_err());
-    assert!(OBV(&[1.0], &[10.0], &mut output).is_err());
+    assert_eq!(
+        OBV(&[1.0], &[10.0], &mut output).unwrap(),
+        OutputRange::new(0, 1)
+    );
+    assert_close(output[0], 10.0);
 
     let mut too_small = [0.0; 1];
     let (_, _, close, volume) = fixture();

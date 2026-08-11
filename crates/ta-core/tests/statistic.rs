@@ -788,6 +788,46 @@ fn regression_matches_pinned_rolling_fma_oracle() {
 }
 
 #[test]
+fn regression_rebases_rolling_sums_before_drift_exceeds_semantic_tolerance() {
+    let period = 14;
+    let real = (0..65_536)
+        .map(|index| {
+            let trend = index as Float * 0.001 as Float;
+            let cycle = ((index * 37) % 101) as Float;
+            trend + cycle + 1.0 as Float
+        })
+        .collect::<Vec<_>>();
+    let mut output = vec![0.0 as Float; real.len() - period + 1];
+    LINEARREG(&real, period, &mut output).unwrap();
+
+    let n = period as Float;
+    let sum_x = n * (n - 1.0 as Float) * 0.5 as Float;
+    let sum_x_sq = n * (n - 1.0 as Float) * (2.0 as Float * n - 1.0 as Float) / 6.0 as Float;
+    let divisor = sum_x * sum_x - n * sum_x_sq;
+    #[cfg(feature = "f32")]
+    let tolerance = 1e-4 as Float;
+    #[cfg(not(feature = "f32"))]
+    let tolerance = 1e-9 as Float;
+    for output_index in [0, 21_683, output.len() - 1] {
+        let window = &real[output_index..output_index + period];
+        let mut sum_y = 0.0 as Float;
+        let mut sum_xy = 0.0 as Float;
+        for (offset, &value) in window.iter().enumerate() {
+            sum_y += value;
+            sum_xy += (period - 1 - offset) as Float * value;
+        }
+        let slope = (n * sum_xy - sum_x * sum_y) / divisor;
+        let intercept = (sum_y - slope * sum_x) / n;
+        let expected = slope.mul_add((period - 1) as Float, intercept);
+        assert!(
+            (output[output_index] - expected).abs() <= tolerance,
+            "output {output_index}: expected {expected}, got {}",
+            output[output_index]
+        );
+    }
+}
+
+#[test]
 fn regression_preserves_large_baseline_cancellation_behavior() {
     let real = [
         10_000_000.0,
