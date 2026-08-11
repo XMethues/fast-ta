@@ -1,0 +1,131 @@
+Analysis of sampling execution_baselines-2a8980ec9ece9b83 (pid 82052) every 1 millisecond
+Process:         execution_baselines-2a8980ec9ece9b83 [82052]
+Path:            /private/tmp/*/execution_baselines-2a8980ec9ece9b83
+Load Address:    0x1001c4000
+Identifier:      execution_baselines-2a8980ec9ece9b83
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  cargo [82051]
+Target Type:     live task
+
+Date/Time:       2026-08-12 01:25:05.967 +0800
+Launch Time:     2026-08-12 01:25:05.901 +0800
+OS Version:      macOS 26.5.2 (25F84)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+
+Physical footprint:         29.1M
+Physical footprint (peak):  29.1M
+Idle exit:                  untracked
+----
+
+Call graph:
+    3139 Thread_5846370   DispatchQueue_1: com.apple.main-thread  (serial)
+      3139 start  (in dyld) + 6992  [0x18b947e00]
+        3139 main  (in execution_baselines-2a8980ec9ece9b83) + 52  [0x10099a744]
+          3139 std::rt::lang_start_internal::h0662b076b027b010  (in execution_baselines-2a8980ec9ece9b83) + 952  [0x100b4bce8]
+            3139 std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::h42b94a493d21e266  (in execution_baselines-2a8980ec9ece9b83) + 16  [0x1009a6404]
+              3139 std::sys::backtrace::__rust_begin_short_backtrace::hc47a53eb8b9ff94e  (in execution_baselines-2a8980ec9ece9b83) + 12  [0x1009c5854]
+                3139 execution_baselines::main::hd8f0223b94ca5c39  (in execution_baselines-2a8980ec9ece9b83) + 20  [0x100956214]
+                  3139 execution_baselines::benches::h14cb284e76ada2c5  (in execution_baselines-2a8980ec9ece9b83) + 10780  [0x100958c7c]
+                    3139 execution_baselines::moving_average_momentum::bench_moving_average_momentum_execution::h6f42d4254c3aaa97  (in execution_baselines-2a8980ec9ece9b83) + 892  [0x1009b1b90]
+                      3139 criterion::benchmark_group::BenchmarkGroup$LT$M$GT$::bench_with_input::h35f2fb2daeea74f2  (in execution_baselines-2a8980ec9ece9b83) + 1412  [0x10074b990]
+                        3139 criterion::analysis::common::h629f57235920e60c  (in execution_baselines-2a8980ec9ece9b83) + 192  [0x1009b65d8]
+                          1572 criterion::routine::Routine::sample::ha90f71eaf3aa9c2e  (in execution_baselines-2a8980ec9ece9b83) + 1536  [0x10046a5ec]
+                          + 1572 _$LT$criterion..routine..Function$LT$M$C$F$C$T$GT$$u20$as$u20$criterion..routine..Routine$LT$M$C$T$GT$$GT$::bench::h7f85e650872dc010  (in execution_baselines-2a8980ec9ece9b83) + 236  [0x1001f3c74]
+                          +   1572 c_with_alloca  (in execution_baselines-2a8980ec9ece9b83) + 76  [0x100aa8bf8]
+                          +     1572 alloca::trampoline::h375a373c64d2bff8  (in execution_baselines-2a8980ec9ece9b83) + 76  [0x1008e30f8]
+                          +       1572 criterion::bencher::Bencher$LT$M$GT$::iter::h19ba9c01f3929873  (in execution_baselines-2a8980ec9ece9b83) + 184  [0x100875d74]
+                          +         793 ta_core::momentum::moving_average::compute_macd_validated::hfa81ec38c742fe32  (in execution_baselines-2a8980ec9ece9b83) + 296  [0x1009db130]
+                          +         ! 287 ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83) + 208,136,...  [0x1009da48c,0x1009da444,...]
+                          +         ! 261 ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83) + 180  [0x1009da470]
+                          +         ! : 261 ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 12,884,...  [0x1009ef494,0x1009ef7fc,...]
+                          +         ! 241 ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83) + 132  [0x1009da440]
+                          +         ! : 241 ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 884,12,...  [0x1009ef7fc,0x1009ef494,...]
+                          +         ! 4 ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 888  [0x1009ef800]
+                          +         337 ta_core::momentum::moving_average::compute_macd_validated::hfa81ec38c742fe32  (in execution_baselines-2a8980ec9ece9b83) + 348  [0x1009db164]
+                          +         ! 337 ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 884,284,...  [0x1009ef7fc,0x1009ef5a4,...]
+                          +         271 ta_core::momentum::moving_average::compute_macd_validated::hfa81ec38c742fe32  (in execution_baselines-2a8980ec9ece9b83) + 308,368,...  [0x1009db13c,0x1009db178,...]
+                          +         92 ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83) + 300,296,...  [0x1009da4e8,0x1009da4e4,...]
+                          +         79 _$LT$ta_core..momentum..moving_average..MACDConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$::compute_into::hf7229ef5257a7782  (in execution_baselines-2a8980ec9ece9b83) + 72  [0x1009dca20]
+                          +           79 ta_core::momentum::moving_average::validate_macd_outputs::h7ba38ec345256d44  (in execution_baselines-2a8980ec9ece9b83) + 268,252,...  [0x1009daec4,0x1009daeb4,...]
+                          1567 criterion::routine::Routine::sample::ha90f71eaf3aa9c2e  (in execution_baselines-2a8980ec9ece9b83) + 724  [0x10046a2c0]
+                            1567 _$LT$criterion..routine..Function$LT$M$C$F$C$T$GT$$u20$as$u20$criterion..routine..Routine$LT$M$C$T$GT$$GT$::warm_up::hf510a8e674884e93  (in execution_baselines-2a8980ec9ece9b83) + 280  [0x1002bf07c]
+                              1567 criterion::bencher::Bencher$LT$M$GT$::iter::h19ba9c01f3929873  (in execution_baselines-2a8980ec9ece9b83) + 184  [0x100875d74]
+                                828 ta_core::momentum::moving_average::compute_macd_validated::hfa81ec38c742fe32  (in execution_baselines-2a8980ec9ece9b83) + 296  [0x1009db130]
+                                ! 343 ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83) + 208,184,...  [0x1009da48c,0x1009da474,...]
+                                ! 287 ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83) + 132  [0x1009da440]
+                                ! : 287 ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 884,12,...  [0x1009ef7fc,0x1009ef494,...]
+                                ! 197 ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83) + 180  [0x1009da470]
+                                ! : 197 ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 32,884,...  [0x1009ef4a8,0x1009ef7fc,...]
+                                ! 1 ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 888  [0x1009ef800]
+                                301 ta_core::momentum::moving_average::compute_macd_validated::hfa81ec38c742fe32  (in execution_baselines-2a8980ec9ece9b83) + 348  [0x1009db164]
+                                ! 301 ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 884,264,...  [0x1009ef7fc,0x1009ef590,...]
+                                272 ta_core::momentum::moving_average::compute_macd_validated::hfa81ec38c742fe32  (in execution_baselines-2a8980ec9ece9b83) + 308,264,...  [0x1009db13c,0x1009db110,...]
+                                91 ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83) + 300,296  [0x1009da4e8,0x1009da4e4]
+                                73 _$LT$ta_core..momentum..moving_average..MACDConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$::compute_into::hf7229ef5257a7782  (in execution_baselines-2a8980ec9ece9b83) + 72  [0x1009dca20]
+                                ! 73 ta_core::momentum::moving_average::validate_macd_outputs::h7ba38ec345256d44  (in execution_baselines-2a8980ec9ece9b83) + 268,252,...  [0x1009daec4,0x1009daeb4,...]
+                                2 ta_core::momentum::moving_average::compute_macd_validated::hfa81ec38c742fe32  (in execution_baselines-2a8980ec9ece9b83) + 80  [0x1009db058]
+                                  1 ta_core::momentum::moving_average::MACDStreamCore::new::h905c8b23deff67d8  (in execution_baselines-2a8980ec9ece9b83) + 60  [0x1009d9d00]
+                                  : 1 ta_core::momentum::moving_average::PairStreamCore::new::hab206a542dd2a25f  (in execution_baselines-2a8980ec9ece9b83) + 656  [0x1009da1f4]
+                                  1 ta_core::overlap::ma::MAStream::new::h5d4ae265d63baef5  (in execution_baselines-2a8980ec9ece9b83) + 1448  [0x1009f021c]
+
+Total number in stack (recursive counted multiple, when >=5):
+        8       ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83) + 0  [0x1009ef488]
+
+Sort by top of stack, same collapsed (when >= 5):
+        ta_core::overlap::ma::MAStreamInner::next::h3d22adcc20612f51  (in execution_baselines-2a8980ec9ece9b83)        1629
+        ta_core::momentum::moving_average::PairStreamCore::next::hc461833e9df1c7e9  (in execution_baselines-2a8980ec9ece9b83)        813
+        ta_core::momentum::moving_average::compute_macd_validated::hfa81ec38c742fe32  (in execution_baselines-2a8980ec9ece9b83)        543
+        ta_core::momentum::moving_average::validate_macd_outputs::h7ba38ec345256d44  (in execution_baselines-2a8980ec9ece9b83)        152
+
+Binary Images:
+       0x1001c4000 -        0x100d8e917 +execution_baselines-2a8980ec9ece9b83 (0) <C1F17015-4C46-3098-9459-897930C5DAE8> /tmp/*/execution_baselines-2a8980ec9ece9b83
+       0x18b8a0000 -        0x18b8f2b4b  libobjc.A.dylib (951.7) <FF1D8AE4-ABEF-35F1-A30A-1183B9CB414F> /usr/lib/libobjc.A.dylib
+       0x18b8f3000 -        0x18b927d07  libdyld.dylib (1378) <B147D877-D0C2-388F-B38D-D3132E39905F> /usr/lib/system/libdyld.dylib
+       0x18b928000 -        0x18b9ce217  dyld (1.0.0 - 1378) <F924BDD3-4365-3466-9580-8B1B3FA8F857> /usr/lib/dyld
+       0x18b9cf000 -        0x18b9d2228  libsystem_blocks.dylib (96) <CC947089-488D-316B-A9C7-46DEC0F73145> /usr/lib/system/libsystem_blocks.dylib
+       0x18b9d3000 -        0x18ba2755f  libxpc.dylib (3102.120.13) <C40FCAE8-7A17-3D82-87CB-3DA4802ADEF1> /usr/lib/system/libxpc.dylib
+       0x18ba28000 -        0x18ba489ff  libsystem_trace.dylib (1861.120.4) <D0FABAB3-5AE7-3F10-8C62-60CBF5D70850> /usr/lib/system/libsystem_trace.dylib
+       0x18ba49000 -        0x18baf75f7  libcorecrypto.dylib (1922.121.1) <A01A158D-6FE7-3B1C-A2C4-6BCB90D7314A> /usr/lib/system/libcorecrypto.dylib
+       0x18baf8000 -        0x18bb481d7  libsystem_malloc.dylib (812.100.31) <5FAE4807-4D2B-3A95-A63A-DD96D3DA11B4> /usr/lib/system/libsystem_malloc.dylib
+       0x18bb49000 -        0x18bb9023f  libdispatch.dylib (1542.100.32) <F071EFE4-299F-3089-ACC4-0025B8FFB52A> /usr/lib/system/libdispatch.dylib
+       0x18bb91000 -        0x18bb93ffb  libsystem_featureflags.dylib (103) <71FCFFBD-85F8-3365-AFE0-BECEA4369122> /usr/lib/system/libsystem_featureflags.dylib
+       0x18bb94000 -        0x18bc14d9f  libsystem_c.dylib (1752.120.2) <694B7881-1BF3-3D0F-8F19-B50AE4E8EF8A> /usr/lib/system/libsystem_c.dylib
+       0x18bc15000 -        0x18bca5ae7  libc++.1.dylib (2100.43) <5013C0F8-84A9-3B56-9FEB-C353816A750F> /usr/lib/libc++.1.dylib
+       0x18bca6000 -        0x18bcc075f  libc++abi.dylib (2100.43) <E482D257-E5A0-3816-BD97-7B39342958DA> /usr/lib/libc++abi.dylib
+       0x18bcc1000 -        0x18bcfe2af  libsystem_kernel.dylib (12377.121.10) <FCA53B98-3D6A-38B2-A0EC-DF0F7E05F171> /usr/lib/system/libsystem_kernel.dylib
+       0x18bcff000 -        0x18bd0bb3b  libsystem_pthread.dylib (539.100.4) <4F33683C-18C8-39A1-800B-2E3BD43BCC13> /usr/lib/system/libsystem_pthread.dylib
+       0x18bd0c000 -        0x18bd14963  libsystem_platform.dylib (375.120.2) <160FD864-8D15-36FC-9E97-9725388CFAFE> /usr/lib/system/libsystem_platform.dylib
+       0x18bd15000 -        0x18bd446eb  libsystem_info.dylib (600) <3D62F2D9-F516-31BF-83C7-E203D872300B> /usr/lib/system/libsystem_info.dylib
+       0x18fcdc000 -        0x18fce5e5f  libsystem_darwin.dylib (1752.120.2) <8858F025-745A-388E-9544-080781CC9A69> /usr/lib/system/libsystem_darwin.dylib
+       0x190147000 -        0x1901591b6  libsystem_notify.dylib (348.120.4) <64D76451-1E0C-369B-A631-54DA3140E083> /usr/lib/system/libsystem_notify.dylib
+       0x192414000 -        0x19242ef7b  libsystem_networkextension.dylib (2226.121.1) <0331EE20-A1FB-3C0D-990A-F65939CFF505> /usr/lib/system/libsystem_networkextension.dylib
+       0x1924b1000 -        0x1924c8fdf  libsystem_asl.dylib (406) <F40838DF-2F15-3F62-970F-DEE25706BF1B> /usr/lib/system/libsystem_asl.dylib
+       0x19406f000 -        0x194077387  libsystem_symptoms.dylib (2169.120.7) <F5029F5C-1BF3-31C7-892E-BC8606AC829E> /usr/lib/system/libsystem_symptoms.dylib
+       0x198313000 -        0x19834b257  libsystem_containermanager.dylib (725.120.2) <518BE44D-AA31-31E6-B44B-A37AD5E47040> /usr/lib/system/libsystem_containermanager.dylib
+       0x199724000 -        0x1997285d7  libsystem_configuration.dylib (1405.120.5) <0F7BBC1C-3D50-3E59-A31F-E4672A80BCEB> /usr/lib/system/libsystem_configuration.dylib
+       0x199729000 -        0x19972f8cf  libsystem_sandbox.dylib (2680.120.12) <EC3A75EA-44C0-3A0B-9BF7-71C117B0A9C6> /usr/lib/system/libsystem_sandbox.dylib
+       0x19ad83000 -        0x19ad861fb  libquarantine.dylib (196.120.2) <5849009B-ACA3-3796-94C4-BBDF8D300EBA> /usr/lib/system/libquarantine.dylib
+       0x19b522000 -        0x19b528d03  libsystem_coreservices.dylib (191.4.5) <9576143B-C303-35A3-BA63-1FD06EDA2BB1> /usr/lib/system/libsystem_coreservices.dylib
+       0x19baad000 -        0x19baeaa77  libsystem_m.dylib (3312.100.1) <A7E0863C-101A-31A0-922B-ED9B02626151> /usr/lib/system/libsystem_m.dylib
+       0x19baeb000 -        0x19baebc9b  libcharset.1.dylib (115.120.2) <338A5252-594A-3AC5-B274-5AB3CE5820C6> /usr/lib/libcharset.1.dylib
+       0x19baec000 -        0x19baef527  libmacho.dylib (1378) <755441B4-C034-3E3A-8E3C-F424FBB28261> /usr/lib/system/libmacho.dylib
+       0x19bb09000 -        0x19bb163a7  libcommonCrypto.dylib (600035) <CE357BB1-2D49-37CC-9FFE-D093936B1475> /usr/lib/system/libcommonCrypto.dylib
+       0x19bb17000 -        0x19bb20ca3  libunwind.dylib (2100.2) <FC8F0C4E-6FB0-3E27-ABEF-B0FA720CD5E4> /usr/lib/system/libunwind.dylib
+       0x19bb29000 -        0x19bb337ff  libcopyfile.dylib (240) <8ACFAC7A-88E9-3EF4-853F-A9140FF110E5> /usr/lib/system/libcopyfile.dylib
+       0x19bb34000 -        0x19bb37987  libcompiler_rt.dylib (103.3) <AA79151F-C19D-3C7C-92F8-B10F04D82C1C> /usr/lib/system/libcompiler_rt.dylib
+       0x19bb38000 -        0x19bb3c78b  libsystem_collections.dylib (1752.120.2) <72DB5BE7-EF78-37D0-8AAD-53E37CFE4287> /usr/lib/system/libsystem_collections.dylib
+       0x19bb3d000 -        0x19bb404cf  libsystem_secinit.dylib (168.100.7) <E525C566-CDA4-3D99-B12B-1615FD54A1F3> /usr/lib/system/libsystem_secinit.dylib
+       0x19bb41000 -        0x19bb43bf7  libremovefile.dylib (85.100.6) <635E661D-80A7-340D-A165-3F7D318FDFC9> /usr/lib/system/libremovefile.dylib
+       0x19bb44000 -        0x19bb44f27  libkeymgr.dylib (31) <8C08891A-DF1C-3DCC-AB64-4742FD6BE9BA> /usr/lib/system/libkeymgr.dylib
+       0x19bb45000 -        0x19bb4de37  libsystem_dnssd.dylib (2881.120.11) <6F45DF3F-233B-3BC3-BA8C-B43E7DA884BF> /usr/lib/system/libsystem_dnssd.dylib
+       0x19bb4e000 -        0x19bb5309b  libcache.dylib (95) <189B576E-6176-3F82-8FA4-5914B0BEAEE7> /usr/lib/system/libcache.dylib
+       0x19bb54000 -        0x19bb55ce3  libSystem.B.dylib (1356) <BA6A669A-3BB9-3BC7-85E8-8F0C1E68351E> /usr/lib/libSystem.B.dylib
+       0x19bb8e000 -        0x19bb952bb  libiconv.2.dylib (115.120.2) <7C02D8F4-1921-323C-9D3D-A5D9B0ACDD78> /usr/lib/libiconv.2.dylib
+       0x28ee10000 -        0x28ee17349  libRosetta.dylib (367.9) <8651ED4F-6506-3788-B56B-32EE414A85CA> /usr/lib/libRosetta.dylib
+       0x290a2d000 -        0x290a30a4b  libsystem_darwindirectory.dylib (122) <CF277A2C-C818-3F16-8B3F-3C7B39FCD164> /usr/lib/system/libsystem_darwindirectory.dylib
+       0x290a31000 -        0x290a3a5d3  libsystem_eligibility.dylib (319.121.1) <DDAC0531-0262-3DDC-8EC8-80EB9438847A> /usr/lib/system/libsystem_eligibility.dylib
+       0x290a3b000 -        0x290a4288b  libsystem_sanitizers.dylib (26.1) <44C4234F-8B2D-38D3-A774-B4B3C75AF3A7> /usr/lib/system/libsystem_sanitizers.dylib
+       0x290a43000 -        0x290a43bb7  libsystem_trial.dylib (474.2.18.2) <68C583BA-AFF5-3916-86AE-6E38BFEF98D6> /usr/lib/system/libsystem_trial.dylib

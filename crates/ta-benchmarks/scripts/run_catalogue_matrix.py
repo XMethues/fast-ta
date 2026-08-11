@@ -8,6 +8,7 @@ from collections import Counter
 import csv
 import hashlib
 import json
+import math
 import os
 import stat
 from pathlib import Path
@@ -412,6 +413,15 @@ def validate_publishable(raw_path: Path) -> None:
         "output_kind",
         "output_arity",
         "input_checksum",
+        "median_ns",
+        "ci95_lower_ns",
+        "ci95_upper_ns",
+        "throughput_observations_per_second",
+        "warmup_iterations",
+        "iterations_per_sample",
+        "outlier_count",
+        "outlier_low_count",
+        "outlier_high_count",
         *FIXED_PUBLICATION_FIELDS,
         *UNIFORM_PROVENANCE_FIELDS,
     }
@@ -443,6 +453,88 @@ def validate_publishable(raw_path: Path) -> None:
             "cannot publish incomplete case/input/mode matrix: "
             f"missing={missing[:5]!r}; unexpected_or_duplicate={unexpected[:5]!r}"
         )
+
+    for row_number, row in enumerate(rows, start=2):
+        positive_floats = {}
+        for field in (
+            "median_ns",
+            "ci95_lower_ns",
+            "ci95_upper_ns",
+            "throughput_observations_per_second",
+        ):
+            try:
+                value = float(row[field])
+            except (TypeError, ValueError) as error:
+                raise RuntimeError(
+                    f"cannot publish raw row {row_number}: invalid {field} {row[field]!r}"
+                ) from error
+            if not math.isfinite(value) or value <= 0.0:
+                raise RuntimeError(
+                    f"cannot publish raw row {row_number}: {field} must be positive and finite"
+                )
+            positive_floats[field] = value
+
+        positive_integers = {}
+        for field in (
+            "input_length",
+            "sample_count",
+            "warmup_iterations",
+            "iterations_per_sample",
+        ):
+            try:
+                value = int(row[field])
+            except (TypeError, ValueError) as error:
+                raise RuntimeError(
+                    f"cannot publish raw row {row_number}: invalid {field} {row[field]!r}"
+                ) from error
+            if value <= 0:
+                raise RuntimeError(
+                    f"cannot publish raw row {row_number}: {field} must be positive"
+                )
+            positive_integers[field] = value
+
+        outliers = {}
+        for field in ("outlier_count", "outlier_low_count", "outlier_high_count"):
+            try:
+                value = int(row[field])
+            except (TypeError, ValueError) as error:
+                raise RuntimeError(
+                    f"cannot publish raw row {row_number}: invalid {field} {row[field]!r}"
+                ) from error
+            if value < 0:
+                raise RuntimeError(
+                    f"cannot publish raw row {row_number}: {field} must be non-negative"
+                )
+            outliers[field] = value
+
+        median = positive_floats["median_ns"]
+        lower = positive_floats["ci95_lower_ns"]
+        upper = positive_floats["ci95_upper_ns"]
+        if not lower <= median <= upper:
+            raise RuntimeError(
+                f"cannot publish raw row {row_number}: 95% confidence interval "
+                "must contain median_ns"
+            )
+        expected_throughput = positive_integers["input_length"] * 1.0e9 / median
+        if not math.isclose(
+            positive_floats["throughput_observations_per_second"],
+            expected_throughput,
+            rel_tol=1.0e-4,
+            abs_tol=0.0,
+        ):
+            raise RuntimeError(
+                f"cannot publish raw row {row_number}: throughput is incoherent "
+                "with input_length and median_ns"
+            )
+        if (
+            outliers["outlier_count"]
+            != outliers["outlier_low_count"] + outliers["outlier_high_count"]
+            or outliers["outlier_count"] > positive_integers["sample_count"]
+        ):
+            raise RuntimeError(
+                f"cannot publish raw row {row_number}: outlier counts are "
+                "incoherent with sample_count"
+            )
 
     for field, expected_value in FIXED_PUBLICATION_FIELDS.items():
         invalid = sum(row[field] != expected_value for row in rows)

@@ -15,7 +15,7 @@ use ta_benchmarks::pattern_shapes::PATTERN_SHAPES;
 use ta_core::pattern_recognition::{
     CDL3BLACKCROWSConfig, CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig,
     CDLHIKKAKEConfig, CDLHIKKAKEMODConfig, CDLMORNINGSTARConfig, Candle, CandleInput,
-    CandleSetting, CandleSettingType, CandleSettings, PatternSignal, Penetration,
+    CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings, PatternSignal, Penetration,
 };
 use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
@@ -90,7 +90,7 @@ fn record_environment_provenance() {
             .collect::<Vec<_>>()
             .join(" | ");
         let provenance = format!(
-            "suite=pattern_recognition\ncommit={commit}\ndirty={}\nrustc={rustc}\nhost={host}\ncpu_model={cpu_model}\nos={}\narch={}\nparallelism={parallelism}\nta_core_features=default(f64,std)\nfloat_bits={}\ncriterion=0.8.2\nprofile=bench\nsizes=256,4096,65536\nlarge_average_period={LARGE_AVERAGE_PERIOD}\nrepresentative_shapes={representative_shapes}\n",
+            "suite=pattern_recognition\ncommit={commit}\ndirty={}\nrustc={rustc}\nhost={host}\ncpu_model={cpu_model}\nos={}\narch={}\nparallelism={parallelism}\nta_core_features=default(f64,std)\nfloat_bits={}\ncriterion=0.8.2\nprofile=bench\nsizes=256,4096,65536\nlarge_average_period={LARGE_AVERAGE_PERIOD}\nrepresentative_shapes={representative_shapes}\nCDL3WHITESOLDIERS_variants=default;custom_non_default(periods=3/3/3/3,factors=2/0.01/2/2,ranges=Shadows/HighLow/Shadows/RealBody);zero_period_default_factors(periods=0/0/0/0,current_range=true)\n",
             dirty,
             std::env::consts::OS,
             std::env::consts::ARCH,
@@ -120,6 +120,49 @@ fn large_period_settings() -> CandleSettings {
         );
     }
     settings
+}
+
+fn white_soldiers_custom_settings() -> CandleSettings {
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::ShadowVeryShort,
+            CandleSetting::new(CandleRangeKind::Shadows, 3, 2.0 as Float)
+                .expect("valid custom ShadowVeryShort setting"),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(CandleRangeKind::HighLow, 3, 0.01 as Float)
+                .expect("valid custom BodyShort setting"),
+        )
+        .with_setting(
+            CandleSettingType::Far,
+            CandleSetting::new(CandleRangeKind::Shadows, 3, 2.0 as Float)
+                .expect("valid custom Far setting"),
+        )
+        .with_setting(
+            CandleSettingType::Near,
+            CandleSetting::new(CandleRangeKind::RealBody, 3, 2.0 as Float)
+                .expect("valid custom Near setting"),
+        )
+}
+
+fn white_soldiers_zero_period_default_factor_settings() -> CandleSettings {
+    let defaults = CandleSettings::default();
+    [
+        CandleSettingType::ShadowVeryShort,
+        CandleSettingType::BodyShort,
+        CandleSettingType::Far,
+        CandleSettingType::Near,
+    ]
+    .into_iter()
+    .fold(defaults, |settings, setting_type| {
+        let default = defaults.setting(setting_type);
+        settings.with_setting(
+            setting_type,
+            CandleSetting::new(default.range_kind(), 0, default.factor())
+                .expect("valid zero-period default-factor setting"),
+        )
+    })
 }
 
 fn benchmark_construction<C, F>(c: &mut Criterion, name: &str, variant: &str, make_config: F)
@@ -281,16 +324,32 @@ fn bench_pattern_recognition(c: &mut Criterion) {
         "default",
         CDL3WHITESOLDIERSConfig::default(),
     );
-    benchmark_construction(c, "CDL3WHITESOLDIERS", "period_200", || {
-        CDL3WHITESOLDIERSConfig::new(large_period_settings())
-            .expect("valid large-period CDL3WHITESOLDIERS")
+    benchmark_construction(c, "CDL3WHITESOLDIERS", "custom_non_default", || {
+        CDL3WHITESOLDIERSConfig::new(white_soldiers_custom_settings())
+            .expect("valid custom CDL3WHITESOLDIERS")
     });
     benchmark_throughput(
         c,
         "CDL3WHITESOLDIERS",
-        "period_200",
-        CDL3WHITESOLDIERSConfig::new(large_period_settings())
-            .expect("valid large-period CDL3WHITESOLDIERS"),
+        "custom_non_default",
+        CDL3WHITESOLDIERSConfig::new(white_soldiers_custom_settings())
+            .expect("valid custom CDL3WHITESOLDIERS"),
+    );
+    benchmark_construction(
+        c,
+        "CDL3WHITESOLDIERS",
+        "zero_period_default_factors",
+        || {
+            CDL3WHITESOLDIERSConfig::new(white_soldiers_zero_period_default_factor_settings())
+                .expect("valid zero-period CDL3WHITESOLDIERS")
+        },
+    );
+    benchmark_throughput(
+        c,
+        "CDL3WHITESOLDIERS",
+        "zero_period_default_factors",
+        CDL3WHITESOLDIERSConfig::new(white_soldiers_zero_period_default_factor_settings())
+            .expect("valid zero-period CDL3WHITESOLDIERS"),
     );
 
     benchmark_construction(

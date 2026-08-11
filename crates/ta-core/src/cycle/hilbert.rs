@@ -74,7 +74,6 @@ impl HilbertTransform {
 pub(crate) struct HilbertState {
     observations: usize,
     price_history: [Float; 3],
-    price_history_index: usize,
     period_wma_sum: Float,
     period_wma_sub: Float,
     trailing_wma_value: Float,
@@ -161,7 +160,7 @@ impl HilbertState {
             _ => {}
         }
 
-        let smoothed_value = self.next_price_wma(input);
+        let smoothed_value = self.next_price_wma(today, input);
         if today < recurrence_start {
             return None;
         }
@@ -188,10 +187,7 @@ impl HilbertState {
             .next(quadrature, even, self.hilbert_index, adjusted_period);
 
         if even {
-            self.hilbert_index += 1;
-            if self.hilbert_index == 3 {
-                self.hilbert_index = 0;
-            }
+            self.hilbert_index = (self.hilbert_index + 1) % 3;
         }
 
         let q2 = 0.2 as Float * (quadrature + ji) + 0.8 as Float * self.previous_q2;
@@ -232,18 +228,14 @@ impl HilbertState {
     }
 
     #[inline(always)]
-    fn next_price_wma(&mut self, input: Float) -> Float {
+    fn next_price_wma(&mut self, today: usize, input: Float) -> Float {
         self.period_wma_sub += input;
         self.period_wma_sub -= self.trailing_wma_value;
         self.period_wma_sum += input * 4.0 as Float;
         let smoothed_value = self.period_wma_sum * 0.1 as Float;
         self.period_wma_sum -= self.period_wma_sub;
-        self.trailing_wma_value = self.price_history[self.price_history_index];
-        self.price_history[self.price_history_index] = input;
-        self.price_history_index += 1;
-        if self.price_history_index == self.price_history.len() {
-            self.price_history_index = 0;
-        }
+        self.trailing_wma_value = self.price_history[today % self.price_history.len()];
+        self.price_history[today % self.price_history.len()] = input;
         smoothed_value
     }
 }
@@ -285,10 +277,7 @@ impl HilbertPhaseState {
             .hilbert
             .next_transition(input, PHASE_RECURRENCE_START)?;
         self.smooth_price[self.smooth_price_index] = transition.smoothed_value;
-        self.smooth_price_index += 1;
-        if self.smooth_price_index == SMOOTH_PRICE_SIZE {
-            self.smooth_price_index = 0;
-        }
+        self.smooth_price_index = (self.smooth_price_index + 1) % SMOOTH_PRICE_SIZE;
         let phase = self.calculate_dominant_cycle_phase(transition.smooth_period);
         Some(HilbertPhaseTransition {
             today,
@@ -309,11 +298,7 @@ impl HilbertPhaseState {
         let period = (smooth_period + 0.5 as Float) as usize;
         let mut real_part = 0.0 as Float;
         let mut imaginary_part = 0.0 as Float;
-        let mut index = if self.smooth_price_index == 0 {
-            SMOOTH_PRICE_SIZE - 1
-        } else {
-            self.smooth_price_index - 1
-        };
+        let mut index = (self.smooth_price_index + SMOOTH_PRICE_SIZE - 1) % SMOOTH_PRICE_SIZE;
 
         for offset in 0..period {
             let angle =
@@ -321,11 +306,7 @@ impl HilbertPhaseState {
             let value = self.smooth_price[index];
             real_part += angle.sin() * value;
             imaginary_part += angle.cos() * value;
-            index = if index == 0 {
-                SMOOTH_PRICE_SIZE - 1
-            } else {
-                index - 1
-            };
+            index = (index + SMOOTH_PRICE_SIZE - 1) % SMOOTH_PRICE_SIZE;
         }
 
         if imaginary_part.abs() > 0.0 as Float {

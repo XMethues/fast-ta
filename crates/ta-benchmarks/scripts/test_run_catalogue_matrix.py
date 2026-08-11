@@ -87,6 +87,17 @@ class PublicationMatrixTests(unittest.TestCase):
                         "output_kind": "float",
                         "output_arity": "1",
                         "input_checksum": runner.INPUT_CHECKSUMS[input_length],
+                        "median_ns": "1000",
+                        "ci95_lower_ns": "900",
+                        "ci95_upper_ns": "1100",
+                        "throughput_observations_per_second": str(
+                            input_length * 1.0e9 / 1000.0
+                        ),
+                        "warmup_iterations": "100",
+                        "iterations_per_sample": "10",
+                        "outlier_count": "2",
+                        "outlier_low_count": "1",
+                        "outlier_high_count": "1",
                         "python_version": "3.12.0",
                         "rustc": "rustc test",
                         "cpu": "test cpu",
@@ -115,6 +126,35 @@ class PublicationMatrixTests(unittest.TestCase):
             self.write_rows(raw, rows)
             with self.assertRaisesRegex(RuntimeError, "incomplete case/input/mode matrix"):
                 runner.validate_publishable(raw)
+
+    def test_publishable_rejects_malformed_numeric_evidence(self) -> None:
+        mutations = (
+            ("median_ns", "NaN", "positive and finite"),
+            ("ci95_lower_ns", "-1", "positive and finite"),
+            ("ci95_upper_ns", "inf", "positive and finite"),
+            ("ci95_lower_ns", "1001", "confidence interval"),
+            (
+                "throughput_observations_per_second",
+                "1",
+                "throughput is incoherent",
+            ),
+            ("sample_count", "0", "sample_count must be positive"),
+            ("warmup_iterations", "0", "warmup_iterations must be positive"),
+            ("iterations_per_sample", "0", "iterations_per_sample must be positive"),
+            ("iterations_per_sample", "NA", "invalid iterations_per_sample"),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            raw = Path(temporary) / "raw.tsv"
+            for field, value, message in mutations:
+                with self.subTest(field=field):
+                    rows = self.rows()
+                    rows[0][field] = value
+                    self.write_rows(raw, rows)
+                    with self.assertRaisesRegex(RuntimeError, message):
+                        runner.validate_publishable(raw)
+
+    def test_committed_optimized_matrix_is_publishable(self) -> None:
+        runner.validate_publishable(runner.PUBLISHED_RAW)
 
 
 class SourceCacheTests(unittest.TestCase):

@@ -19,7 +19,7 @@ cargo build -p ta-core
 
 With f32 precision:
 ```bash
-cargo build -p ta-core --features f32
+cargo build -p ta-core --no-default-features --features f32,std
 ```
 
 Run tests:
@@ -122,8 +122,11 @@ Dependencies remain under `target/catalogue-matrix/deps`. Every run writes
 `target/catalogue-matrix/results/catalogue-matrix-raw.tsv`; its human report is
 generated only after rereading those rows. `--publish` rejects noncanonical
 sample, warm-up, sample-duration, baseline, and optimization-evidence inputs,
-then requires every expected case × input length × implementation/mode cell
-with one consistent pinned provenance before copying the stable review paths:
+malformed or non-positive timing evidence, confidence intervals that do not
+contain their median, incoherent throughput/outlier counts, and zero iteration
+counts. It then requires every expected case × input length ×
+implementation/mode cell with one consistent pinned provenance before copying
+the stable review paths:
 
 ```text
 crates/ta-benchmarks/baselines/catalogue_matrix_optimized.tsv
@@ -156,13 +159,16 @@ cargo run --release -p ta-benchmarks --features catalogue-matrix \
   --report crates/ta-benchmarks/CATALOGUE_MATRIX_REPORT.txt
 ```
 
-The platform JSONL inputs are runtime evidence from successful GitHub Actions
-run `31513123909` at commit
-`0306801184363ae472b8fffab036ef8aa1740afd`. The report parser preserves the
-runtime backend, scalar equivalence, per-size medians, confidence intervals,
-throughput, speedup, timed boundary, workflow run/job, and commit provenance.
-x86 public validated timings are not compared with validation-excluded explicit
-kernel timings; WASM rows cover the public `wasm-bindgen` TYPPRICE boundary.
+The platform JSONL inputs are runtime evidence whose metadata records are the
+source of truth for the current workflow run/job, source commit, precision,
+release profile, feature set, OS, CPU, runtime, and active backend. The report
+parser derives provenance from those current artifacts rather than relying on a
+run ID or commit copied into this document. Every artifact must also contain
+successful validation records before its scalar-equivalence measurements can
+be reported. The renderer preserves per-size medians, confidence intervals,
+throughput, speedup, and timed boundaries. Public validated timings are only
+compared with matching scalar rows at the same boundary and precision; WASM
+rows cover the public `wasm-bindgen` TYPPRICE boundary.
 Output Range, per-column count, float values, and exact Pattern Signal codes are
 checked before any catalogue row is timed. Mismatches suppress that case's
 timings and fail the command.

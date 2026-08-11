@@ -40,6 +40,11 @@ name = "execution_baselines"
 harness = false
 
 [[bench]]
+name = "cycle_regression"
+harness = false
+
+
+[[bench]]
 name = "execution_allocations"
 harness = false
 

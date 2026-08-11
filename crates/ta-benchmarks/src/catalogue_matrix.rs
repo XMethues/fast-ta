@@ -606,7 +606,9 @@ pub struct BenchmarkRow {
 pub fn write_raw_rows(path: &Path, rows: &[BenchmarkRow]) -> Result<(), String> {
     let mut output = String::from(RAW_HEADER);
     output.push('\n');
-    for row in rows {
+    for (index, row) in rows.iter().enumerate() {
+        validate_benchmark_row_evidence(row)
+            .map_err(|error| format!("raw row {}: {error}", index + 2))?;
         output.push_str(&format_row(row));
         output.push('\n');
     }
@@ -721,6 +723,7 @@ pub struct PlatformQualification {
     pub platform: String,
     pub precision: String,
     pub runtime: String,
+    pub profile: String,
     pub cpu: String,
     pub os: String,
     pub commit: String,
@@ -759,6 +762,8 @@ pub fn parse_platform_qualification(
     artifact: &str,
 ) -> Result<PlatformQualification, String> {
     let mut metadata = None;
+    let mut has_aggregate_validation = false;
+    let mut validated_backends = BTreeSet::new();
     let mut measurements = Vec::new();
     for (index, line) in input
         .lines()
@@ -778,22 +783,54 @@ pub fn parse_platform_qualification(
                     .or_else(|| value.get("simd_backend").and_then(Value::as_str))
                     .ok_or_else(|| format!("{artifact} metadata is missing a runtime backend"))?
                     .to_owned();
-                let feature_flags = ["scalar_feature_flags", "simd_feature_flags"]
-                    .into_iter()
-                    .filter_map(|key| {
-                        value
-                            .get(key)
-                            .and_then(Value::as_str)
-                            .map(|flag| format!("{key}={flag}"))
+                let feature_flags = value
+                    .get("features")
+                    .and_then(Value::as_str)
+                    .filter(|features| !features.is_empty())
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        let cargo = value
+                            .get("cargo_features")?
+                            .as_str()
+                            .filter(|features| !features.is_empty())?;
+                        let target = value
+                            .get("target_features")?
+                            .as_str()
+                            .filter(|features| !features.is_empty())?;
+                        Some(format!("cargo_features={cargo}; target_features={target}"))
                     })
-                    .collect::<Vec<_>>()
-                    .join("; ");
+                    .or_else(|| {
+                        let flags = ["scalar_feature_flags", "simd_feature_flags"]
+                            .into_iter()
+                            .map(|key| {
+                                value
+                                    .get(key)
+                                    .and_then(Value::as_str)
+                                    .filter(|flag| !flag.is_empty())
+                                    .map(|flag| format!("{key}={flag}"))
+                            })
+                            .collect::<Option<Vec<_>>>()?;
+                        Some(flags.join("; "))
+                    })
+                    .ok_or_else(|| {
+                        format!("{artifact} metadata is missing string field \"features\"")
+                    })?;
+                let profile = value
+                    .get("profile")
+                    .and_then(Value::as_str)
+                    .or_else(|| value.get("rust_profile").and_then(Value::as_str))
+                    .filter(|profile| !profile.is_empty())
+                    .ok_or_else(|| {
+                        format!("{artifact} metadata is missing string field \"profile\"")
+                    })?
+                    .to_owned();
                 metadata = Some((
                     json_string(&value, "platform")?,
-                    json_string(&value, "precision")?,
+                    json_nonempty_string(&value, "precision")?,
                     json_string(&value, "runtime")?,
+                    profile,
                     json_string(&value, "cpu")?,
-                    json_optional_string(&value, "os"),
+                    json_nonempty_string(&value, "os")?,
                     json_string(&value, "commit")?,
                     json_identifier(&value, "workflow_run_id")?,
                     json_string(&value, "workflow_run_url")?,
@@ -826,23 +863,42 @@ pub fn parse_platform_qualification(
                         measurement.input_length
                     ));
                 }
-                if measurement.median_ns <= 0.0
-                    || measurement.ci95_lower_ns <= 0.0
-                    || measurement.ci95_upper_ns <= 0.0
-                    || measurement.throughput_observations_per_second <= 0.0
-                {
-                    return Err(format!("{artifact} has non-positive timing evidence"));
-                }
+                validate_positive_timing_evidence(
+                    measurement.median_ns,
+                    measurement.ci95_lower_ns,
+                    measurement.ci95_upper_ns,
+                    measurement.throughput_observations_per_second,
+                    measurement.sample_count,
+                    measurement.input_length,
+                )
+                .map_err(|error| format!("{artifact} measurement row {}: {error}", index + 1))?;
                 measurements.push(measurement);
             }
-            "validation" => {}
+            "validation" => match validate_qualification_validation(&value, artifact, index + 1)? {
+                Some(backend) if !validated_backends.insert(backend.clone()) => {
+                    return Err(format!(
+                        "{artifact} has duplicate validation records for backend {backend:?}"
+                    ));
+                }
+                Some(_) => {}
+                None if has_aggregate_validation => {
+                    return Err(format!(
+                        "{artifact} has more than one aggregate validation record"
+                    ));
+                }
+                None => has_aggregate_validation = true,
+            },
             other => return Err(format!("{artifact} has unsupported record type {other:?}")),
         }
+    }
+    if !has_aggregate_validation && validated_backends.is_empty() {
+        return Err(format!("{artifact} has no validation records"));
     }
     let (
         platform,
         precision,
         runtime,
+        profile,
         cpu,
         os,
         commit,
@@ -855,6 +911,18 @@ pub fn parse_platform_qualification(
     if measurements.is_empty() {
         return Err(format!("{artifact} has no measurement records"));
     }
+    for measurement in &measurements {
+        if measurement.equivalent_to_scalar
+            && !(measurement.backend == "ta-lib-c" && measurement.mode == "direct C caller-owned")
+            && !has_aggregate_validation
+            && !validated_backends.contains(&measurement.backend)
+        {
+            return Err(format!(
+                "{artifact} reports scalar equivalence for backend {:?} without a matching validation record",
+                measurement.backend
+            ));
+        }
+    }
     Ok(PlatformQualification {
         artifact: artifact.to_owned(),
         platform,
@@ -862,6 +930,7 @@ pub fn parse_platform_qualification(
         runtime,
         cpu,
         os,
+        profile,
         commit,
         workflow_run_id,
         workflow_run_url,
@@ -880,12 +949,12 @@ fn json_string(value: &Value, key: &str) -> Result<String, String> {
         .ok_or_else(|| format!("JSON record is missing string field {key:?}"))
 }
 
-fn json_optional_string(value: &Value, key: &str) -> String {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+fn json_nonempty_string(value: &Value, key: &str) -> Result<String, String> {
+    let parsed = json_string(value, key)?;
+    if parsed.is_empty() {
+        return Err(format!("JSON record has empty string field {key:?}"));
+    }
+    Ok(parsed)
 }
 
 fn json_u64(value: &Value, key: &str) -> Result<u64, String> {
@@ -897,8 +966,8 @@ fn json_u64(value: &Value, key: &str) -> Result<u64, String> {
 
 fn json_identifier(value: &Value, key: &str) -> Result<String, String> {
     match value.get(key) {
-        Some(Value::String(value)) => Ok(value.clone()),
-        Some(Value::Number(value)) => Ok(value.to_string()),
+        Some(Value::String(value)) if !value.is_empty() => Ok(value.clone()),
+        Some(Value::Number(value)) if value.is_u64() => Ok(value.to_string()),
         _ => Err(format!(
             "JSON record is missing string or integer field {key:?}"
         )),
@@ -914,6 +983,78 @@ fn json_f64(value: &Value, key: &str) -> Result<f64, String> {
         .get(key)
         .and_then(Value::as_f64)
         .ok_or_else(|| format!("JSON record is missing numeric field {key:?}"))
+}
+
+fn validate_qualification_validation(
+    value: &Value,
+    artifact: &str,
+    row_number: usize,
+) -> Result<Option<String>, String> {
+    let invalid = |reason: &str| format!("{artifact} validation row {row_number} {reason}");
+    if value.get("exact_scalar_equivalence").is_some() {
+        for key in [
+            "public_boundary",
+            "exact_scalar_equivalence",
+            "error_semantics_verified",
+            "mismatched_length_error_equal_to_scalar",
+            "non_finite_error_equal_to_scalar",
+        ] {
+            if !json_bool(value, key)? {
+                return Err(invalid(&format!("has {key}=false")));
+            }
+        }
+        let backend = json_nonempty_string(value, "backend")?;
+        let observed_backend = json_string(value, "observed_backend")?;
+        if backend != observed_backend {
+            return Err(invalid("did not observe its requested backend"));
+        }
+        for key in ["precision", "mode"] {
+            if json_string(value, key)?.is_empty() {
+                return Err(invalid(&format!("has empty {key}")));
+            }
+        }
+        return Ok(Some(backend));
+    } else if value.get("errors_match_scalar").is_some() {
+        for key in [
+            "public_boundary",
+            "unequal_lengths_verified",
+            "non_finite_verified",
+            "short_output_verified",
+            "errors_match_scalar",
+        ] {
+            if !json_bool(value, key)? {
+                return Err(invalid(&format!("has {key}=false")));
+            }
+        }
+        let backend = json_nonempty_string(value, "backend")?;
+        for key in [
+            "unequal_lengths_error",
+            "non_finite_error",
+            "short_output_error",
+        ] {
+            if json_string(value, key)?.is_empty() {
+                return Err(invalid(&format!("has empty {key}")));
+            }
+        }
+        return Ok(Some(backend));
+    } else {
+        for key in ["unequal_lengths_verified", "non_finite_verified"] {
+            if !json_bool(value, key)? {
+                return Err(invalid(&format!("has {key}=false")));
+            }
+        }
+        for key in [
+            "scalar_unequal_lengths_error",
+            "scalar_non_finite_error",
+            "simd_unequal_lengths_error",
+            "simd_non_finite_error",
+        ] {
+            if json_string(value, key)?.is_empty() {
+                return Err(invalid(&format!("has empty {key}")));
+            }
+        }
+    }
+    Ok(None)
 }
 
 fn json_bool(value: &Value, key: &str) -> Result<bool, String> {
@@ -1449,7 +1590,7 @@ pub fn render_report_with_comparison(
     }
 
     comparison.push_str(
-        "\nRuntime platform qualification from committed JSONL\n\nThese rows are parsed from the named JSONL artifacts. Speedup is scalar median divided by the matching backend median only when mode, precision, input size, and timed boundary match. A value below 1x means the SIMD backend was slower on this runner. The public x86 row has no matching public scalar row and is therefore not compared with the validation-excluded explicit scalar kernel.\n\n| Artifact | Platform | Precision | Runtime / CPU | Active backend | Equivalence | Workflow provenance | Commit |\n|---|---|---|---|---|---|---|---|\n",
+        "\nRuntime platform qualification from committed JSONL\n\nThese rows are parsed from the named JSONL artifacts only after their validation records and numeric timing evidence pass schema checks. Speedup is scalar median divided by the matching backend median only when mode, precision, input size, and timed boundary match. A value below 1x means the accelerated backend was slower on this runner. Rows without a scalar measurement at the same boundary are not compared.\n\n| Artifact | Platform | Precision | Profile / features | Runtime / CPU / OS | Active backend | Equivalence | Workflow provenance | Commit |\n|---|---|---|---|---|---|---|---|---|\n",
     );
     for qualification in platform_qualifications {
         let equivalent = qualification.measurements.iter().all(|measurement| {
@@ -1458,15 +1599,18 @@ pub fn render_report_with_comparison(
                 && measurement.timing_status == "measured"
         });
         comparison.push_str(&format!(
-            "| {} | {} | {} | {} / {} | {} | {} | run [{}]({}), job {} | {} |\n",
+            "| {} | {} | {} | {} / {} | {} / {} / {} | {} | {} | run [{}]({}), job {} | {} |\n",
             clean(&qualification.artifact),
             clean(&qualification.platform),
             clean(&qualification.precision),
+            clean(&qualification.profile),
+            clean(&qualification.feature_flags),
             clean(&qualification.runtime),
             clean(&qualification.cpu),
+            clean(&qualification.os),
             clean(&qualification.active_backend),
             if equivalent {
-                "all measurement rows verified"
+                "all measurement and validation rows verified"
             } else {
                 "qualification contains an unverified row"
             },
@@ -1863,7 +2007,86 @@ fn parse_row(line: &str) -> Result<BenchmarkRow, String> {
     if row.stats.is_none() && fields[10..17].iter().any(|value| *value != "NA") {
         return Err("partial unavailable timing statistics".to_owned());
     }
+    validate_benchmark_row_evidence(&row)?;
     Ok(row)
+}
+
+fn validate_benchmark_row_evidence(row: &BenchmarkRow) -> Result<(), String> {
+    if row.input_length == 0 {
+        return Err("input_length must be positive".to_owned());
+    }
+    for (name, iterations) in [
+        ("warmup_iterations", row.warmup_iterations),
+        ("iterations_per_sample", row.iterations_per_sample),
+    ] {
+        if iterations == Some(0) {
+            return Err(format!("{name} must be positive when present"));
+        }
+    }
+    let Some(stats) = &row.stats else {
+        return Ok(());
+    };
+    if row.warmup_iterations.is_none() || row.iterations_per_sample.is_none() {
+        return Err(
+            "measured timing evidence requires warmup_iterations and iterations_per_sample"
+                .to_owned(),
+        );
+    }
+    validate_positive_timing_evidence(
+        stats.median_ns,
+        stats.ci95_lower_ns,
+        stats.ci95_upper_ns,
+        stats.throughput_observations_per_second,
+        stats.sample_count,
+        row.input_length,
+    )?;
+    let classified_outliers = stats
+        .outlier_low_count
+        .checked_add(stats.outlier_high_count)
+        .ok_or_else(|| "outlier counts overflow".to_owned())?;
+    if stats.outlier_count != classified_outliers || stats.outlier_count > stats.sample_count {
+        return Err("outlier counts are incoherent with sample_count".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_positive_timing_evidence(
+    median_ns: f64,
+    ci95_lower_ns: f64,
+    ci95_upper_ns: f64,
+    throughput_observations_per_second: f64,
+    sample_count: usize,
+    input_length: usize,
+) -> Result<(), String> {
+    if [
+        median_ns,
+        ci95_lower_ns,
+        ci95_upper_ns,
+        throughput_observations_per_second,
+    ]
+    .into_iter()
+    .any(|value| !value.is_finite() || value <= 0.0)
+    {
+        return Err("timing evidence must be positive and finite".to_owned());
+    }
+    if ci95_lower_ns > median_ns || median_ns > ci95_upper_ns {
+        return Err("95% confidence interval must contain the median".to_owned());
+    }
+    if sample_count == 0 {
+        return Err("sample_count must be positive".to_owned());
+    }
+    if input_length == 0 {
+        return Err("input_length must be positive".to_owned());
+    }
+    let expected_throughput = input_length as f64 * 1.0e9 / median_ns;
+    let relative_error =
+        (throughput_observations_per_second - expected_throughput).abs() / expected_throughput;
+    if relative_error > 1.0e-4 {
+        return Err(format!(
+            "throughput is incoherent with input_length and median_ns (relative error {relative_error:.6})"
+        ));
+    }
+    Ok(())
 }
 
 fn parse<T>(value: &str, name: &str) -> Result<T, String>

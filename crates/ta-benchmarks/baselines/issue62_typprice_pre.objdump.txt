@@ -1,0 +1,274 @@
+
+/private/tmp/fast-ta-diagnostics-target-pre/release/deps/execution_baselines-2a8980ec9ece9b83:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+000000010082fcf0 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E>:
+10082fcf0: d10543ff    	sub	sp, sp, #0x150
+10082fcf4: a90f6ffc    	stp	x28, x27, [sp, #0xf0]
+10082fcf8: a91067fa    	stp	x26, x25, [sp, #0x100]
+10082fcfc: a9115ff8    	stp	x24, x23, [sp, #0x110]
+10082fd00: a91257f6    	stp	x22, x21, [sp, #0x120]
+10082fd04: a9134ff4    	stp	x20, x19, [sp, #0x130]
+10082fd08: a9147bfd    	stp	x29, x30, [sp, #0x140]
+10082fd0c: 910503fd    	add	x29, sp, #0x140
+10082fd10: aa0803f3    	mov	x19, x8
+10082fd14: a9405035    	ldp	x21, x20, [x1]
+10082fd18: d10263b8    	sub	x24, x29, #0x98
+10082fd1c: a9412836    	ldp	x22, x10, [x1, #0x10]
+10082fd20: b0001169    	adrp	x9, 0x100a5c000 <GCC_except_table791>
+10082fd24: 9133f129    	add	x9, x9, #0xcfc
+10082fd28: a9422037    	ldp	x23, x8, [x1, #0x20]
+10082fd2c: 5280008b    	mov	w11, #0x4               ; =4
+10082fd30: a903afe9    	stp	x9, x11, [sp, #0x38]
+10082fd34: d00011cb    	adrp	x11, 0x100a69000 <_anon.972c0f529c2e5056ddf32e935dac4d5b.0+0x220>
+10082fd38: 9112816b    	add	x11, x11, #0x4a0
+10082fd3c: a904aff4    	stp	x20, x11, [sp, #0x48]
+10082fd40: 5280006c    	mov	w12, #0x3               ; =3
+10082fd44: a905abec    	stp	x12, x10, [sp, #0x58]
+10082fd48: eb0a029f    	cmp	x20, x10
+10082fd4c: 540009a1    	b.ne	0x10082fe80 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x190>
+10082fd50: 5280008a    	mov	w10, #0x4               ; =4
+10082fd54: a903abe9    	stp	x9, x10, [sp, #0x38]
+10082fd58: d00011c9    	adrp	x9, 0x100a69000 <_anon.972c0f529c2e5056ddf32e935dac4d5b.0+0x220>
+10082fd5c: 91128d29    	add	x9, x9, #0x4a3
+10082fd60: a904a7f4    	stp	x20, x9, [sp, #0x48]
+10082fd64: 528000aa    	mov	w10, #0x5               ; =5
+10082fd68: a905a3ea    	stp	x10, x8, [sp, #0x58]
+10082fd6c: eb08029f    	cmp	x20, x8
+10082fd70: 54000881    	b.ne	0x10082fe80 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x190>
+10082fd74: b4000454    	cbz	x20, 0x10082fdfc <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x10c>
+10082fd78: d2800009    	mov	x9, #0x0                ; =0
+10082fd7c: d37df299    	lsl	x25, x20, #3
+10082fd80: 92f00208    	mov	x8, #0x7fefffffffffffff ; =9218868437227405311
+10082fd84: aa1903ea    	mov	x10, x25
+10082fd88: fc697aa0    	ldr	d0, [x21, x9, lsl #3]
+10082fd8c: 9e66000b    	fmov	x11, d0
+10082fd90: 9240f96b    	and	x11, x11, #0x7fffffffffffffff
+10082fd94: eb08017f    	cmp	x11, x8
+10082fd98: 540014cc    	b.gt	0x100830030 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x340>
+10082fd9c: 91000529    	add	x9, x9, #0x1
+10082fda0: f100214a    	subs	x10, x10, #0x8
+10082fda4: 54ffff21    	b.ne	0x10082fd88 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x98>
+10082fda8: d2800009    	mov	x9, #0x0                ; =0
+10082fdac: 92f00208    	mov	x8, #0x7fefffffffffffff ; =9218868437227405311
+10082fdb0: aa1903ea    	mov	x10, x25
+10082fdb4: fc697ac0    	ldr	d0, [x22, x9, lsl #3]
+10082fdb8: 9e66000b    	fmov	x11, d0
+10082fdbc: 9240f96b    	and	x11, x11, #0x7fffffffffffffff
+10082fdc0: eb08017f    	cmp	x11, x8
+10082fdc4: 5400154c    	b.gt	0x10083006c <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x37c>
+10082fdc8: 91000529    	add	x9, x9, #0x1
+10082fdcc: f100214a    	subs	x10, x10, #0x8
+10082fdd0: 54ffff21    	b.ne	0x10082fdb4 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0xc4>
+10082fdd4: d2800009    	mov	x9, #0x0                ; =0
+10082fdd8: 92f00208    	mov	x8, #0x7fefffffffffffff ; =9218868437227405311
+10082fddc: fc697ae0    	ldr	d0, [x23, x9, lsl #3]
+10082fde0: 9e66000a    	fmov	x10, d0
+10082fde4: 9240f94a    	and	x10, x10, #0x7fffffffffffffff
+10082fde8: eb08015f    	cmp	x10, x8
+10082fdec: 540015ec    	b.gt	0x1008300a8 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x3b8>
+10082fdf0: 91000529    	add	x9, x9, #0x1
+10082fdf4: f1002339    	subs	x25, x25, #0x8
+10082fdf8: 54ffff21    	b.ne	0x10082fddc <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0xec>
+10082fdfc: d00011c8    	adrp	x8, 0x100a69000 <_anon.972c0f529c2e5056ddf32e935dac4d5b.0+0x220>
+10082fe00: 91122108    	add	x8, x8, #0x488
+10082fe04: 52800109    	mov	w9, #0x8                ; =8
+10082fe08: a90527e8    	stp	x8, x9, [sp, #0x50]
+10082fe0c: f90033e3    	str	x3, [sp, #0x60]
+10082fe10: f9001ff4    	str	x20, [sp, #0x38]
+10082fe14: eb14007f    	cmp	x3, x20
+10082fe18: 54000842    	b.hs	0x10082ff20 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x230>
+10082fe1c: b0000028    	adrp	x8, 0x100834000 <__ZN140_$LT$ta_core..overlap..bands..BBANDSStream$u20$as$u20$ta_core..traits..StreamingComputation$LT$ta_core..overlap..bands..BBANDSConfig$GT$$GT$4next17h4ca64ffda43f2000E+0x2c>
+10082fe20: 9130a108    	add	x8, x8, #0xc28
+10082fe24: 910143e9    	add	x9, sp, #0x50
+10082fe28: a906a3e9    	stp	x9, x8, [sp, #0x68]
+10082fe2c: 9100e3e8    	add	x8, sp, #0x38
+10082fe30: 90000c49    	adrp	x9, 0x1009b7000 <__ZN4core3fmt3num3imp21_$LT$impl$u20$u64$GT$10_fmt_inner17hf78fa1016b9d59f9E+0x140>
+10082fe34: 910b3129    	add	x9, x9, #0x2cc
+10082fe38: a907a7e8    	stp	x8, x9, [sp, #0x78]
+10082fe3c: 910183e8    	add	x8, sp, #0x60
+10082fe40: a908a7e8    	stp	x8, x9, [sp, #0x88]
+10082fe44: d10263a8    	sub	x8, x29, #0x98
+10082fe48: b00012a0    	adrp	x0, 0x100a84000 <__ZN4core7unicode12unicode_data5cased17SHORT_OFFSET_RUNS17h0c142114f0fd7528E+0x724>
+10082fe4c: 9128b800    	add	x0, x0, #0xa2e
+10082fe50: 91002108    	add	x8, x8, #0x8
+10082fe54: 9101a3e1    	add	x1, sp, #0x68
+10082fe58: 9406127f    	bl	0x1009b4854 <__ZN5alloc3fmt6format12format_inner17h63985d1d6aa0fe33E>
+10082fe5c: d2f00008    	mov	x8, #-0x8000000000000000 ; =-9223372036854775808
+10082fe60: f81683a8    	stur	x8, [x29, #-0x98]
+10082fe64: ad410700    	ldp	q0, q1, [x24, #0x20]
+10082fe68: ad010660    	stp	q0, q1, [x19, #0x20]
+10082fe6c: f85a83a8    	ldur	x8, [x29, #-0x58]
+10082fe70: f9002268    	str	x8, [x19, #0x40]
+10082fe74: ad400301    	ldp	q1, q0, [x24]
+10082fe78: ad000261    	stp	q1, q0, [x19]
+10082fe7c: 14000021    	b	0x10082ff00 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x210>
+10082fe80: 9100e3e8    	add	x8, sp, #0x38
+10082fe84: b0000029    	adrp	x9, 0x100834000 <__ZN140_$LT$ta_core..overlap..bands..BBANDSStream$u20$as$u20$ta_core..traits..StreamingComputation$LT$ta_core..overlap..bands..BBANDSConfig$GT$$GT$4next17h4ca64ffda43f2000E+0x2c>
+10082fe88: 9130a129    	add	x9, x9, #0xc28
+10082fe8c: a906a7e8    	stp	x8, x9, [sp, #0x68]
+10082fe90: 910143e8    	add	x8, sp, #0x50
+10082fe94: a907a7e8    	stp	x8, x9, [sp, #0x78]
+10082fe98: 90000c48    	adrp	x8, 0x1009b7000 <__ZN4core3fmt3num3imp21_$LT$impl$u20$u64$GT$10_fmt_inner17hf78fa1016b9d59f9E+0x140>
+10082fe9c: 910b3108    	add	x8, x8, #0x2cc
+10082fea0: 910123e9    	add	x9, sp, #0x48
+10082fea4: a908a3e9    	stp	x9, x8, [sp, #0x88]
+10082fea8: 910183e9    	add	x9, sp, #0x60
+10082feac: a909a3e9    	stp	x9, x8, [sp, #0x98]
+10082feb0: d00012a0    	adrp	x0, 0x100a85000 <_anon.74dc6b3b0dc2ee7dd8843560a51729ac.20+0x17a>
+10082feb4: 913f4c00    	add	x0, x0, #0xfd3
+10082feb8: 91002308    	add	x8, x24, #0x8
+10082febc: 9101a3e1    	add	x1, sp, #0x68
+10082fec0: 94061265    	bl	0x1009b4854 <__ZN5alloc3fmt6format12format_inner17h63985d1d6aa0fe33E>
+10082fec4: ad408700    	ldp	q0, q1, [x24, #0x10]
+10082fec8: ad0007e0    	stp	q0, q1, [sp]
+10082fecc: 3dc00f00    	ldr	q0, [x24, #0x30]
+10082fed0: 3d800be0    	str	q0, [sp, #0x20]
+10082fed4: f85703a9    	ldur	x9, [x29, #-0x90]
+10082fed8: f85a83a8    	ldur	x8, [x29, #-0x58]
+10082fedc: f9001be8    	str	x8, [sp, #0x30]
+10082fee0: d2f00008    	mov	x8, #-0x8000000000000000 ; =-9223372036854775808
+10082fee4: a9002668    	stp	x8, x9, [x19]
+10082fee8: ad4007e0    	ldp	q0, q1, [sp]
+10082feec: ad008660    	stp	q0, q1, [x19, #0x10]
+10082fef0: 3dc00be0    	ldr	q0, [sp, #0x20]
+10082fef4: 3d800e60    	str	q0, [x19, #0x30]
+10082fef8: f9401be8    	ldr	x8, [sp, #0x30]
+10082fefc: f9002268    	str	x8, [x19, #0x40]
+10082ff00: a9547bfd    	ldp	x29, x30, [sp, #0x140]
+10082ff04: a9534ff4    	ldp	x20, x19, [sp, #0x130]
+10082ff08: a95257f6    	ldp	x22, x21, [sp, #0x120]
+10082ff0c: a9515ff8    	ldp	x24, x23, [sp, #0x110]
+10082ff10: a95067fa    	ldp	x26, x25, [sp, #0x100]
+10082ff14: a94f6ffc    	ldp	x28, x27, [sp, #0xf0]
+10082ff18: 910543ff    	add	sp, sp, #0x150
+10082ff1c: d65f03c0    	ret
+10082ff20: b40007f4    	cbz	x20, 0x10083001c <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x32c>
+10082ff24: eb03029f    	cmp	x20, x3
+10082ff28: 9a833288    	csel	x8, x20, x3, lo
+10082ff2c: d1000689    	sub	x9, x20, #0x1
+10082ff30: eb09011f    	cmp	x8, x9
+10082ff34: 9a893108    	csel	x8, x8, x9, lo
+10082ff38: f100211f    	cmp	x8, #0x8
+10082ff3c: 540000a2    	b.hs	0x10082ff50 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x260>
+10082ff40: d280000a    	mov	x10, #0x0               ; =0
+10082ff44: aa0203e8    	mov	x8, x2
+10082ff48: aa1403e9    	mov	x9, x20
+10082ff4c: 14000024    	b	0x10082ffdc <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x2ec>
+10082ff50: 91000508    	add	x8, x8, #0x1
+10082ff54: f2400909    	ands	x9, x8, #0x7
+10082ff58: 5280010a    	mov	w10, #0x8               ; =8
+10082ff5c: 9a890149    	csel	x9, x10, x9, eq
+10082ff60: cb09010a    	sub	x10, x8, x9
+10082ff64: cb0a0289    	sub	x9, x20, x10
+10082ff68: 8b0a0c48    	add	x8, x2, x10, lsl #3
+10082ff6c: 910082ab    	add	x11, x21, #0x20
+10082ff70: 910082cc    	add	x12, x22, #0x20
+10082ff74: 910082ed    	add	x13, x23, #0x20
+10082ff78: 9100804e    	add	x14, x2, #0x20
+10082ff7c: 6f00f500    	fmov.2d	v0, #3.00000000
+10082ff80: aa0a03ef    	mov	x15, x10
+10082ff84: ad7f0961    	ldp	q1, q2, [x11, #-0x20]
+10082ff88: acc21163    	ldp	q3, q4, [x11], #0x40
+10082ff8c: ad7f1985    	ldp	q5, q6, [x12, #-0x20]
+10082ff90: acc24187    	ldp	q7, q16, [x12], #0x40
+10082ff94: 4e65d421    	fadd.2d	v1, v1, v5
+10082ff98: 4e66d442    	fadd.2d	v2, v2, v6
+10082ff9c: 4e67d463    	fadd.2d	v3, v3, v7
+10082ffa0: 4e70d484    	fadd.2d	v4, v4, v16
+10082ffa4: ad7f19a5    	ldp	q5, q6, [x13, #-0x20]
+10082ffa8: acc241a7    	ldp	q7, q16, [x13], #0x40
+10082ffac: 4e65d421    	fadd.2d	v1, v1, v5
+10082ffb0: 4e66d442    	fadd.2d	v2, v2, v6
+10082ffb4: 4e67d463    	fadd.2d	v3, v3, v7
+10082ffb8: 4e70d484    	fadd.2d	v4, v4, v16
+10082ffbc: 6e60fc21    	fdiv.2d	v1, v1, v0
+10082ffc0: 6e60fc42    	fdiv.2d	v2, v2, v0
+10082ffc4: 6e60fc63    	fdiv.2d	v3, v3, v0
+10082ffc8: 6e60fc84    	fdiv.2d	v4, v4, v0
+10082ffcc: ad3f09c1    	stp	q1, q2, [x14, #-0x20]
+10082ffd0: ac8211c3    	stp	q3, q4, [x14], #0x40
+10082ffd4: f10021ef    	subs	x15, x15, #0x8
+10082ffd8: 54fffd61    	b.ne	0x10082ff84 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x294>
+10082ffdc: 8b030c4b    	add	x11, x2, x3, lsl #3
+10082ffe0: 1e611000    	fmov	d0, #3.00000000
+10082ffe4: eb0b011f    	cmp	x8, x11
+10082ffe8: 540001a0    	b.eq	0x10083001c <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x32c>
+10082ffec: eb0a029f    	cmp	x20, x10
+10082fff0: 54000880    	b.eq	0x100830100 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x410>
+10082fff4: fc6a7aa1    	ldr	d1, [x21, x10, lsl #3]
+10082fff8: fc6a7ac2    	ldr	d2, [x22, x10, lsl #3]
+10082fffc: fc6a7ae3    	ldr	d3, [x23, x10, lsl #3]
+100830000: 9100054a    	add	x10, x10, #0x1
+100830004: 1e622821    	fadd	d1, d1, d2
+100830008: 1e632821    	fadd	d1, d1, d3
+10083000c: 1e601821    	fdiv	d1, d1, d0
+100830010: fc008501    	str	d1, [x8], #0x8
+100830014: d1000529    	sub	x9, x9, #0x1
+100830018: b5fffe69    	cbnz	x9, 0x10082ffe4 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x2f4>
+10083001c: f9000a74    	str	x20, [x19, #0x10]
+100830020: 900011c8    	adrp	x8, 0x100a68000 <_anon.cc4bee3606c3a3693cae6921af9b97f0.57+0x19e>
+100830024: 3dc2a500    	ldr	q0, [x8, #0xa90]
+100830028: 3d800260    	str	q0, [x19]
+10083002c: 17ffffb5    	b	0x10082ff00 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x210>
+100830030: 90001160    	adrp	x0, 0x100a5c000 <GCC_except_table791>
+100830034: 9133f000    	add	x0, x0, #0xcfc
+100830038: d10263a8    	sub	x8, x29, #0x98
+10083003c: 52800081    	mov	w1, #0x4                ; =4
+100830040: aa0203fa    	mov	x26, x2
+100830044: aa0903e2    	mov	x2, x9
+100830048: aa0303fb    	mov	x27, x3
+10083004c: 94065002    	bl	0x1009c4054 <__ZN7ta_core6common22non_finite_value_error17h08cc4783b5ec32c9E>
+100830050: aa1a03e2    	mov	x2, x26
+100830054: aa1b03e3    	mov	x3, x27
+100830058: f85683a8    	ldur	x8, [x29, #-0x98]
+10083005c: b2410fe9    	mov	x9, #-0x7ffffffffffffff9 ; =-9223372036854775801
+100830060: eb09011f    	cmp	x8, x9
+100830064: 54ffea20    	b.eq	0x10082fda8 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0xb8>
+100830068: 1400001e    	b	0x1008300e0 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x3f0>
+10083006c: b00011c0    	adrp	x0, 0x100a69000 <_anon.972c0f529c2e5056ddf32e935dac4d5b.0+0x220>
+100830070: 91128000    	add	x0, x0, #0x4a0
+100830074: d10263a8    	sub	x8, x29, #0x98
+100830078: 52800061    	mov	w1, #0x3                ; =3
+10083007c: aa0203fa    	mov	x26, x2
+100830080: aa0903e2    	mov	x2, x9
+100830084: aa0303fb    	mov	x27, x3
+100830088: 94064ff3    	bl	0x1009c4054 <__ZN7ta_core6common22non_finite_value_error17h08cc4783b5ec32c9E>
+10083008c: aa1a03e2    	mov	x2, x26
+100830090: aa1b03e3    	mov	x3, x27
+100830094: f85683a8    	ldur	x8, [x29, #-0x98]
+100830098: b2410fe9    	mov	x9, #-0x7ffffffffffffff9 ; =-9223372036854775801
+10083009c: eb09011f    	cmp	x8, x9
+1008300a0: 54ffe9a0    	b.eq	0x10082fdd4 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0xe4>
+1008300a4: 1400000f    	b	0x1008300e0 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x3f0>
+1008300a8: b00011c0    	adrp	x0, 0x100a69000 <_anon.972c0f529c2e5056ddf32e935dac4d5b.0+0x220>
+1008300ac: 91128c00    	add	x0, x0, #0x4a3
+1008300b0: d10263a8    	sub	x8, x29, #0x98
+1008300b4: 528000a1    	mov	w1, #0x5                ; =5
+1008300b8: aa0203f9    	mov	x25, x2
+1008300bc: aa0903e2    	mov	x2, x9
+1008300c0: aa0303fa    	mov	x26, x3
+1008300c4: 94064fe4    	bl	0x1009c4054 <__ZN7ta_core6common22non_finite_value_error17h08cc4783b5ec32c9E>
+1008300c8: aa1903e2    	mov	x2, x25
+1008300cc: aa1a03e3    	mov	x3, x26
+1008300d0: f85683a8    	ldur	x8, [x29, #-0x98]
+1008300d4: b2410fe9    	mov	x9, #-0x7ffffffffffffff9 ; =-9223372036854775801
+1008300d8: eb09011f    	cmp	x8, x9
+1008300dc: 54ffe900    	b.eq	0x10082fdfc <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x10c>
+1008300e0: ad408700    	ldp	q0, q1, [x24, #0x10]
+1008300e4: ad0007e0    	stp	q0, q1, [sp]
+1008300e8: 3dc00f00    	ldr	q0, [x24, #0x30]
+1008300ec: 3d800be0    	str	q0, [sp, #0x20]
+1008300f0: f85703a9    	ldur	x9, [x29, #-0x90]
+1008300f4: f85a83aa    	ldur	x10, [x29, #-0x58]
+1008300f8: f9001bea    	str	x10, [sp, #0x30]
+1008300fc: 17ffff7a    	b	0x10082fee4 <__ZN103_$LT$ta_core..price_transform..typprice..TYPPRICEConfig$u20$as$u20$ta_core..traits..IndicatorConfig$GT$12compute_into17h42e88b9e5a481ad6E+0x1f4>
+100830100: 90001da2    	adrp	x2, 0x100be4000 <_anon.420eaa30389e8fa5e2715319a18380cc.60+0x80>
+100830104: 9108e042    	add	x2, x2, #0x238
+100830108: aa1403e0    	mov	x0, x20
+10083010c: aa1403e1    	mov	x1, x20
+100830110: 94068d4c    	bl	0x1009d3640 <__ZN4core9panicking18panic_bounds_check17h6c2a8f4f22099848E>
+
+
+Wall time: 0.05 seconds

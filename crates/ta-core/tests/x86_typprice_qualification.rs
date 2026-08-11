@@ -12,7 +12,7 @@ use ta_core::{
     price_transform::TYPPRICE,
     simd::dispatch::{
         active_indicator_backend,
-        qualification::{backend_available, typical_price},
+        qualification::{backend_available, with_indicator_backend},
         IndicatorBackend,
     },
     Float, TalibError,
@@ -125,50 +125,142 @@ fn json_string(value: &str) -> String {
     escaped
 }
 
+#[derive(Clone, Copy)]
+struct Measurement {
+    median_ns: f64,
+    lower_ns: f64,
+    upper_ns: f64,
+}
+
 fn measure(
     backend: IndicatorBackend,
-    public_path: bool,
     high: &[Float],
     low: &[Float],
     close: &[Float],
     output: &mut [Float],
-) -> (f64, f64, f64) {
-    let run = |output: &mut [Float]| {
-        if public_path {
+) -> Measurement {
+    with_indicator_backend(backend, || {
+        let mut run = || {
             let range = TYPPRICE(
                 black_box(high),
                 black_box(low),
                 black_box(close),
-                black_box(output),
+                black_box(&mut *output),
             )
             .unwrap();
             assert_eq!((range.beg_idx, range.nb_element), (0, high.len()));
-        } else {
-            typical_price(
-                backend,
-                black_box(high),
-                black_box(low),
-                black_box(close),
-                black_box(output),
-            );
-        }
-        black_box(output[output.len() - 1]);
-    };
+            black_box(output[output.len() - 1]);
+        };
 
-    for _ in 0..10 {
-        run(output);
-    }
-    let iterations = iterations(high.len());
-    let mut samples = Vec::with_capacity(SAMPLE_COUNT);
-    for _ in 0..SAMPLE_COUNT {
-        let started = Instant::now();
-        for _ in 0..iterations {
-            run(output);
+        for _ in 0..10 {
+            run();
         }
-        samples.push(started.elapsed().as_nanos() as f64 / iterations as f64);
+        let iterations = iterations(high.len());
+        let mut samples = Vec::with_capacity(SAMPLE_COUNT);
+        for _ in 0..SAMPLE_COUNT {
+            let started = Instant::now();
+            for _ in 0..iterations {
+                run();
+            }
+            samples.push(started.elapsed().as_nanos() as f64 / iterations as f64);
+        }
+        let (lower_ns, upper_ns) = confidence_interval(&samples);
+        Measurement {
+            median_ns: median(&mut samples),
+            lower_ns,
+            upper_ns,
+        }
+    })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ValidationEvidence {
+    unequal_lengths_error: String,
+    non_finite_error: String,
+    short_output_error: String,
+}
+
+fn validate_public_boundary(backend: IndicatorBackend) -> ValidationEvidence {
+    with_indicator_backend(backend, || {
+        let mut mismatch_output = [91.0 as Float; 2];
+        let unequal_lengths = TYPPRICE(
+            &[2.0 as Float, 3.0 as Float],
+            &[1.0 as Float],
+            &[1.5 as Float, 2.5 as Float],
+            &mut mismatch_output,
+        )
+        .unwrap_err();
+        assert!(matches!(&unequal_lengths, TalibError::InvalidInput { .. }));
+        assert_eq!(mismatch_output, [91.0 as Float; 2]);
+
+        let mut non_finite_output = [92.0 as Float; 1];
+        let non_finite = TYPPRICE(
+            &[2.0 as Float],
+            &[Float::NAN],
+            &[1.5 as Float],
+            &mut non_finite_output,
+        )
+        .unwrap_err();
+        assert!(matches!(&non_finite, TalibError::InvalidInput { .. }));
+        assert_eq!(non_finite_output, [92.0 as Float; 1]);
+
+        let mut short_output = [93.0 as Float; 1];
+        let short = TYPPRICE(
+            &[2.0 as Float, 3.0 as Float],
+            &[1.0 as Float, 2.0 as Float],
+            &[1.5 as Float, 2.5 as Float],
+            &mut short_output,
+        )
+        .unwrap_err();
+        assert!(matches!(&short, TalibError::InvalidInput { .. }));
+        assert_eq!(short_output, [93.0 as Float; 1]);
+
+        ValidationEvidence {
+            unequal_lengths_error: unequal_lengths.to_string(),
+            non_finite_error: non_finite.to_string(),
+            short_output_error: short.to_string(),
+        }
+    })
+}
+
+fn available_backends() -> Vec<IndicatorBackend> {
+    [
+        IndicatorBackend::Scalar,
+        IndicatorBackend::Avx2,
+        IndicatorBackend::Avx512,
+    ]
+    .into_iter()
+    .filter(|backend| backend_available(*backend))
+    .collect()
+}
+
+fn metadata(name: &str) -> String {
+    std::env::var(name).unwrap_or_else(|_| panic!("{name} must be set by the qualification script"))
+}
+
+#[test]
+fn forced_backends_share_public_equivalence_and_error_boundaries() {
+    let scalar_validation = validate_public_boundary(IndicatorBackend::Scalar);
+    let (high, low, close) = fixture(257);
+    let mut scalar = vec![0.0 as Float; high.len()];
+    with_indicator_backend(IndicatorBackend::Scalar, || {
+        TYPPRICE(&high, &low, &close, &mut scalar).unwrap();
+    });
+
+    for backend in available_backends() {
+        let mut output = vec![0.0 as Float; high.len()];
+        with_indicator_backend(backend, || {
+            assert_eq!(active_indicator_backend(), backend);
+            TYPPRICE(&high, &low, &close, &mut output).unwrap();
+        });
+        assert_eq!(output, scalar, "{} output", backend.as_str());
+        assert_eq!(
+            validate_public_boundary(backend),
+            scalar_validation,
+            "{} errors",
+            backend.as_str()
+        );
     }
-    let (lower, upper) = confidence_interval(&samples);
-    (median(&mut samples), lower, upper)
 }
 
 #[test]
@@ -179,28 +271,21 @@ fn qualify_public_typprice_on_x86_simd() {
         "x86 qualification requires an AVX2-capable runner"
     );
     let active = active_indicator_backend();
-    let expected_active = if backend_available(IndicatorBackend::Avx512) {
-        IndicatorBackend::Avx512
+    let expected_active = if cfg!(feature = "f32") {
+        if backend_available(IndicatorBackend::Avx512) {
+            IndicatorBackend::Avx512
+        } else {
+            IndicatorBackend::Avx2
+        }
     } else {
-        IndicatorBackend::Avx2
+        IndicatorBackend::Scalar
     };
     assert_eq!(
         active, expected_active,
-        "runtime dispatch selected the wrong backend"
+        "runtime dispatch selected a backend without matching-boundary benefit"
     );
 
-    let mismatch = TYPPRICE(&[1.0 as Float], &[], &[1.0 as Float], &mut [0.0 as Float]);
-    assert!(matches!(mismatch, Err(TalibError::InvalidInput { .. })));
-    let non_finite = TYPPRICE(
-        &[1.0 as Float],
-        &[Float::NAN],
-        &[1.0 as Float],
-        &mut [0.0 as Float],
-    );
-    assert!(matches!(non_finite, Err(TalibError::InvalidInput { .. })));
-
-    let output_path = std::env::var("QUALIFICATION_OUTPUT")
-        .unwrap_or_else(|_| "target/qualification/x86_typprice.jsonl".to_owned());
+    let output_path = metadata("QUALIFICATION_OUTPUT");
     if let Some(parent) = std::path::Path::new(&output_path).parent() {
         std::fs::create_dir_all(parent).unwrap();
     }
@@ -211,97 +296,127 @@ fn qualify_public_typprice_on_x86_simd() {
     } else {
         "catalogue_fixture_v1:f64le"
     };
-    let workflow_run_id = std::env::var("GITHUB_RUN_ID").unwrap_or_else(|_| "unknown".to_owned());
-    let workflow_run_url = match (
-        std::env::var("GITHUB_SERVER_URL"),
-        std::env::var("GITHUB_REPOSITORY"),
-        workflow_run_id.as_str(),
-    ) {
-        (Ok(server), Ok(repository), run_id) if run_id != "unknown" => {
-            format!("{server}/{repository}/actions/runs/{run_id}")
-        }
-        _ => "unknown".to_owned(),
-    };
-    let workflow_job = std::env::var("GITHUB_JOB").unwrap_or_else(|_| "unknown".to_owned());
+    let backends = available_backends();
     writeln!(
         evidence,
-        "{{\"record\":\"metadata\",\"indicator\":\"TYPPRICE\",\"indicator_definition\":\"TYPPRICE: Typical Price\",\"parameters\":\"none\",\"fixture\":{},\"platform\":\"x86_64\",\"precision\":\"{}\",\"runtime\":{},\"cpu\":{},\"commit\":{},\"workflow_run_id\":{},\"workflow_run_url\":{},\"workflow_job\":{},\"active_backend\":\"{}\",\"avx2_available\":true,\"avx512_available\":{}}}",
+        "{{\"record\":\"metadata\",\"indicator\":\"TYPPRICE\",\"indicator_definition\":\"TYPPRICE: Typical Price\",\"parameters\":\"none\",\"fixture\":{},\"platform\":\"x86_64\",\"os\":{},\"architecture\":{},\"precision\":\"{}\",\"runtime\":{},\"rust_profile\":{},\"profile\":{},\"cargo_features\":{},\"features\":{},\"target_features\":{},\"cpu\":{},\"commit\":{},\"qualification_command\":{},\"workflow_run_id\":{},\"workflow_run_url\":{},\"workflow_job\":{},\"active_backend\":\"{}\",\"avx2_available\":true,\"avx512_available\":{}}}",
         json_string(fixture_id),
+        json_string(&metadata("QUALIFICATION_OS")),
+        json_string(&metadata("QUALIFICATION_ARCHITECTURE")),
         precision,
-        json_string(&std::env::var("QUALIFICATION_RUNTIME").unwrap_or_else(|_| "unknown".to_owned())),
-        json_string(&std::env::var("QUALIFICATION_CPU").unwrap_or_else(|_| "unknown".to_owned())),
-        json_string(&std::env::var("QUALIFICATION_COMMIT").unwrap_or_else(|_| "unknown".to_owned())),
-        json_string(&workflow_run_id),
-        json_string(&workflow_run_url),
-        json_string(&workflow_job),
+        json_string(&metadata("QUALIFICATION_RUNTIME")),
+        json_string(&metadata("QUALIFICATION_RUST_PROFILE")),
+        json_string(&metadata("QUALIFICATION_RUST_PROFILE")),
+        json_string(&metadata("QUALIFICATION_CARGO_FEATURES")),
+        json_string(&metadata("QUALIFICATION_CARGO_FEATURES")),
+        json_string(&metadata("QUALIFICATION_TARGET_FEATURES")),
+        json_string(&metadata("QUALIFICATION_CPU")),
+        json_string(&metadata("QUALIFICATION_COMMIT")),
+        json_string(&metadata("QUALIFICATION_COMMAND")),
+        json_string(&metadata("QUALIFICATION_WORKFLOW_RUN_ID")),
+        json_string(&metadata("QUALIFICATION_WORKFLOW_RUN_URL")),
+        json_string(&metadata("QUALIFICATION_WORKFLOW_JOB")),
         active.as_str(),
         backend_available(IndicatorBackend::Avx512),
     )
     .unwrap();
 
+    let scalar_validation = validate_public_boundary(IndicatorBackend::Scalar);
+    for backend in &backends {
+        let validation = validate_public_boundary(*backend);
+        assert_eq!(
+            validation,
+            scalar_validation,
+            "{} public errors differ from scalar",
+            backend.as_str()
+        );
+        writeln!(
+            evidence,
+            "{{\"record\":\"validation\",\"indicator\":\"TYPPRICE\",\"backend\":\"{}\",\"public_boundary\":true,\"unequal_lengths_verified\":true,\"non_finite_verified\":true,\"short_output_verified\":true,\"errors_match_scalar\":true,\"unequal_lengths_error\":{},\"non_finite_error\":{},\"short_output_error\":{}}}",
+            backend.as_str(),
+            json_string(&validation.unequal_lengths_error),
+            json_string(&validation.non_finite_error),
+            json_string(&validation.short_output_error),
+        )
+        .unwrap();
+    }
+
+    let mut selected_regressions = Vec::new();
     for size in LENGTHS {
         let (high, low, close) = fixture(size);
         let mut scalar = vec![0.0 as Float; size];
-        typical_price(IndicatorBackend::Scalar, &high, &low, &close, &mut scalar);
+        with_indicator_backend(IndicatorBackend::Scalar, || {
+            let range = TYPPRICE(&high, &low, &close, &mut scalar).unwrap();
+            assert_eq!((range.beg_idx, range.nb_element), (0, size));
+        });
         let expected_checksum = checksum(&scalar);
 
-        let mut backends = vec![IndicatorBackend::Scalar, IndicatorBackend::Avx2];
-        if backend_available(IndicatorBackend::Avx512) {
-            backends.push(IndicatorBackend::Avx512);
-        }
-        for backend in backends {
+        let mut measurements = Vec::with_capacity(backends.len());
+        for backend in &backends {
             let mut output = vec![0.0 as Float; size];
-            typical_price(backend, &high, &low, &close, &mut output);
+            with_indicator_backend(*backend, || {
+                let range = TYPPRICE(&high, &low, &close, &mut output).unwrap();
+                assert_eq!((range.beg_idx, range.nb_element), (0, size));
+            });
             assert_eq!(
                 output,
                 scalar,
-                "{} differs at length {size}",
+                "{} public boundary differs at length {size}",
                 backend.as_str()
             );
-            let (median_ns, lower_ns, upper_ns) =
-                measure(backend, false, &high, &low, &close, &mut output);
+            let timing = measure(*backend, &high, &low, &close, &mut output);
+            measurements.push((*backend, timing));
+        }
+
+        let scalar_median_ns = measurements
+            .iter()
+            .find(|(backend, _)| *backend == IndicatorBackend::Scalar)
+            .unwrap()
+            .1
+            .median_ns;
+        for (backend, timing) in measurements {
+            let scalar_ratio = timing.median_ns / scalar_median_ns;
+            let slower_than_scalar_pct = (scalar_ratio - 1.0) * 100.0;
+            let exceeds_5_percent = scalar_ratio > 1.05;
+            let selected = backend == active;
+            let disposition = if backend == IndicatorBackend::Scalar {
+                "scalar control"
+            } else if exceeds_5_percent && selected {
+                selected_regressions.push((backend, size, slower_than_scalar_pct));
+                "invalid selection: accelerated backend exceeds the 5% scalar gate"
+            } else if exceeds_5_percent {
+                "not selected: accelerated backend exceeds the 5% scalar gate"
+            } else if selected {
+                "selected: accelerated backend is within the 5% scalar gate"
+            } else {
+                "qualified but not selected: a higher-priority backend is active"
+            };
             writeln!(
                 evidence,
-                "{{\"record\":\"measurement\",\"indicator\":\"TYPPRICE\",\"indicator_family\":\"Price Transform\",\"indicator_definition\":\"TYPPRICE: Typical Price\",\"case_id\":\"TYPPRICE\",\"mode\":\"explicit kernel\",\"backend\":\"{}\",\"parameters\":\"none\",\"input_length\":{},\"output_kind\":\"float\",\"output_arity\":1,\"output_begin\":0,\"output_count\":{},\"output_checksum\":\"{}\",\"equivalent_to_scalar\":true,\"semantic_status\":\"verified\",\"timing_status\":\"measured\",\"sample_count\":{},\"median_ns\":{:.3},\"ci95_lower_ns\":{:.3},\"ci95_upper_ns\":{:.3},\"throughput_observations_per_second\":{:.3},\"fixture\":{},\"timed_boundary\":\"caller-owned kernel; validation excluded\"}}",
+                "{{\"record\":\"measurement\",\"indicator\":\"TYPPRICE\",\"indicator_family\":\"Price Transform\",\"indicator_definition\":\"TYPPRICE: Typical Price\",\"case_id\":\"TYPPRICE\",\"mode\":\"public TYPPRICE\",\"backend\":\"{}\",\"parameters\":\"none\",\"input_length\":{},\"output_kind\":\"float\",\"output_arity\":1,\"output_begin\":0,\"output_count\":{},\"output_checksum\":\"{}\",\"equivalent_to_scalar\":true,\"error_semantics_verified\":true,\"same_public_boundary\":true,\"semantic_status\":\"verified\",\"timing_status\":\"measured\",\"sample_count\":{},\"median_ns\":{:.3},\"ci95_lower_ns\":{:.3},\"ci95_upper_ns\":{:.3},\"throughput_observations_per_second\":{:.3},\"scalar_ratio\":{:.6},\"slower_than_scalar_pct\":{:.3},\"exceeds_5_percent\":{},\"selected_for_public_dispatch\":{},\"disposition\":{},\"fixture\":{},\"timed_boundary\":\"public TYPPRICE; validation included; caller-owned output; qualification override outside timed region\"}}",
                 backend.as_str(),
                 size,
                 size,
                 expected_checksum,
                 SAMPLE_COUNT,
-                median_ns,
-                lower_ns,
-                upper_ns,
-                size as f64 * 1_000_000_000.0 / median_ns,
+                timing.median_ns,
+                timing.lower_ns,
+                timing.upper_ns,
+                size as f64 * 1_000_000_000.0 / timing.median_ns,
+                scalar_ratio,
+                slower_than_scalar_pct,
+                exceeds_5_percent,
+                selected,
+                json_string(disposition),
                 json_string(fixture_id),
             )
             .unwrap();
         }
-
-        let mut public_output = vec![0.0 as Float; size];
-        let range = TYPPRICE(&high, &low, &close, &mut public_output).unwrap();
-        assert_eq!((range.beg_idx, range.nb_element), (0, size));
-        assert_eq!(
-            public_output, scalar,
-            "public dispatch differs at length {size}"
-        );
-        let (median_ns, lower_ns, upper_ns) =
-            measure(active, true, &high, &low, &close, &mut public_output);
-        writeln!(
-            evidence,
-            "{{\"record\":\"measurement\",\"indicator\":\"TYPPRICE\",\"indicator_family\":\"Price Transform\",\"indicator_definition\":\"TYPPRICE: Typical Price\",\"case_id\":\"TYPPRICE\",\"mode\":\"public TYPPRICE\",\"backend\":\"{}\",\"parameters\":\"none\",\"input_length\":{},\"output_kind\":\"float\",\"output_arity\":1,\"output_begin\":0,\"output_count\":{},\"output_checksum\":\"{}\",\"equivalent_to_scalar\":true,\"error_semantics_verified\":true,\"semantic_status\":\"verified\",\"timing_status\":\"measured\",\"sample_count\":{},\"median_ns\":{:.3},\"ci95_lower_ns\":{:.3},\"ci95_upper_ns\":{:.3},\"throughput_observations_per_second\":{:.3},\"fixture\":{},\"timed_boundary\":\"public TYPPRICE; validation included; caller-owned output\"}}",
-            active.as_str(),
-            size,
-            size,
-            expected_checksum,
-            SAMPLE_COUNT,
-            median_ns,
-            lower_ns,
-            upper_ns,
-            size as f64 * 1_000_000_000.0 / median_ns,
-            json_string(fixture_id),
-        )
-        .unwrap();
     }
     evidence.flush().unwrap();
+    assert!(
+        selected_regressions.is_empty(),
+        "public dispatch selected backends more than 5% slower than scalar: {selected_regressions:?}"
+    );
     println!("x86 TYPPRICE qualification evidence: {output_path}");
 }

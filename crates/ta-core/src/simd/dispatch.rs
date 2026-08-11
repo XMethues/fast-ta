@@ -16,6 +16,7 @@ use std::sync::LazyLock;
     test,
     not(feature = "std"),
     target_arch = "x86_64",
+    all(feature = "simd-qualification", target_arch = "aarch64"),
     all(target_arch = "wasm32", not(target_feature = "simd128")),
     not(any(
         target_arch = "x86_64",
@@ -164,6 +165,7 @@ impl IndicatorDispatchTable {
     #[cfg(any(
         not(feature = "std"),
         target_arch = "x86_64",
+        all(feature = "simd-qualification", target_arch = "aarch64"),
         all(target_arch = "wasm32", not(target_feature = "simd128")),
         not(any(
             target_arch = "x86_64",
@@ -195,6 +197,17 @@ static INDICATOR_DISPATCH: LazyLock<IndicatorDispatchTable> =
     LazyLock::new(init_indicator_dispatch);
 #[cfg(not(feature = "std"))]
 static INDICATOR_DISPATCH_SCALAR: IndicatorDispatchTable = IndicatorDispatchTable::scalar();
+#[cfg(all(
+    feature = "simd-qualification",
+    feature = "std",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+std::thread_local! {
+    static QUALIFICATION_INDICATOR_DISPATCH:
+        core::cell::Cell<Option<IndicatorDispatchTable>> = const {
+            core::cell::Cell::new(None)
+        };
+}
 
 /// Initialize the dispatch table with the best available SIMD implementation.
 ///
@@ -281,30 +294,86 @@ fn init_dispatch() -> DispatchTable {
     DispatchTable::scalar()
 }
 
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+#[inline]
+fn x86_indicator_backend(has_avx2: bool, has_avx512: bool) -> IndicatorBackend {
+    // Retained reference qualification found that the f64 AVX2 and AVX-512
+    // kernels failed the 5% benefit gate at representative sizes. Keep them
+    // available for qualification, but only dispatch f32 calls to them.
+    if !cfg!(feature = "f32") {
+        return IndicatorBackend::Scalar;
+    }
+    if has_avx512 {
+        IndicatorBackend::Avx512
+    } else if has_avx2 {
+        IndicatorBackend::Avx2
+    } else {
+        IndicatorBackend::Scalar
+    }
+}
+
+#[cfg(all(feature = "std", target_arch = "x86_64"))]
+#[inline]
+fn x86_indicator_dispatch(backend: IndicatorBackend) -> IndicatorDispatchTable {
+    match backend {
+        IndicatorBackend::Scalar => IndicatorDispatchTable::scalar(),
+        IndicatorBackend::Avx2 => IndicatorDispatchTable::new(
+            IndicatorBackend::Avx2,
+            |values| unsafe { x86_64::avx2::first_non_finite(values) },
+            |high, low, close, output| unsafe {
+                x86_64::avx2::typical_price(high, low, close, output)
+            },
+        ),
+        IndicatorBackend::Avx512 => IndicatorDispatchTable::new(
+            IndicatorBackend::Avx512,
+            |values| unsafe { x86_64::avx512::first_non_finite(values) },
+            |high, low, close, output| unsafe {
+                x86_64::avx512::typical_price(high, low, close, output)
+            },
+        ),
+        IndicatorBackend::Neon | IndicatorBackend::Simd128 => unreachable!(),
+    }
+}
+
+#[cfg(all(
+    feature = "simd-qualification",
+    feature = "std",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+#[inline]
+fn qualification_indicator_dispatch(backend: IndicatorBackend) -> IndicatorDispatchTable {
+    #[cfg(target_arch = "x86_64")]
+    {
+        x86_indicator_dispatch(backend)
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        match backend {
+            IndicatorBackend::Scalar => IndicatorDispatchTable::scalar(),
+            IndicatorBackend::Neon => IndicatorDispatchTable::new(
+                IndicatorBackend::Neon,
+                |values| unsafe { aarch64::neon::first_non_finite(values) },
+                |high, low, close, output| unsafe {
+                    aarch64::neon::typical_price(high, low, close, output)
+                },
+            ),
+            IndicatorBackend::Avx2 | IndicatorBackend::Avx512 | IndicatorBackend::Simd128 => {
+                unreachable!()
+            }
+        }
+    }
+}
+
 #[cfg(feature = "std")]
 #[cold]
 fn init_indicator_dispatch() -> IndicatorDispatchTable {
     #[cfg(target_arch = "x86_64")]
     {
-        if std::is_x86_feature_detected!("avx512f") {
-            return IndicatorDispatchTable::new(
-                IndicatorBackend::Avx512,
-                |values| unsafe { x86_64::avx512::first_non_finite(values) },
-                |high, low, close, output| unsafe {
-                    x86_64::avx512::typical_price(high, low, close, output)
-                },
-            );
-        }
-        if std::is_x86_feature_detected!("avx2") {
-            return IndicatorDispatchTable::new(
-                IndicatorBackend::Avx2,
-                |values| unsafe { x86_64::avx2::first_non_finite(values) },
-                |high, low, close, output| unsafe {
-                    x86_64::avx2::typical_price(high, low, close, output)
-                },
-            );
-        }
-        IndicatorDispatchTable::scalar()
+        let backend = x86_indicator_backend(
+            std::is_x86_feature_detected!("avx2"),
+            std::is_x86_feature_detected!("avx512f"),
+        );
+        x86_indicator_dispatch(backend)
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -338,14 +407,23 @@ fn init_indicator_dispatch() -> IndicatorDispatchTable {
 }
 
 #[inline]
-fn get_indicator_dispatch() -> &'static IndicatorDispatchTable {
+fn get_indicator_dispatch() -> IndicatorDispatchTable {
+    #[cfg(all(
+        feature = "simd-qualification",
+        feature = "std",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    if let Some(dispatch) = QUALIFICATION_INDICATOR_DISPATCH.get() {
+        return dispatch;
+    }
+
     #[cfg(feature = "std")]
     {
-        &INDICATOR_DISPATCH
+        *INDICATOR_DISPATCH
     }
     #[cfg(not(feature = "std"))]
     {
-        &INDICATOR_DISPATCH_SCALAR
+        INDICATOR_DISPATCH_SCALAR
     }
 }
 
@@ -403,27 +481,71 @@ pub(crate) fn typical_price(high: &[Float], low: &[Float], close: &[Float], outp
     (get_indicator_dispatch().typical_price)(high, low, close, output);
 }
 
-/// Explicit x86 kernels used by the platform qualification harness.
+/// Explicit kernels and scoped public-boundary overrides used by the x86 and
+/// AArch64 platform qualification harnesses.
 ///
 /// The module is feature-gated so ordinary consumers cannot accidentally
-/// bypass the validated Indicator execution seam.
+/// bypass or override the validated Indicator execution seam.
 #[cfg(all(
     feature = "simd-qualification",
     feature = "std",
-    target_arch = "x86_64"
+    any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 pub mod qualification {
-    use super::IndicatorBackend;
-    use crate::{simd, Float};
+    use super::{
+        qualification_indicator_dispatch, IndicatorBackend, IndicatorDispatchTable,
+        QUALIFICATION_INDICATOR_DISPATCH,
+    };
+    use crate::Float;
 
     /// Reports whether the current CPU can execute a qualification backend.
     pub fn backend_available(backend: IndicatorBackend) -> bool {
         match backend {
             IndicatorBackend::Scalar => true,
+            #[cfg(target_arch = "x86_64")]
             IndicatorBackend::Avx2 => std::is_x86_feature_detected!("avx2"),
+            #[cfg(target_arch = "x86_64")]
             IndicatorBackend::Avx512 => std::is_x86_feature_detected!("avx512f"),
+            #[cfg(target_arch = "x86_64")]
             IndicatorBackend::Neon | IndicatorBackend::Simd128 => false,
+            #[cfg(target_arch = "aarch64")]
+            IndicatorBackend::Neon => true,
+            #[cfg(target_arch = "aarch64")]
+            IndicatorBackend::Avx2 | IndicatorBackend::Avx512 | IndicatorBackend::Simd128 => false,
         }
+    }
+
+    struct OverrideGuard {
+        previous: Option<IndicatorDispatchTable>,
+    }
+
+    impl Drop for OverrideGuard {
+        fn drop(&mut self) {
+            QUALIFICATION_INDICATOR_DISPATCH.set(self.previous);
+        }
+    }
+
+    /// Runs a closure with the selected backend at the normal public Indicator
+    /// validation, output, and dispatch boundary.
+    ///
+    /// The override is scoped to the current thread, restores nested overrides,
+    /// and is reset during unwinding.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the selected backend is unavailable on the current CPU.
+    pub fn with_indicator_backend<R>(backend: IndicatorBackend, run: impl FnOnce() -> R) -> R {
+        assert!(
+            backend_available(backend),
+            "backend {} is unavailable",
+            backend.as_str()
+        );
+        let previous = QUALIFICATION_INDICATOR_DISPATCH
+            .replace(Some(qualification_indicator_dispatch(backend)));
+        let guard = OverrideGuard { previous };
+        let result = run();
+        drop(guard);
+        result
     }
 
     /// Executes one explicitly selected kernel for differential qualification.
@@ -448,18 +570,7 @@ pub mod qualification {
             backend.as_str()
         );
 
-        match backend {
-            IndicatorBackend::Scalar => {
-                simd::scalar::typical_price(high, low, close, output);
-            }
-            IndicatorBackend::Avx2 => unsafe {
-                simd::arch::x86_64::avx2::typical_price(high, low, close, output);
-            },
-            IndicatorBackend::Avx512 => unsafe {
-                simd::arch::x86_64::avx512::typical_price(high, low, close, output);
-            },
-            IndicatorBackend::Neon | IndicatorBackend::Simd128 => unreachable!(),
-        }
+        (qualification_indicator_dispatch(backend).typical_price)(high, low, close, output);
     }
 }
 
@@ -550,6 +661,59 @@ mod tests {
         } else {
             2
         }
+    }
+
+    #[cfg(all(feature = "std", target_arch = "x86_64"))]
+    #[test]
+    fn x86_indicator_selection_uses_only_qualified_precision_backends() {
+        if cfg!(feature = "f32") {
+            assert_eq!(
+                x86_indicator_backend(false, false),
+                IndicatorBackend::Scalar
+            );
+            assert_eq!(x86_indicator_backend(true, false), IndicatorBackend::Avx2);
+            assert_eq!(x86_indicator_backend(true, true), IndicatorBackend::Avx512);
+        } else {
+            for (has_avx2, has_avx512) in [(false, false), (true, false), (true, true)] {
+                assert_eq!(
+                    x86_indicator_backend(has_avx2, has_avx512),
+                    IndicatorBackend::Scalar
+                );
+            }
+        }
+    }
+
+    #[cfg(all(
+        feature = "simd-qualification",
+        feature = "std",
+        target_arch = "x86_64"
+    ))]
+    #[test]
+    fn qualification_override_controls_the_public_indicator_boundary() {
+        let production_backend = active_indicator_backend();
+        let high = [3.0 as Float, 6.0 as Float];
+        let low = [1.0 as Float, 2.0 as Float];
+        let close = [2.0 as Float, 4.0 as Float];
+        let mut scalar_output = [0.0 as Float; 2];
+
+        qualification::with_indicator_backend(IndicatorBackend::Scalar, || {
+            assert_eq!(active_indicator_backend(), IndicatorBackend::Scalar);
+            crate::price_transform::TYPPRICE(&high, &low, &close, &mut scalar_output).unwrap();
+        });
+
+        for backend in [IndicatorBackend::Avx2, IndicatorBackend::Avx512]
+            .into_iter()
+            .filter(|backend| qualification::backend_available(*backend))
+        {
+            let mut output = [0.0 as Float; 2];
+            qualification::with_indicator_backend(backend, || {
+                assert_eq!(active_indicator_backend(), backend);
+                crate::price_transform::TYPPRICE(&high, &low, &close, &mut output).unwrap();
+            });
+            assert_eq!(output, scalar_output);
+        }
+
+        assert_eq!(active_indicator_backend(), production_backend);
     }
 
     #[test]

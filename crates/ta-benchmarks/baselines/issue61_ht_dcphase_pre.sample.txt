@@ -1,0 +1,302 @@
+Analysis of sampling execution_baselines-2a8980ec9ece9b83 (pid 82490) every 1 millisecond
+Process:         execution_baselines-2a8980ec9ece9b83 [82490]
+Path:            /private/tmp/*/execution_baselines-2a8980ec9ece9b83
+Load Address:    0x104454000
+Identifier:      execution_baselines-2a8980ec9ece9b83
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  cargo [82489]
+Target Type:     live task
+
+Date/Time:       2026-08-12 01:26:14.528 +0800
+Launch Time:     2026-08-12 01:26:14.482 +0800
+OS Version:      macOS 26.5.2 (25F84)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+
+Physical footprint:         3488K
+Physical footprint (peak):  3488K
+Idle exit:                  untracked
+----
+
+Call graph:
+    3316 Thread_5849922   DispatchQueue_1: com.apple.main-thread  (serial)
+      3316 start  (in dyld) + 6992  [0x18b947e00]
+        3316 main  (in execution_baselines-2a8980ec9ece9b83) + 52  [0x104c2a744]
+          3316 std::rt::lang_start_internal::h0662b076b027b010  (in execution_baselines-2a8980ec9ece9b83) + 952  [0x104ddbce8]
+            3316 std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::h42b94a493d21e266  (in execution_baselines-2a8980ec9ece9b83) + 16  [0x104c36404]
+              3316 std::sys::backtrace::__rust_begin_short_backtrace::hc47a53eb8b9ff94e  (in execution_baselines-2a8980ec9ece9b83) + 12  [0x104c55854]
+                3316 execution_baselines::main::hd8f0223b94ca5c39  (in execution_baselines-2a8980ec9ece9b83) + 20  [0x104be6214]
+                  3316 execution_baselines::benches::h14cb284e76ada2c5  (in execution_baselines-2a8980ec9ece9b83) + 4948  [0x104be75b4]
+                    3316 criterion::benchmark_group::BenchmarkGroup$LT$M$GT$::bench_with_input::hc4b49504da9e1ee1  (in execution_baselines-2a8980ec9ece9b83) + 1400  [0x104a47834]
+                      3316 criterion::analysis::common::h629f57235920e60c  (in execution_baselines-2a8980ec9ece9b83) + 192  [0x104c465d8]
+                        1715 criterion::routine::Routine::sample::h9716ded6c3bd45de  (in execution_baselines-2a8980ec9ece9b83) + 1536  [0x1046d803c]
+                        + 1715 _$LT$criterion..routine..Function$LT$M$C$F$C$T$GT$$u20$as$u20$criterion..routine..Routine$LT$M$C$T$GT$$GT$::bench::hc45f228480595a0a  (in execution_baselines-2a8980ec9ece9b83) + 236  [0x10449cc94]
+                        +   1715 c_with_alloca  (in execution_baselines-2a8980ec9ece9b83) + 76  [0x104d38bf8]
+                        +     1714 alloca::trampoline::h4c14c6f945e4ce85  (in execution_baselines-2a8980ec9ece9b83) + 216  [0x104b7cad0]
+                        +     ! 1714 criterion::bencher::Bencher$LT$M$GT$::iter::h554db1e492b85e9a  (in execution_baselines-2a8980ec9ece9b83) + 140  [0x104b1e9d4]
+                        +     !   1699 ta_core::cycle::outputs::HT_DCPHASE::h48be60eb0b872cd4  (in execution_baselines-2a8980ec9ece9b83) + 356  [0x104c7538c]
+                        +     !   : 1232 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 260  [0x104c750c0]
+                        +     !   : | 452 __sincos_stret  (in libsystem_m.dylib) + 348,4,...  [0x19baadd74,0x19baadc1c,...]
+                        +     !   : | 404 __sincos_stret  (in libsystem_m.dylib) + 392  [0x19baadda0]
+                        +     !   : | + 160 __sincos_stret  (in libsystem_m.dylib) + 392  [0x19baadda0]
+                        +     !   : | + ! 61 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a8  [0x19baae0a8]
+                        +     !   : | + ! 18 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1080  [0x19baae080]
+                        +     !   : | + ! 16 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1088  [0x19baae088]
+                        +     !   : | + ! 16 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1098  [0x19baae098]
+                        +     !   : | + ! 8 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a4  [0x19baae0a4]
+                        +     !   : | + ! 7 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1068  [0x19baae068]
+                        +     !   : | + ! 7 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1078  [0x19baae078]
+                        +     !   : | + ! 6 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x108c  [0x19baae08c]
+                        +     !   : | + ! 6 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1094  [0x19baae094]
+                        +     !   : | + ! 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1084  [0x19baae084]
+                        +     !   : | + ! 3 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x109c  [0x19baae09c]
+                        +     !   : | + ! 3 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a0  [0x19baae0a0]
+                        +     !   : | + ! 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1074  [0x19baae074]
+                        +     !   : | + ! 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x107c  [0x19baae07c]
+                        +     !   : | + ! 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1090  [0x19baae090]
+                        +     !   : | + 47 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1130  [0x19baae130]
+                        +     !   : | + 42 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1150  [0x19baae150]
+                        +     !   : | + 39 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1144  [0x19baae144]
+                        +     !   : | + 18 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1170  [0x19baae170]
+                        +     !   : | + 17 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x112c  [0x19baae12c]
+                        +     !   : | + 13 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1124  [0x19baae124]
+                        +     !   : | + 10 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x111c  [0x19baae11c]
+                        +     !   : | + 10 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1120  [0x19baae120]
+                        +     !   : | + 9 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x114c  [0x19baae14c]
+                        +     !   : | + 8 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1114  [0x19baae114]
+                        +     !   : | + 8 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1140  [0x19baae140]
+                        +     !   : | + 7 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1050  [0x19baae050]
+                        +     !   : | + 7 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1138  [0x19baae138]
+                        +     !   : | + 6 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1054  [0x19baae054]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1118  [0x19baae118]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x113c  [0x19baae13c]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1174  [0x19baae174]
+                        +     !   : | 153 __sincos_stret  (in libsystem_m.dylib) + 372  [0x19baadd8c]
+                        +     !   : | + 72 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a8  [0x19baae0a8]
+                        +     !   : | + 44 __sincos_stret  (in libsystem_m.dylib) + 372  [0x19baadd8c]
+                        +     !   : | + ! 22 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1150  [0x19baae150]
+                        +     !   : | + ! 5 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x112c  [0x19baae12c]
+                        +     !   : | + ! 5 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1138  [0x19baae138]
+                        +     !   : | + ! 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1124  [0x19baae124]
+                        +     !   : | + ! 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1130  [0x19baae130]
+                        +     !   : | + ! 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1144  [0x19baae144]
+                        +     !   : | + ! 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1120  [0x19baae120]
+                        +     !   : | + ! 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x113c  [0x19baae13c]
+                        +     !   : | + ! 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x114c  [0x19baae14c]
+                        +     !   : | + ! 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1170  [0x19baae170]
+                        +     !   : | + 12 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1094  [0x19baae094]
+                        +     !   : | + 12 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1098  [0x19baae098]
+                        +     !   : | + 6 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a4  [0x19baae0a4]
+                        +     !   : | + 3 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1088  [0x19baae088]
+                        +     !   : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1078  [0x19baae078]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1080  [0x19baae080]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x108c  [0x19baae08c]
+                        +     !   : | 128 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 260,232,...  [0x104c750c0,0x104c750a4,...]
+                        +     !   : | 87 DYLD-STUB$$__sincos_stret  (in execution_baselines-2a8980ec9ece9b83) + 4,0  [0x104e278b4,0x104e278b0]
+                        +     !   : | 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1154  [0x19baae154]
+                        +     !   : | 4 sin  (in libsystem_m.dylib) + 340  [0x19baadabc]
+                        +     !   : 296 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 72  [0x104c75004]
+                        +     !   : | 175 ta_core::cycle::hilbert::HilbertState::next_transition::h58e43a0f95483448  (in execution_baselines-2a8980ec9ece9b83) + 1048,968,...  [0x104c74e8c,0x104c74e3c,...]
+                        +     !   : | 91 ta_core::cycle::hilbert::HilbertState::next_transition::h58e43a0f95483448  (in execution_baselines-2a8980ec9ece9b83) + 1096  [0x104c74ebc]
+                        +     !   : | + 81 atan  (in libsystem_m.dylib) + 112,660,...  [0x19bab418c,0x19bab43b0,...]
+                        +     !   : | + 3 DYLD-STUB$$atan  (in execution_baselines-2a8980ec9ece9b83) + 4,8  [0x104e27938,0x104e2793c]
+                        +     !   : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x254d4  [0x19bad24d4]
+                        +     !   : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2558c  [0x19bad258c]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25560  [0x19bad2560]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25588  [0x19bad2588]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25594  [0x19bad2594]
+                        +     !   : | 30 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 252,172,...  [0x104c750b8,0x104c75068,...]
+                        +     !   : 102 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 308  [0x104c750f0]
+                        +     !   : | 66 atan  (in libsystem_m.dylib) + 140,20,...  [0x19bab41a8,0x19bab4130,...]
+                        +     !   : | 16 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 496,536,...  [0x104c751ac,0x104c751d4,...]
+                        +     !   : | 10 atan  (in libsystem_m.dylib) + 68  [0x19bab4160]
+                        +     !   : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x254c8  [0x19bad24c8]
+                        +     !   : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25524  [0x19bad2524]
+                        +     !   : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2558c  [0x19bad258c]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25530  [0x19bad2530]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2553c  [0x19bad253c]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25554  [0x19bad2554]
+                        +     !   : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25594  [0x19bad2594]
+                        +     !   : | 4 DYLD-STUB$$atan  (in execution_baselines-2a8980ec9ece9b83) + 4  [0x104e27938]
+                        +     !   : | 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2558c  [0x19bad258c]
+                        +     !   : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25524  [0x19bad2524]
+                        +     !   : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2553c  [0x19bad253c]
+                        +     !   : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25554  [0x19bad2554]
+                        +     !   : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25560  [0x19bad2560]
+                        +     !   : 56 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 592,580,...  [0x104c7520c,0x104c75200,...]
+                        +     !   : 8 ta_core::cycle::hilbert::HilbertState::next_transition::h58e43a0f95483448  (in execution_baselines-2a8980ec9ece9b83) + 1328,1316,...  [0x104c74fa4,0x104c74f98,...]
+                        +     !   : 5 ta_core::cycle::outputs::HT_DCPHASE::h48be60eb0b872cd4  (in execution_baselines-2a8980ec9ece9b83) + 356  [0x104c7538c]
+                        +     !   :   5 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 56,64  [0x104c74ff4,0x104c74ffc]
+                        +     !   15 ta_core::cycle::outputs::HT_DCPHASE::h48be60eb0b872cd4  (in execution_baselines-2a8980ec9ece9b83) + 324,88,...  [0x104c7536c,0x104c75280,...]
+                        +     1 alloca::trampoline::h4c14c6f945e4ce85  (in execution_baselines-2a8980ec9ece9b83) + 84  [0x104b7ca4c]
+                        +       1 ta_benchmarks::catalogue_matrix::series_fixture::h38b4e84c40d9db2e  (in execution_baselines-2a8980ec9ece9b83) + 416  [0x104c5905c]
+                        1601 criterion::routine::Routine::sample::h9716ded6c3bd45de  (in execution_baselines-2a8980ec9ece9b83) + 724  [0x1046d7d10]
+                          1601 _$LT$criterion..routine..Function$LT$M$C$F$C$T$GT$$u20$as$u20$criterion..routine..Routine$LT$M$C$T$GT$$GT$::warm_up::h993551beccc85825  (in execution_baselines-2a8980ec9ece9b83) + 244  [0x104517764]
+                            1601 criterion::bencher::Bencher$LT$M$GT$::iter::h554db1e492b85e9a  (in execution_baselines-2a8980ec9ece9b83) + 140  [0x104b1e9d4]
+                              1581 ta_core::cycle::outputs::HT_DCPHASE::h48be60eb0b872cd4  (in execution_baselines-2a8980ec9ece9b83) + 356  [0x104c7538c]
+                              ! 1110 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 260  [0x104c750c0]
+                              ! : 402 __sincos_stret  (in libsystem_m.dylib) + 348,4,...  [0x19baadd74,0x19baadc1c,...]
+                              ! : 354 __sincos_stret  (in libsystem_m.dylib) + 392  [0x19baadda0]
+                              ! : | 130 __sincos_stret  (in libsystem_m.dylib) + 392  [0x19baadda0]
+                              ! : | + 40 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a8  [0x19baae0a8]
+                              ! : | + 20 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1080  [0x19baae080]
+                              ! : | + 15 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1088  [0x19baae088]
+                              ! : | + 14 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1068  [0x19baae068]
+                              ! : | + 10 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1098  [0x19baae098]
+                              ! : | + 6 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1078  [0x19baae078]
+                              ! : | + 5 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a0  [0x19baae0a0]
+                              ! : | + 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x108c  [0x19baae08c]
+                              ! : | + 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a4  [0x19baae0a4]
+                              ! : | + 3 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1094  [0x19baae094]
+                              ! : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1074  [0x19baae074]
+                              ! : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x107c  [0x19baae07c]
+                              ! : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1084  [0x19baae084]
+                              ! : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x109c  [0x19baae09c]
+                              ! : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1090  [0x19baae090]
+                              ! : | 48 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1130  [0x19baae130]
+                              ! : | 39 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1144  [0x19baae144]
+                              ! : | 32 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1150  [0x19baae150]
+                              ! : | 22 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1124  [0x19baae124]
+                              ! : | 13 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x112c  [0x19baae12c]
+                              ! : | 12 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1140  [0x19baae140]
+                              ! : | 11 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1170  [0x19baae170]
+                              ! : | 10 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x114c  [0x19baae14c]
+                              ! : | 8 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1138  [0x19baae138]
+                              ! : | 6 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1114  [0x19baae114]
+                              ! : | 6 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x111c  [0x19baae11c]
+                              ! : | 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1050  [0x19baae050]
+                              ! : | 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1054  [0x19baae054]
+                              ! : | 3 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x113c  [0x19baae13c]
+                              ! : | 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1120  [0x19baae120]
+                              ! : | 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1128  [0x19baae128]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1118  [0x19baae118]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x117c  [0x19baae17c]
+                              ! : 154 __sincos_stret  (in libsystem_m.dylib) + 372  [0x19baadd8c]
+                              ! : | 65 __sincos_stret  (in libsystem_m.dylib) + 372  [0x19baadd8c]
+                              ! : | + 25 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1150  [0x19baae150]
+                              ! : | + 11 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1124  [0x19baae124]
+                              ! : | + 8 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1130  [0x19baae130]
+                              ! : | + 8 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1138  [0x19baae138]
+                              ! : | + 5 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x112c  [0x19baae12c]
+                              ! : | + 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1114  [0x19baae114]
+                              ! : | + 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1120  [0x19baae120]
+                              ! : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1144  [0x19baae144]
+                              ! : | + 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1148  [0x19baae148]
+                              ! : | 60 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a8  [0x19baae0a8]
+                              ! : | 12 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1098  [0x19baae098]
+                              ! : | 6 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1094  [0x19baae094]
+                              ! : | 5 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a4  [0x19baae0a4]
+                              ! : | 3 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1078  [0x19baae078]
+                              ! : | 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x108c  [0x19baae08c]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1088  [0x19baae088]
+                              ! : 119 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 260,232,...  [0x104c750c0,0x104c750a4,...]
+                              ! : 68 DYLD-STUB$$__sincos_stret  (in execution_baselines-2a8980ec9ece9b83) + 4,0  [0x104e278b4,0x104e278b0]
+                              ! : 8 sin  (in libsystem_m.dylib) + 340  [0x19baadabc]
+                              ! : 5 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1154  [0x19baae154]
+                              ! 284 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 72  [0x104c75004]
+                              ! : 166 ta_core::cycle::hilbert::HilbertState::next_transition::h58e43a0f95483448  (in execution_baselines-2a8980ec9ece9b83) + 704,208,...  [0x104c74d34,0x104c74b44,...]
+                              ! : 84 ta_core::cycle::hilbert::HilbertState::next_transition::h58e43a0f95483448  (in execution_baselines-2a8980ec9ece9b83) + 1096  [0x104c74ebc]
+                              ! : | 70 atan  (in libsystem_m.dylib) + 112,660,...  [0x19bab418c,0x19bab43b0,...]
+                              ! : | 7 DYLD-STUB$$atan  (in execution_baselines-2a8980ec9ece9b83) + 4  [0x104e27938]
+                              ! : | 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25560  [0x19bad2560]
+                              ! : | 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2558c  [0x19bad258c]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x254d4  [0x19bad24d4]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2553c  [0x19bad253c]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25554  [0x19bad2554]
+                              ! : 34 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 252,172,...  [0x104c750b8,0x104c75068,...]
+                              ! 117 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 308  [0x104c750f0]
+                              ! : 85 atan  (in libsystem_m.dylib) + 140,0,...  [0x19bab41a8,0x19bab411c,...]
+                              ! : 9 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 520,556,...  [0x104c751c4,0x104c751e8,...]
+                              ! : 8 atan  (in libsystem_m.dylib) + 68  [0x19bab4160]
+                              ! : | 3 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2558c  [0x19bad258c]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x254c8  [0x19bad24c8]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x254d4  [0x19bad24d4]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2550c  [0x19bad250c]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25530  [0x19bad2530]
+                              ! : | 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2554c  [0x19bad254c]
+                              ! : 4 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2558c  [0x19bad258c]
+                              ! : 3 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25524  [0x19bad2524]
+                              ! : 3 DYLD-STUB$$atan  (in execution_baselines-2a8980ec9ece9b83) + 4  [0x104e27938]
+                              ! : 2 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25560  [0x19bad2560]
+                              ! : 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x254d4  [0x19bad24d4]
+                              ! : 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25500  [0x19bad2500]
+                              ! : 1 ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25594  [0x19bad2594]
+                              ! 52 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 592,576,...  [0x104c7520c,0x104c751fc,...]
+                              ! 11 ta_core::cycle::hilbert::HilbertState::next_transition::h58e43a0f95483448  (in execution_baselines-2a8980ec9ece9b83) + 1328,1320,...  [0x104c74fa4,0x104c74f9c,...]
+                              ! 7 ta_core::cycle::outputs::HT_DCPHASE::h48be60eb0b872cd4  (in execution_baselines-2a8980ec9ece9b83) + 356  [0x104c7538c]
+                              !   7 ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 56  [0x104c74ff4]
+                              20 ta_core::cycle::outputs::HT_DCPHASE::h48be60eb0b872cd4  (in execution_baselines-2a8980ec9ece9b83) + 364,324,...  [0x104c75394,0x104c7536c,...]
+
+Total number in stack (recursive counted multiple, when >=5):
+        10       ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83) + 0  [0x104c74fbc]
+        6       ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2558c  [0x19bad258c]
+
+Sort by top of stack, same collapsed (when >= 5):
+        __sincos_stret  (in libsystem_m.dylib)        854
+        ta_core::cycle::hilbert::HilbertPhaseState::next_phase_transition::h7bb4ce7ed9a133e4  (in execution_baselines-2a8980ec9ece9b83)        456
+        ta_core::cycle::hilbert::HilbertState::next_transition::h58e43a0f95483448  (in execution_baselines-2a8980ec9ece9b83)        360
+        atan  (in libsystem_m.dylib)        302
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a8  [0x19baae0a8]        233
+        DYLD-STUB$$__sincos_stret  (in execution_baselines-2a8980ec9ece9b83)        155
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1150  [0x19baae150]        121
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1130  [0x19baae130]        105
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1144  [0x19baae144]        81
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1098  [0x19baae098]        50
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1124  [0x19baae124]        50
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x112c  [0x19baae12c]        40
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1080  [0x19baae080]        39
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1088  [0x19baae088]        35
+        ta_core::cycle::outputs::HT_DCPHASE::h48be60eb0b872cd4  (in execution_baselines-2a8980ec9ece9b83)        35
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1170  [0x19baae170]        30
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1138  [0x19baae138]        28
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1094  [0x19baae094]        27
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a4  [0x19baae0a4]        23
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1068  [0x19baae068]        21
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1140  [0x19baae140]        20
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x114c  [0x19baae14c]        20
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1078  [0x19baae078]        18
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1114  [0x19baae114]        18
+        DYLD-STUB$$atan  (in execution_baselines-2a8980ec9ece9b83)        17
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x111c  [0x19baae11c]        16
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1120  [0x19baae120]        15
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x2558c  [0x19bad258c]        15
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x108c  [0x19baae08c]        13
+        sin  (in libsystem_m.dylib)        12
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1050  [0x19baae050]        11
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1054  [0x19baae054]        10
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1154  [0x19baae154]        9
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x10a0  [0x19baae0a0]        8
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x1084  [0x19baae084]        6
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25524  [0x19bad2524]        6
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x25560  [0x19bad2560]        6
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x109c  [0x19baae09c]        5
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x113c  [0x19baae13c]        5
+        ???  (in libsystem_m.dylib)  load address 0x19baad000 + 0x254d4  [0x19bad24d4]        5
+
+Binary Images:
+       0x104454000 -        0x10501e917 +execution_baselines-2a8980ec9ece9b83 (0) <C1F17015-4C46-3098-9459-897930C5DAE8> /tmp/*/execution_baselines-2a8980ec9ece9b83
+       0x18b8a0000 -        0x18b8f2b4b  libobjc.A.dylib (951.7) <FF1D8AE4-ABEF-35F1-A30A-1183B9CB414F> /usr/lib/libobjc.A.dylib
+       0x18b8f3000 -        0x18b927d07  libdyld.dylib (1378) <B147D877-D0C2-388F-B38D-D3132E39905F> /usr/lib/system/libdyld.dylib
+       0x18b928000 -        0x18b9ce217  dyld (1.0.0 - 1378) <F924BDD3-4365-3466-9580-8B1B3FA8F857> /usr/lib/dyld
+       0x18b9cf000 -        0x18b9d2228  libsystem_blocks.dylib (96) <CC947089-488D-316B-A9C7-46DEC0F73145> /usr/lib/system/libsystem_blocks.dylib
+       0x18b9d3000 -        0x18ba2755f  libxpc.dylib (3102.120.13) <C40FCAE8-7A17-3D82-87CB-3DA4802ADEF1> /usr/lib/system/libxpc.dylib
+       0x18ba28000 -        0x18ba489ff  libsystem_trace.dylib (1861.120.4) <D0FABAB3-5AE7-3F10-8C62-60CBF5D70850> /usr/lib/system/libsystem_trace.dylib
+       0x18ba49000 -        0x18baf75f7  libcorecrypto.dylib (1922.121.1) <A01A158D-6FE7-3B1C-A2C4-6BCB90D7314A> /usr/lib/system/libcorecrypto.dylib
+       0x18baf8000 -        0x18bb481d7  libsystem_malloc.dylib (812.100.31) <5FAE4807-4D2B-3A95-A63A-DD96D3DA11B4> /usr/lib/system/libsystem_malloc.dylib
+       0x18bb49000 -        0x18bb9023f  libdispatch.dylib (1542.100.32) <F071EFE4-299F-3089-ACC4-0025B8FFB52A> /usr/lib/system/libdispatch.dylib
+       0x18bb91000 -        0x18bb93ffb  libsystem_featureflags.dylib (103) <71FCFFBD-85F8-3365-AFE0-BECEA4369122> /usr/lib/system/libsystem_featureflags.dylib
+       0x18bb94000 -        0x18bc14d9f  libsystem_c.dylib (1752.120.2) <694B7881-1BF3-3D0F-8F19-B50AE4E8EF8A> /usr/lib/system/libsystem_c.dylib
+       0x18bc15000 -        0x18bca5ae7  libc++.1.dylib (2100.43) <5013C0F8-84A9-3B56-9FEB-C353816A750F> /usr/lib/libc++.1.dylib
+       0x18bca6000 -        0x18bcc075f  libc++abi.dylib (2100.43) <E482D257-E5A0-3816-BD97-7B39342958DA> /usr/lib/libc++abi.dylib
+       0x18bcc1000 -        0x18bcfe2af  libsystem_kernel.dylib (12377.121.10) <FCA53B98-3D6A-38B2-A0EC-DF0F7E05F171> /usr/lib/system/libsystem_kernel.dylib
+       0x18bcff000 -        0x18bd0bb3b  libsystem_pthread.dylib (539.100.4) <4F33683C-18C8-39A1-800B-2E3BD43BCC13> /usr/lib/system/libsystem_pthread.dylib
+       0x18bd0c000 -        0x18bd14963  libsystem_platform.dylib (375.120.2) <160FD864-8D15-36FC-9E97-9725388CFAFE> /usr/lib/system/libsystem_platform.dylib
+       0x18bd15000 -        0x18bd446eb  libsystem_info.dylib (600) <3D62F2D9-F516-31BF-83C7-E203D872300B> /usr/lib/system/libsystem_info.dylib
+       0x18fcdc000 -        0x18fce5e5f  libsystem_darwin.dylib (1752.120.2) <8858F025-745A-388E-9544-080781CC9A69> /usr/lib/system/libsystem_darwin.dylib
+       0x190147000 -        0x1901591b6  libsystem_notify.dylib (348.120.4) <64D76451-1E0C-369B-A631-54DA3140E083> /usr/lib/system/libsystem_notify.dylib
+       0x192414000 -        0x19242ef7b  libsystem_networkextension.dylib (2226.121.1) <0331EE20-A1FB-3C0D-990A-F65939CFF505> /usr/lib/system/libsystem_networkextension.dylib
+       0x1924b1000 -        0x1924c8fdf  libsystem_asl.dylib (406) <F40838DF-2F15-3F62-970F-DEE25706BF1B> /usr/lib/system/libsystem_asl.dylib
+
+[Showing lines 1-300 of 327. Use :301 to continue]

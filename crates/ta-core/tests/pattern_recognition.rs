@@ -229,7 +229,7 @@ fn qualify_pattern_fixture<C>(
     assert_eq!(replay, expected);
 }
 
-fn assert_specialized_batch_contract<C>(config: C, series: &Series)
+fn assert_allocation_free_batch_contract<C>(config: C, series: &Series)
 where
     C: Copy + 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
     for<'a> C:
@@ -519,7 +519,7 @@ fn independently_reasoned_boundaries_lock_doji_and_engulfing_semantics() {
 }
 
 #[test]
-fn representative_specialized_batches_preserve_zero_period_and_inert_settings_in_all_modes() {
+fn representative_batches_preserve_zero_period_and_inert_settings_in_all_modes() {
     let doji_settings = CandleSettings::default().with_setting(
         CandleSettingType::BodyDoji,
         CandleSetting::new(CandleRangeKind::Shadows, 0, 1.0 as Float).unwrap(),
@@ -582,14 +582,14 @@ fn representative_specialized_batches_preserve_zero_period_and_inert_settings_in
 }
 
 #[test]
-fn representative_specialized_batches_preserve_allocation_and_validation_contracts() {
+fn representative_batches_preserve_allocation_and_validation_contracts() {
     let doji_series = Series::from_fixture(
         reference::DOJI_DEFAULT_OPEN,
         reference::DOJI_DEFAULT_HIGH,
         reference::DOJI_DEFAULT_LOW,
         reference::DOJI_DEFAULT_CLOSE,
     );
-    assert_specialized_batch_contract(CDLDOJIConfig::default(), &doji_series);
+    assert_allocation_free_batch_contract(CDLDOJIConfig::default(), &doji_series);
 
     let engulfing_series = Series::from_fixture(
         reference::ENGULFING_OPEN,
@@ -597,15 +597,108 @@ fn representative_specialized_batches_preserve_allocation_and_validation_contrac
         reference::ENGULFING_LOW,
         reference::ENGULFING_CLOSE,
     );
-    assert_specialized_batch_contract(CDLENGULFINGConfig::default(), &engulfing_series);
+    assert_allocation_free_batch_contract(CDLENGULFINGConfig::default(), &engulfing_series);
+}
 
-    let crows_series = Series::from_fixture(
-        reference::THREE_BLACK_CROWS_OPEN,
-        reference::THREE_BLACK_CROWS_HIGH,
-        reference::THREE_BLACK_CROWS_LOW,
-        reference::THREE_BLACK_CROWS_CLOSE,
+fn white_soldiers_custom_settings() -> CandleSettings {
+    CandleSettings::default()
+        .with_setting(
+            CandleSettingType::ShadowVeryShort,
+            CandleSetting::new(CandleRangeKind::Shadows, 3, 2.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::BodyShort,
+            CandleSetting::new(CandleRangeKind::HighLow, 3, 0.01 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Far,
+            CandleSetting::new(CandleRangeKind::Shadows, 3, 2.0 as Float).unwrap(),
+        )
+        .with_setting(
+            CandleSettingType::Near,
+            CandleSetting::new(CandleRangeKind::RealBody, 3, 2.0 as Float).unwrap(),
+        )
+}
+
+fn white_soldiers_zero_period_default_factor_settings() -> CandleSettings {
+    let defaults = CandleSettings::default();
+    [
+        CandleSettingType::ShadowVeryShort,
+        CandleSettingType::BodyShort,
+        CandleSettingType::Far,
+        CandleSettingType::Near,
+    ]
+    .into_iter()
+    .fold(defaults, |settings, setting_type| {
+        let default = defaults.setting(setting_type);
+        settings.with_setting(
+            setting_type,
+            CandleSetting::new(default.range_kind(), 0, default.factor()).unwrap(),
+        )
+    })
+}
+
+#[test]
+fn white_soldiers_representative_covers_custom_and_zero_period_settings_in_all_modes() {
+    let series = Series::from_fixture(
+        reference::THREE_WHITE_SOLDIERS_OPEN,
+        reference::THREE_WHITE_SOLDIERS_HIGH,
+        reference::THREE_WHITE_SOLDIERS_LOW,
+        reference::THREE_WHITE_SOLDIERS_CLOSE,
     );
-    assert_specialized_batch_contract(CDL3BLACKCROWSConfig::default(), &crows_series);
+
+    let defaults = CandleSettings::default();
+    let custom_settings = white_soldiers_custom_settings();
+    for setting_type in [
+        CandleSettingType::ShadowVeryShort,
+        CandleSettingType::BodyShort,
+        CandleSettingType::Far,
+        CandleSettingType::Near,
+    ] {
+        let default = defaults.setting(setting_type);
+        let custom = custom_settings.setting(setting_type);
+        assert_ne!(custom.range_kind(), default.range_kind());
+        assert_ne!(custom.average_period(), default.average_period());
+        assert_ne!(custom.factor(), default.factor());
+    }
+    let custom = CDL3WHITESOLDIERSConfig::new(custom_settings).unwrap();
+    let mut custom_stream = custom.stream().unwrap();
+    let custom_expected: Vec<_> = series
+        .candles()
+        .into_iter()
+        .filter_map(|candle| custom_stream.next(candle).unwrap())
+        .collect();
+    assert!(custom_expected
+        .iter()
+        .any(|signal| *signal != PatternSignal::NoMatch));
+    qualify_pattern_fixture(custom, &series, custom.lookback(), &custom_expected);
+
+    let defaults = CandleSettings::default();
+    let zero_period =
+        CDL3WHITESOLDIERSConfig::new(white_soldiers_zero_period_default_factor_settings()).unwrap();
+    for setting_type in [
+        CandleSettingType::ShadowVeryShort,
+        CandleSettingType::BodyShort,
+        CandleSettingType::Far,
+        CandleSettingType::Near,
+    ] {
+        let default = defaults.setting(setting_type);
+        assert_eq!(
+            zero_period.candle_settings().setting(setting_type),
+            CandleSetting::new(default.range_kind(), 0, default.factor()).unwrap()
+        );
+    }
+
+    assert!(CDL3WHITESOLDIERSConfig::default()
+        .compute(series.input())
+        .unwrap()
+        .values()
+        .iter()
+        .any(|signal| *signal != PatternSignal::NoMatch));
+    // With period zero, BodyShort's documented current-candle threshold is
+    // current_real_body * 1.0, so TA-Lib's strict `>` predicate cannot match.
+    let zero_expected = vec![PatternSignal::NoMatch; series.open.len() - 2];
+    qualify_pattern_fixture(zero_period, &series, 2, &zero_expected);
 }
 
 #[test]

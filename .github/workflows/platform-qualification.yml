@@ -24,16 +24,50 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Execute AVX2 and available AVX-512 qualification
+      - name: Execute matching-boundary scalar, AVX2, and available AVX-512 qualification
         env:
           QUALIFICATION_COMMIT: ${{ github.sha }}
         run: crates/ta-core/scripts/qualify_typprice_x86.sh target/qualification/x86
 
       - name: Retain x86 timing and equivalence evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: typprice-x86-${{ github.sha }}
           path: target/qualification/x86/*.jsonl
+          if-no-files-found: error
+          retention-days: 30
+
+  aarch64-typprice:
+    name: macOS AArch64 TYPPRICE runtime qualification
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Python for pinned TA-Lib builder
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Execute scalar and observed NEON public qualification
+        env:
+          QUALIFICATION_COMMIT: ${{ github.sha }}
+        run: crates/ta-core/scripts/qualify_typprice_aarch64.sh target/qualification/aarch64
+
+      - name: Retain AArch64 timing and equivalence evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: typprice-aarch64-${{ github.sha }}
+          path: target/qualification/aarch64/*.jsonl
           if-no-files-found: error
           retention-days: 30
 

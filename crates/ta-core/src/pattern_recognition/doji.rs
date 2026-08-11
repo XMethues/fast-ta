@@ -1,6 +1,6 @@
 //! CDLDOJI local definition and concrete execution types.
 
-use super::engine::{compute_single_setting_batch_into, PatternDefinition, RecognitionContext};
+use super::engine::{widen, PatternDefinition, RecognitionContext};
 use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength};
 
 define_pattern_config!(CDLDOJIConfig, CDLDOJIBatchRunner, CDLDOJIStream);
@@ -61,22 +61,49 @@ impl PatternDefinition for CDLDOJIConfig {
         output: &mut [PatternSignal],
     ) -> bool {
         let setting = self.candle_settings.setting(CandleSettingType::BodyDoji);
-        compute_single_setting_batch_into::<1>(
-            input,
-            output,
-            self.lookback(),
-            setting,
-            |_source_index, candle, averages| {
-                if candle.real_body() <= averages[0] {
-                    PatternSignal::Match {
-                        direction: PatternDirection::Bullish,
-                        strength: PatternStrength::Standard,
-                    }
-                } else {
-                    PatternSignal::NoMatch
+        let period = setting.average_period();
+        let factor = widen(setting.factor());
+        let divisor = if setting.range_kind() == super::CandleRangeKind::Shadows {
+            2.0
+        } else {
+            1.0
+        };
+        let signal = |candle: super::Candle, average: f64| {
+            if candle.real_body() <= average {
+                PatternSignal::Match {
+                    direction: PatternDirection::Bullish,
+                    strength: PatternStrength::Standard,
                 }
-            },
-        );
+            } else {
+                PatternSignal::NoMatch
+            }
+        };
+
+        if period == 0 {
+            for (output_value, source_index) in output.iter_mut().zip(0..input.len()) {
+                let candle = input.candle(source_index);
+                let average = factor * candle.range(setting.range_kind()) / divisor;
+                *output_value = signal(candle, average);
+            }
+            return true;
+        }
+
+        if input.len() < period {
+            return true;
+        }
+
+        let mut total = (0..period)
+            .map(|source_index| input.candle(source_index).range(setting.range_kind()))
+            .sum::<f64>();
+        for (output_value, source_index) in output.iter_mut().zip(period..input.len()) {
+            let candle = input.candle(source_index);
+            let average = factor * (total / period as f64) / divisor;
+            *output_value = signal(candle, average);
+            total += candle.range(setting.range_kind())
+                - input
+                    .candle(source_index - period)
+                    .range(setting.range_kind());
+        }
         true
     }
 }

@@ -1,10 +1,7 @@
 //! Local definitions for crow, soldier, and advance patterns.
 
-use super::engine::{
-    compute_single_setting_batch_into, CandleColor, PatternDefinition, PatternFloat,
-    RecognitionContext, WideCandle,
-};
-use super::{Candle, CandleSettingType, CandleSettings, PatternDirection, PatternSignal};
+use super::engine::{CandleColor, PatternDefinition, RecognitionContext};
+use super::{CandleSettingType, CandleSettings, PatternDirection, PatternSignal};
 
 macro_rules! definition {
     ($config:ident, $name:literal, [$($setting:expr),+ $(,)?], $body:expr) => {
@@ -37,109 +34,36 @@ impl CDL3BLACKCROWSConfig {
         ) + 3
     }
 }
-#[inline]
-fn three_black_crows_signal(
-    prior: Candle,
-    first: Candle,
-    second: Candle,
-    current: Candle,
-    averages: [PatternFloat; 3],
-) -> PatternSignal {
-    let prior_values = WideCandle::from(prior);
-    let first_values = WideCandle::from(first);
-    let second_values = WideCandle::from(second);
-    let current_values = WideCandle::from(current);
-
-    if prior.color() == CandleColor::White
-        && first.color() == CandleColor::Black
-        && second.color() == CandleColor::Black
-        && current.color() == CandleColor::Black
-        && second_values.open < first_values.open
-        && second_values.open > first_values.close
-        && current_values.open < second_values.open
-        && current_values.open > second_values.close
-        && prior_values.high > first_values.close
-        && first_values.close > second_values.close
-        && second_values.close > current_values.close
-        && first.lower_shadow() < averages[2]
-        && second.lower_shadow() < averages[1]
-        && current.lower_shadow() < averages[0]
-    {
-        PatternSignal::standard(PatternDirection::Bearish)
-    } else {
-        PatternSignal::NoMatch
+definition!(
+    CDL3BLACKCROWSConfig,
+    "CDL3BLACKCROWS",
+    [CandleSettingType::ShadowVeryShort],
+    |context: &RecognitionContext<'_>| {
+        let prior = context.candle(3);
+        let first = context.candle(2);
+        let second = context.candle(1);
+        let current = context.candle(0);
+        if context.color(3) == CandleColor::White
+            && context.color(2) == CandleColor::Black
+            && context.color(1) == CandleColor::Black
+            && context.color(0) == CandleColor::Black
+            && second.open < first.open
+            && second.open > first.close
+            && current.open < second.open
+            && current.open > second.close
+            && prior.high > first.close
+            && first.close > second.close
+            && second.close > current.close
+            && context.lower_shadow(2) < context.average(CandleSettingType::ShadowVeryShort, 2)
+            && context.lower_shadow(1) < context.average(CandleSettingType::ShadowVeryShort, 1)
+            && context.lower_shadow(0) < context.average(CandleSettingType::ShadowVeryShort, 0)
+        {
+            PatternSignal::standard(PatternDirection::Bearish)
+        } else {
+            PatternSignal::NoMatch
+        }
     }
-}
-
-impl PatternDefinition for CDL3BLACKCROWSConfig {
-    type State = ();
-
-    fn name(&self) -> &'static str {
-        "CDL3BLACKCROWS"
-    }
-
-    fn settings(&self) -> CandleSettings {
-        self.candle_settings
-    }
-
-    fn referenced_settings(&self) -> &'static [CandleSettingType] {
-        &[CandleSettingType::ShadowVeryShort]
-    }
-
-    fn lookback(&self) -> usize {
-        self.warm_up()
-    }
-
-    fn transition_start(&self) -> usize {
-        self.lookback()
-    }
-
-    fn initial_state(&self) -> Self::State {}
-
-    fn transition(
-        &self,
-        context: &RecognitionContext<'_>,
-        _state: &mut Self::State,
-    ) -> PatternSignal {
-        three_black_crows_signal(
-            context.raw_candle(3),
-            context.raw_candle(2),
-            context.raw_candle(1),
-            context.raw_candle(0),
-            [
-                context.average(CandleSettingType::ShadowVeryShort, 0),
-                context.average(CandleSettingType::ShadowVeryShort, 1),
-                context.average(CandleSettingType::ShadowVeryShort, 2),
-            ],
-        )
-    }
-
-    fn compute_batch_into(
-        &self,
-        input: super::CandleInput<'_>,
-        output: &mut [PatternSignal],
-    ) -> bool {
-        let setting = self
-            .candle_settings
-            .setting(CandleSettingType::ShadowVeryShort);
-        compute_single_setting_batch_into::<3>(
-            input,
-            output,
-            self.lookback(),
-            setting,
-            |source_index, current, averages| {
-                three_black_crows_signal(
-                    input.candle(source_index - 3),
-                    input.candle(source_index - 2),
-                    input.candle(source_index - 1),
-                    current,
-                    averages,
-                )
-            },
-        );
-        true
-    }
-}
+);
 
 define_pattern_config!(
     CDL3STARSINSOUTHConfig,

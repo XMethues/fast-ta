@@ -173,6 +173,8 @@ const records = [
     fixture: "catalogue_fixture_v1:f64le",
     platform: "wasm32-unknown-unknown",
     precision: "f64",
+    profile: "release",
+    features: "ta-wasm default; ta-core f64,std",
     runtime: process.version,
     cpu: os.cpus()[0]?.model ?? "unknown",
     os: `${os.platform()} ${os.release()} ${os.arch()}`,
