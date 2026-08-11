@@ -65,31 +65,35 @@ Run completeness and semantic gate
 
 | Raw rows | Semantic verified | Measured | Sample counts | Provenance |
 |---:|---:|---:|---|---|
-| 270 | 270 | 270 | 50 | clean canonical run |
+| 270 | 270 | 270 | 50 | clean canonical final run |
+
+Canonical comparison baseline
+
+The committed clean pre-optimization matrix is the sole comparison baseline: commit e61c887995a7cb4277c15fdff85633db15de32a8 (dirty: false), 270 rows, Apple M2 on Darwin 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:27:52 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T8112 aarch64. The historical post-scalar dirty diagnostic is not an input to this report.
 
 Per-case caller-owned Rust/C latency ratios
 
 | Definition | 256 | 4,096 | 65,536 | 65,536 disposition |
 |---|---:|---:|---:|---|
-| ADD | 1.721x | 2.396x | 1.878x | unresolved gap above the 5% band |
-| ADX | 1.088x | 1.067x | 1.058x | unresolved gap above the 5% band |
+| ADD | 1.721x | 2.396x | 1.878x | remaining gap above the 5% band |
+| ADX | 1.088x | 1.067x | 1.058x | remaining gap above the 5% band |
 | ATR | 0.986x | 0.944x | 1.015x | parity band |
 | BBANDS | 0.834x | 0.842x | 0.682x | fast-ta faster |
-| CDL3WHITESOLDIERS | 4.255x | 4.029x | 4.642x | unresolved gap above the 5% band |
-| CDLDOJI | 2.248x | 2.553x | 2.432x | unresolved gap above the 5% band |
-| CDLENGULFING | 1.823x | 2.112x | 2.310x | unresolved gap above the 5% band |
-| HT_DCPHASE | 1.162x | 1.229x | 1.324x | unresolved gap above the 5% band |
+| CDL3WHITESOLDIERS | 4.255x | 4.029x | 4.642x | remaining gap above the 5% band |
+| CDLDOJI | 2.248x | 2.553x | 2.432x | remaining gap above the 5% band |
+| CDLENGULFING | 1.823x | 2.112x | 2.310x | remaining gap above the 5% band |
+| HT_DCPHASE | 1.162x | 1.229x | 1.324x | remaining gap above the 5% band |
 | LINEARREG | 0.969x | 0.942x | 0.986x | parity band |
 | MACD | 0.495x | 0.461x | 0.461x | fast-ta faster |
-| OBV | 1.158x | 1.197x | 1.189x | unresolved gap above the 5% band |
+| OBV | 1.158x | 1.197x | 1.189x | remaining gap above the 5% band |
 | RSI | 0.912x | 0.927x | 0.930x | fast-ta faster |
 | SIN | 1.004x | 1.035x | 1.031x | parity band |
 | SMA | 0.562x | 0.592x | 0.639x | fast-ta faster |
-| TYPPRICE | 1.764x | 2.965x | 2.117x | unresolved gap above the 5% band |
+| TYPPRICE | 1.764x | 2.965x | 2.117x | remaining gap above the 5% band |
 
 Execution-path cost summaries
 
-Ratios are geometric path/C latency indices over matching cases. Only the caller-owned Rust/C row is a kernel comparison; the other rows deliberately expose distinct public or user-facing costs.
+Ratios are geometric path/C latency indices over matching cases. Only the caller-owned Rust/C row is a kernel comparison; the other rows expose distinct public or user-facing costs.
 
 | Input | Path | Cases | Geometric path/C ratio | Interpretation |
 |---:|---|---:|---:|---|
@@ -109,92 +113,282 @@ Ratios are geometric path/C latency indices over matching cases. Only the caller
 | 65536 | Streaming reset plus ticks | 15 | 3.186x | separate stateful execution cost |
 | 65536 | official Python NumPy API | 15 | 1.006x | user-facing API-owned output cost |
 
-Targeted optimization effects
+Durable optimization diagnosis and reproduction evidence
 
-The before values below are parsed from the committed evidence TSV. Issue 56 did not retain a clean complete first-delivery raw artifact, so each row names its actual evidence stage rather than promoting a dirty diagnostic run to a canonical baseline.
+Evidence kinds below are literal. `source` means source inspection and clean matrix behavior, not a sampled profiler or invented profiler percentage.
 
-| Definition | Input | Evidence stage | Source | Before Rust/C | Final Rust/C | Ratio change | Disposition |
+| Ticket | Cases | Exact focused command(s) | Generated verdict from final clean rows |
+|---|---|---|---|
+| issue-57 ADX | ADX | `python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case ADX` | ADX: 256 FAIL (1.088x), 4096 FAIL (1.067x), 65536 FAIL (1.058x) |
+| issue-58 MACD | MACD | `python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case MACD` | MACD: 256 PASS (0.495x), 4096 PASS (0.461x), 65536 PASS (0.461x) |
+| issue-59 Pattern | CDLDOJI, CDLENGULFING, CDL3WHITESOLDIERS | `python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case CDLDOJI`<br>`python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case CDLENGULFING`<br>`python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case CDL3WHITESOLDIERS` | CDLDOJI: 256 FAIL (2.248x), 4096 FAIL (2.553x), 65536 FAIL (2.432x); CDLENGULFING: 256 FAIL (1.823x), 4096 FAIL (2.112x), 65536 FAIL (2.310x); CDL3WHITESOLDIERS: 256 FAIL (4.255x), 4096 FAIL (4.029x), 65536 FAIL (4.642x) |
+| issue-60 ATR | ATR | `python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case ATR` | ATR: 256 PASS (0.986x), 4096 PASS (0.944x), 65536 PASS (1.015x) |
+| issue-61 HT_DCPHASE | HT_DCPHASE | `python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case HT_DCPHASE` | HT_DCPHASE: 256 FAIL (1.162x), 4096 FAIL (1.229x), 65536 FAIL (1.324x) |
+| issue-62-64 TYPPRICE | TYPPRICE | `python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case TYPPRICE` | TYPPRICE: 256 FAIL (1.764x), 4096 FAIL (2.965x), 65536 FAIL (2.117x) |
+
+| Ticket | Ranked falsifiable hypotheses | Confirmed evidence | Neighboring-workload disposition |
+|---|---|---|---|
+| issue-57 ADX | 1. Validation dominates if caller-owned cost falls in proportion to input count across unrelated validated batch definitions<br>2. Generic per-tick readiness and Option transitions dominate if a fixed-phase batch state removes most Rust-only latency while C is stable<br>3. Directional Movement arithmetic dominates if PLUS/MINUS DM and Wilder updates remain the hot loop after validation<br>4. Branching dominates if separating seed, DI accumulation, and ADX recurrence phases changes large-input throughput more than short-call latency | source: crates/ta-core/src/momentum/directional_movement.rs adds AdxBatchState with explicit seed, DX accumulation, and recurrence phases and replaces the per-tick AdxState Option/readiness loop only for ADX batch execution; no sampled-profiler percentages are retained | ADX Streaming; other Directional Movement definitions are absent from the representative matrix — The generated clean table measures ADX caller-owned effects and classifies Streaming separately; dedicated PLUS_DI, MINUS_DI, DX, and ADXR timing is unavailable in the committed matrices and is not claimed |
+| issue-58 MACD | 1. Finite-slice validation dominates if MACD improves in step with unrelated multi-input batch definitions<br>2. Generic MA dispatch dominates if an all-EMA-only fused path materially improves MACD but leaves non-EMA MACDEXT unchanged<br>3. Warm-up Option transitions dominate if explicit seed boundaries remove short and large input overhead<br>4. Three output writes dominate if fusion fails to improve throughput despite removing dispatch | source: crates/ta-core/src/momentum/moving_average.rs adds uses_only_ema and compute_macd_ema_validated, keeps fast, slow, and signal EMA states as scalars, and bypasses generic MA dispatch and per-tick Option transitions for all-EMA MACD only; no sampled-profiler percentages are retained | MACD Streaming; non-EMA MACDEXT and related EMA definitions are outside this matrix — The final clean matrix measures MACD batch and Streaming rows separately; source retains generic non-EMA and Streaming paths, while dedicated MACDEXT and EMA neighbor timings are unavailable and are not claimed |
+| issue-59 Pattern | 1. Generic RecognitionContext construction dominates if direct batch predicates materially improve multi-candle definitions while Streaming is unchanged<br>2. Rolling Candle Setting averages dominate if the single-setting helper improves representatives with nonzero average periods<br>3. Signal branching dominates if CDLENGULFING remains unchanged after context removal<br>4. Shared-helper abstraction costs dominate CDLDOJI if its clean batch rows worsen after migration while Streaming remains comparatively stable | source: crates/ta-core/src/pattern_recognition/engine.rs adds compute_single_setting_batch_into; engulfing.rs and crows_soldiers.rs add direct batch predicates; doji.rs migrates its prior local rolling loop to the shared helper. Clean CDLDOJI regression is rendered explicitly rather than attributed to the historical dirty diagnostic | The three representative Pattern shapes plus each definition's Streaming row — CDLENGULFING clean batch improvement supports removal of generic context overhead; CDLDOJI clean batch regression is source-correlated with the helper migration and remains unresolved; no all-61-pattern timing claim is made |
+| issue-60 ATR | 1. HLC finite validation dominates if ATR tracks unrelated three-slice definitions<br>2. Indexed True Range adapters dominate if an aligned iterator improves seed and recurrence phases without changing arithmetic order<br>3. Wilder recurrence dominates if aligned access produces little large-input change<br>4. Output indexing dominates if caller-owned improves but Owned allocation does not | source: crates/ta-core/src/volatility/trange.rs adds the aligned true_ranges iterator and atr.rs consumes it for both seed and Wilder recurrence, removing repeated indexed high, low, and prior-close access while preserving operation order; no sampled-profiler percentages are retained | ATR Streaming; TRANGE and NATR are not present in the representative matrix — The generated clean table measures ATR batch and Streaming separately; the shared TRANGE source seam is confirmed, but dedicated TRANGE and NATR before/after timings are unavailable and are not claimed |
+| issue-61 HT_DCPHASE | 1. Transcendental phase work dominates if replacing ring modulo has no large-input effect<br>2. Fixed-size ring modulo dominates if cursor wrap branches improve throughput without changing outputs<br>3. Dynamic-period averaging dominates if the remaining Rust/C gap grows with input length after ring changes<br>4. Batch plumbing dominates if Streaming and caller-owned movements remain coupled | source: crates/ta-core/src/cycle/hilbert.rs replaces modulo-based Hilbert, price-history, and smooth-price ring advancement with stored cursors and explicit wrap branches; no sampled-profiler percentages or disassembly counts are retained | HT_DCPHASE Streaming; other Hilbert cycle definitions are absent from the representative matrix — The clean comparison separately classifies the unchanged public mode and flags the large caller-owned regression as unresolved; dedicated HT_PHASOR, HT_SINE, HT_TRENDMODE, and reset timing is unavailable and is not claimed |
+| issue-62-64 TYPPRICE | 1. Finite-slice validation dominates if SIMD first-non-finite scanning benefits validated public batch paths<br>2. Independent three-input arithmetic vectorizes profitably if explicit SIMD kernels beat matching scalar kernels at large sizes<br>3. Runtime dispatch dominates if 256 observations regress while large inputs improve<br>4. Public boundary conversion and allocation dominate WASM if explicit arithmetic gains shrink through wasm-bindgen | source: crates/ta-core/src/price_transform/typprice.rs routes validated batch execution through the indicator dispatch table; aarch64/neon.rs contains explicit NEON first-non-finite and typical-price intrinsics; committed x86 and WASM JSONL records prove the reached runtime backends and are parsed separately, with no invented profiler or instruction-count values | TYPPRICE Streaming; explicit x86 scalar, AVX2, AVX-512F and public WASM scalar/SIMD128 rows — The clean matrix measures AArch64 public batch effects and classifies scalar Streaming separately; runtime JSONL shows x86 backends were equivalent but slower than scalar on that runner and WASM SIMD128 had a practical public-boundary benefit on that runner |
+
+Clean before/after optimization effects
+
+Every number in this table is read from matching caller-owned fast-ta rows in the committed clean pre-optimization and final matrices. Throughput is observations per second from those raw rows; the verdict is regenerated from the final same-run Rust/C pair.
+
+| Ticket | Definition | Input | Clean pre median [95% CI] | Clean pre throughput | Final median [95% CI] | Final throughput | Rust latency change | Focused verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| issue-57 ADX | ADX | 256 | 2.216 us [2.208, 2.220] | 115.532 Mobs/s | 1.558 us [1.553, 1.560] | 164.346 Mobs/s | -29.7% | FAIL (1.088x) |
+| issue-57 ADX | ADX | 4096 | 35.857 us [35.809, 35.886] | 114.230 Mobs/s | 26.097 us [26.045, 26.162] | 156.955 Mobs/s | -27.2% | FAIL (1.067x) |
+| issue-57 ADX | ADX | 65536 | 572.440 us [571.727, 574.713] | 114.485 Mobs/s | 417.057 us [414.948, 418.114] | 157.139 Mobs/s | -27.1% | FAIL (1.058x) |
+| issue-58 MACD | MACD | 256 | 2.145 us [2.135, 2.155] | 119.372 Mobs/s | 0.754 us [0.751, 0.757] | 339.632 Mobs/s | -64.9% | PASS (0.495x) |
+| issue-58 MACD | MACD | 4096 | 33.646 us [33.542, 33.758] | 121.737 Mobs/s | 12.796 us [12.777, 12.851] | 320.094 Mobs/s | -62.0% | PASS (0.461x) |
+| issue-58 MACD | MACD | 65536 | 542.822 us [541.773, 549.473] | 120.732 Mobs/s | 206.358 us [205.858, 206.691] | 317.585 Mobs/s | -62.0% | PASS (0.461x) |
+| issue-59 Pattern | CDLDOJI | 256 | 0.790 us [0.787, 0.794] | 323.913 Mobs/s | 0.882 us [0.881, 0.889] | 290.214 Mobs/s | +11.6% | FAIL (2.248x) |
+| issue-59 Pattern | CDLDOJI | 4096 | 12.205 us [12.168, 12.252] | 335.590 Mobs/s | 14.287 us [14.253, 14.311] | 286.704 Mobs/s | +17.1% | FAIL (2.553x) |
+| issue-59 Pattern | CDLDOJI | 65536 | 200.986 us [197.808, 203.006] | 326.073 Mobs/s | 228.498 us [227.687, 228.877] | 286.812 Mobs/s | +13.7% | FAIL (2.432x) |
+| issue-59 Pattern | CDLENGULFING | 256 | 2.992 us [2.984, 3.003] | 85.550 Mobs/s | 0.542 us [0.540, 0.543] | 472.638 Mobs/s | -81.9% | FAIL (1.823x) |
+| issue-59 Pattern | CDLENGULFING | 4096 | 48.774 us [47.990, 49.779] | 83.979 Mobs/s | 8.460 us [8.440, 8.478] | 484.167 Mobs/s | -82.7% | FAIL (2.112x) |
+| issue-59 Pattern | CDLENGULFING | 65536 | 744.665 us [718.667, 752.432] | 88.007 Mobs/s | 145.206 us [144.815, 145.557] | 451.330 Mobs/s | -80.5% | FAIL (2.310x) |
+| issue-59 Pattern | CDL3WHITESOLDIERS | 256 | 5.711 us [5.701, 5.722] | 44.829 Mobs/s | 5.475 us [5.460, 5.486] | 46.760 Mobs/s | -4.1% | FAIL (4.255x) |
+| issue-59 Pattern | CDL3WHITESOLDIERS | 4096 | 100.466 us [99.733, 101.908] | 40.770 Mobs/s | 88.271 us [87.961, 88.811] | 46.403 Mobs/s | -12.1% | FAIL (4.029x) |
+| issue-59 Pattern | CDL3WHITESOLDIERS | 65536 | 1489.851 us [1484.286, 1497.357] | 43.988 Mobs/s | 1496.309 us [1424.997, 1509.580] | 43.798 Mobs/s | +0.4% | FAIL (4.642x) |
+| issue-60 ATR | ATR | 256 | 1.540 us [1.537, 1.544] | 166.185 Mobs/s | 1.327 us [1.323, 1.335] | 192.945 Mobs/s | -13.9% | PASS (0.986x) |
+| issue-60 ATR | ATR | 4096 | 25.726 us [25.658, 25.782] | 159.218 Mobs/s | 22.256 us [22.176, 22.318] | 184.043 Mobs/s | -13.5% | PASS (0.944x) |
+| issue-60 ATR | ATR | 65536 | 412.780 us [411.460, 414.194] | 158.767 Mobs/s | 356.862 us [356.198, 358.017] | 183.645 Mobs/s | -13.5% | PASS (1.015x) |
+| issue-61 HT_DCPHASE | HT_DCPHASE | 256 | 24.711 us [24.652, 24.774] | 10.360 Mobs/s | 24.294 us [24.198, 24.375] | 10.537 Mobs/s | -1.7% | FAIL (1.162x) |
+| issue-61 HT_DCPHASE | HT_DCPHASE | 4096 | 450.101 us [448.675, 452.266] | 9.100 Mobs/s | 448.245 us [446.648, 449.245] | 9.138 Mobs/s | -0.4% | FAIL (1.229x) |
+| issue-61 HT_DCPHASE | HT_DCPHASE | 65536 | 7266.188 us [7244.167, 7295.520] | 9.019 Mobs/s | 7785.375 us [7746.531, 7806.708] | 8.418 Mobs/s | +7.1% | FAIL (1.324x) |
+| issue-62-64 TYPPRICE | TYPPRICE | 256 | 0.382 us [0.381, 0.383] | 669.773 Mobs/s | 0.172 us [0.172, 0.172] | 1488.907 Mobs/s | -55.0% | FAIL (1.764x) |
+| issue-62-64 TYPPRICE | TYPPRICE | 4096 | 5.674 us [5.635, 5.714] | 721.841 Mobs/s | 2.536 us [2.529, 2.545] | 1615.054 Mobs/s | -55.3% | FAIL (2.965x) |
+| issue-62-64 TYPPRICE | TYPPRICE | 65536 | 97.364 us [97.044, 97.712] | 673.106 Mobs/s | 43.482 us [43.363, 43.573] | 1507.181 Mobs/s | -55.3% | FAIL (2.117x) |
+
+CDLDOJI clean-data investigation
+
+The clean comparison, not the historical dirty diagnostic, shows whether the representative regressed. Source inspection identifies the only CDLDOJI batch change as migration to the shared `compute_single_setting_batch_into` rolling helper; Streaming did not take that helper. The table keeps raw and Rust/C-normalized changes separate so reference-run movement cannot be mistaken for a source effect.
+
+| Input | Pre Rust | Final Rust | Rust change | Pre Rust/C | Final Rust/C | Normalized ratio change | Disposition |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 256 | 0.790 us | 0.882 us | +11.6% | 2.015x | 2.248x | +11.5% | confirmed clean batch regression; source-correlated with shared-helper migration; unresolved |
+| 4096 | 12.205 us | 14.287 us | +17.1% | 2.184x | 2.553x | +16.9% | confirmed clean batch regression; source-correlated with shared-helper migration; unresolved |
+| 65536 | 200.986 us | 228.498 us | +13.7% | 2.264x | 2.432x | +7.4% | confirmed clean batch regression; source-correlated with shared-helper migration; unresolved |
+
+Complete >5% clean pre/final classification
+
+160 matching raw rows changed by more than 5%. This list is exhaustive for measured rows shared by the two committed clean artifacts. An investigation classification is not a same-run causal claim; the matrices were separate clean runs, and external C/Python movement is retained as a control.
+
+| Definition | Input | Implementation | Mode | Pre median | Final median | Change | Classification |
 |---|---:|---|---|---:|---:|---:|---|
-| ADX | 256 | issue-56 pre-target | issue-57 retained raw rows | 1.504x | 1.088x | -27.6% | practical improvement |
-| ADX | 4096 | issue-56 pre-target | issue-57 retained raw rows | 1.487x | 1.067x | -28.3% | practical improvement |
-| ADX | 65536 | issue-56 pre-target | issue-57 retained raw rows | 1.476x | 1.058x | -28.3% | practical improvement |
-| ATR | 256 | issue-56 pre-target | issue-60 retained raw rows | 1.155x | 0.986x | -14.7% | practical improvement |
-| ATR | 4096 | issue-56 pre-target | issue-60 retained raw rows | 1.109x | 0.944x | -14.9% | practical improvement |
-| ATR | 65536 | issue-56 pre-target | issue-60 retained raw rows | 1.169x | 1.015x | -13.2% | practical improvement |
-| CDL3BLACKCROWS | 256 | issue-56 pre-target | issue-59 retained raw rows | 8.315x | unavailable | unavailable | final comparable row absent |
-| CDL3BLACKCROWS | 4096 | issue-56 pre-target | issue-59 retained raw rows | 9.443x | unavailable | unavailable | final comparable row absent |
-| CDL3BLACKCROWS | 65536 | issue-56 pre-target | issue-59 retained raw rows | 9.212x | unavailable | unavailable | final comparable row absent |
-| CDLDOJI | 256 | issue-56 pre-target | issue-59 retained raw rows | 2.033x | 2.248x | +10.6% | documented cross-run worsening above 5% |
-| CDLDOJI | 4096 | issue-56 pre-target | issue-59 retained raw rows | 2.155x | 2.553x | +18.4% | documented cross-run worsening above 5% |
-| CDLDOJI | 65536 | issue-56 pre-target | issue-59 retained raw rows | 2.233x | 2.432x | +8.9% | documented cross-run worsening above 5% |
-| CDLENGULFING | 256 | issue-56 pre-target | issue-59 retained raw rows | 10.053x | 1.823x | -81.9% | practical improvement |
-| CDLENGULFING | 4096 | issue-56 pre-target | issue-59 retained raw rows | 11.548x | 2.112x | -81.7% | practical improvement |
-| CDLENGULFING | 65536 | issue-56 pre-target | issue-59 retained raw rows | 11.880x | 2.310x | -80.6% | practical improvement |
-| HT_DCPHASE | 256 | issue-56 pre-target | issue-61 retained raw rows | 1.231x | 1.162x | -5.6% | practical improvement |
-| HT_DCPHASE | 4096 | issue-56 pre-target | issue-61 retained raw rows | 1.192x | 1.229x | +3.1% | within the 5% cross-run band |
-| HT_DCPHASE | 65536 | issue-56 pre-target | issue-61 retained raw rows | 1.248x | 1.324x | +6.1% | documented cross-run worsening above 5% |
-| MACD | 256 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.540x | 0.495x | -8.4% | post-fusion stability only; no retained pre-fusion measurement |
-| MACD | 4096 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.510x | 0.461x | -9.6% | post-fusion stability only; no retained pre-fusion measurement |
-| MACD | 65536 | post-MACD diagnostic; pre-fusion baseline unavailable | preserved dirty b156ac1 diagnostic raw rows | 0.514x | 0.461x | -10.4% | post-fusion stability only; no retained pre-fusion measurement |
-| TYPPRICE | 256 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 3.961x | 1.764x | -55.5% | practical improvement |
-| TYPPRICE | 4096 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 7.193x | 2.965x | -58.8% | practical improvement |
-| TYPPRICE | 65536 | post-scalar pre-AArch64-SIMD diagnostic | preserved dirty b156ac1 diagnostic raw rows | 5.128x | 2.117x | -58.7% | practical improvement |
+| ADD | 256 | fast-ta | Owned Compact Output | 0.292 us | 0.138 us | -52.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADD | 256 | fast-ta | Prepared Batch Runner | 0.261 us | 0.103 us | -60.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADD | 256 | fast-ta | caller-owned Batch Computation | 0.263 us | 0.105 us | -60.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADD | 4096 | TA-Lib C | direct C caller-owned | 0.562 us | 0.716 us | +27.5% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| ADD | 4096 | TA-Lib Python | official Python NumPy API | 0.666 us | 0.798 us | +19.7% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| ADD | 4096 | fast-ta | Owned Compact Output | 4.442 us | 2.351 us | -47.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADD | 4096 | fast-ta | Prepared Batch Runner | 3.844 us | 1.627 us | -57.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADD | 4096 | fast-ta | caller-owned Batch Computation | 4.095 us | 1.716 us | -58.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADD | 65536 | fast-ta | Owned Compact Output | 73.968 us | 36.564 us | -50.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADD | 65536 | fast-ta | Prepared Batch Runner | 67.662 us | 28.633 us | -57.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADD | 65536 | fast-ta | caller-owned Batch Computation | 67.976 us | 29.001 us | -57.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 256 | fast-ta | Owned Compact Output | 2.256 us | 1.591 us | -29.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 256 | fast-ta | Prepared Batch Runner | 2.260 us | 1.553 us | -31.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 256 | fast-ta | Streaming Computation | 2.380 us | 3.366 us | +41.4% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| ADX | 256 | fast-ta | caller-owned Batch Computation | 2.216 us | 1.558 us | -29.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 4096 | fast-ta | Owned Compact Output | 36.200 us | 28.253 us | -22.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 4096 | fast-ta | Prepared Batch Runner | 35.815 us | 25.983 us | -27.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 4096 | fast-ta | Streaming Computation | 40.481 us | 54.491 us | +34.6% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| ADX | 4096 | fast-ta | caller-owned Batch Computation | 35.857 us | 26.097 us | -27.2% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 65536 | fast-ta | Owned Compact Output | 577.141 us | 423.899 us | -26.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 65536 | fast-ta | Prepared Batch Runner | 576.161 us | 416.514 us | -27.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ADX | 65536 | fast-ta | Streaming Computation | 621.844 us | 871.116 us | +40.1% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| ADX | 65536 | fast-ta | caller-owned Batch Computation | 572.440 us | 417.057 us | -27.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 256 | fast-ta | Owned Compact Output | 1.582 us | 1.457 us | -7.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 256 | fast-ta | Prepared Batch Runner | 1.533 us | 1.325 us | -13.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 256 | fast-ta | Streaming Computation | 1.790 us | 2.222 us | +24.1% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| ATR | 256 | fast-ta | caller-owned Batch Computation | 1.540 us | 1.327 us | -13.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 4096 | TA-Lib C | direct C caller-owned | 21.916 us | 23.586 us | +7.6% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| ATR | 4096 | fast-ta | Owned Compact Output | 26.263 us | 22.870 us | -12.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 4096 | fast-ta | Prepared Batch Runner | 25.964 us | 22.234 us | -14.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 4096 | fast-ta | Streaming Computation | 30.129 us | 37.819 us | +25.5% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| ATR | 4096 | fast-ta | caller-owned Batch Computation | 25.726 us | 22.256 us | -13.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 65536 | fast-ta | Owned Compact Output | 415.190 us | 359.999 us | -13.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 65536 | fast-ta | Prepared Batch Runner | 414.092 us | 355.658 us | -14.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| ATR | 65536 | fast-ta | Streaming Computation | 470.935 us | 565.196 us | +20.0% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| ATR | 65536 | fast-ta | caller-owned Batch Computation | 412.780 us | 356.862 us | -13.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 256 | fast-ta | Owned Compact Output | 1.094 us | 0.933 us | -14.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 256 | fast-ta | Prepared Batch Runner | 0.970 us | 0.823 us | -15.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 256 | fast-ta | Streaming Computation | 1.700 us | 2.086 us | +22.7% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| BBANDS | 256 | fast-ta | caller-owned Batch Computation | 0.965 us | 0.819 us | -15.2% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 4096 | TA-Lib Python | official Python NumPy API | 19.786 us | 18.674 us | -5.6% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| BBANDS | 4096 | fast-ta | Owned Compact Output | 17.323 us | 15.150 us | -12.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 4096 | fast-ta | Prepared Batch Runner | 16.141 us | 13.791 us | -14.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 4096 | fast-ta | Streaming Computation | 27.274 us | 33.665 us | +23.4% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| BBANDS | 4096 | fast-ta | caller-owned Batch Computation | 16.072 us | 13.732 us | -14.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 65536 | fast-ta | Owned Compact Output | 270.595 us | 231.730 us | -14.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 65536 | fast-ta | Prepared Batch Runner | 266.739 us | 236.148 us | -11.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| BBANDS | 65536 | fast-ta | Streaming Computation | 448.716 us | 589.016 us | +31.3% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| BBANDS | 65536 | fast-ta | caller-owned Batch Computation | 293.625 us | 236.136 us | -19.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDL3WHITESOLDIERS | 256 | fast-ta | Prepared Batch Runner | 5.736 us | 5.433 us | -5.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDL3WHITESOLDIERS | 4096 | TA-Lib C | direct C caller-owned | 20.116 us | 21.911 us | +8.9% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| CDL3WHITESOLDIERS | 4096 | fast-ta | Owned Compact Output | 100.827 us | 88.933 us | -11.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDL3WHITESOLDIERS | 4096 | fast-ta | Prepared Batch Runner | 99.134 us | 88.731 us | -10.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDL3WHITESOLDIERS | 4096 | fast-ta | caller-owned Batch Computation | 100.466 us | 88.271 us | -12.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDL3WHITESOLDIERS | 65536 | TA-Lib Python | official Python NumPy API | 324.471 us | 345.727 us | +6.6% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| CDL3WHITESOLDIERS | 65536 | fast-ta | Owned Compact Output | 1515.976 us | 1427.466 us | -5.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDL3WHITESOLDIERS | 65536 | fast-ta | Streaming Computation | 1586.369 us | 1674.182 us | +5.5% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| CDLDOJI | 256 | fast-ta | Owned Compact Output | 0.866 us | 0.950 us | +9.8% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLDOJI | 256 | fast-ta | Prepared Batch Runner | 0.796 us | 0.882 us | +10.8% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLDOJI | 256 | fast-ta | caller-owned Batch Computation | 0.790 us | 0.882 us | +11.6% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLDOJI | 4096 | fast-ta | Owned Compact Output | 13.001 us | 15.144 us | +16.5% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLDOJI | 4096 | fast-ta | Prepared Batch Runner | 12.139 us | 15.108 us | +24.5% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLDOJI | 4096 | fast-ta | Streaming Computation | 41.293 us | 44.497 us | +7.8% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| CDLDOJI | 4096 | fast-ta | caller-owned Batch Computation | 12.205 us | 14.287 us | +17.1% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLDOJI | 65536 | TA-Lib C | direct C caller-owned | 88.785 us | 93.944 us | +5.8% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| CDLDOJI | 65536 | TA-Lib Python | official Python NumPy API | 90.034 us | 94.827 us | +5.3% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| CDLDOJI | 65536 | fast-ta | Owned Compact Output | 215.822 us | 255.995 us | +18.6% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLDOJI | 65536 | fast-ta | Prepared Batch Runner | 212.368 us | 247.015 us | +16.3% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLDOJI | 65536 | fast-ta | caller-owned Batch Computation | 200.986 us | 228.498 us | +13.7% | investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved |
+| CDLENGULFING | 256 | fast-ta | Owned Compact Output | 3.073 us | 0.608 us | -80.2% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDLENGULFING | 256 | fast-ta | Prepared Batch Runner | 2.963 us | 0.539 us | -81.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDLENGULFING | 256 | fast-ta | Streaming Computation | 3.165 us | 2.740 us | -13.4% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| CDLENGULFING | 256 | fast-ta | caller-owned Batch Computation | 2.992 us | 0.542 us | -81.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDLENGULFING | 4096 | fast-ta | Owned Compact Output | 44.266 us | 9.814 us | -77.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDLENGULFING | 4096 | fast-ta | Prepared Batch Runner | 48.100 us | 8.579 us | -82.2% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDLENGULFING | 4096 | fast-ta | Streaming Computation | 50.295 us | 44.272 us | -12.0% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| CDLENGULFING | 4096 | fast-ta | caller-owned Batch Computation | 48.774 us | 8.460 us | -82.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDLENGULFING | 65536 | TA-Lib C | direct C caller-owned | 69.353 us | 62.847 us | -9.4% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| CDLENGULFING | 65536 | fast-ta | Owned Compact Output | 776.306 us | 145.047 us | -81.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDLENGULFING | 65536 | fast-ta | Prepared Batch Runner | 640.711 us | 134.521 us | -79.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| CDLENGULFING | 65536 | fast-ta | Streaming Computation | 798.923 us | 713.607 us | -10.7% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| CDLENGULFING | 65536 | fast-ta | caller-owned Batch Computation | 744.665 us | 145.206 us | -80.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| HT_DCPHASE | 256 | TA-Lib C | direct C caller-owned | 19.780 us | 20.914 us | +5.7% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| HT_DCPHASE | 256 | fast-ta | Streaming Computation | 23.801 us | 26.721 us | +12.3% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| HT_DCPHASE | 4096 | fast-ta | Streaming Computation | 438.688 us | 464.454 us | +5.9% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| HT_DCPHASE | 65536 | TA-Lib C | direct C caller-owned | 6386.302 us | 5878.031 us | -8.0% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| HT_DCPHASE | 65536 | fast-ta | Streaming Computation | 7716.521 us | 6972.781 us | -9.6% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| HT_DCPHASE | 65536 | fast-ta | caller-owned Batch Computation | 7266.188 us | 7785.375 us | +7.1% | investigated clean large-input regression despite ring-wrap source change; unresolved |
+| LINEARREG | 256 | fast-ta | caller-owned Batch Computation | 1.547 us | 1.451 us | -6.2% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| LINEARREG | 4096 | TA-Lib C | direct C caller-owned | 24.319 us | 26.019 us | +7.0% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| LINEARREG | 4096 | fast-ta | Prepared Batch Runner | 24.279 us | 22.929 us | -5.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| LINEARREG | 65536 | fast-ta | Prepared Batch Runner | 389.320 us | 368.481 us | -5.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| LINEARREG | 65536 | fast-ta | Streaming Computation | 366.212 us | 397.650 us | +8.6% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| MACD | 256 | fast-ta | Owned Compact Output | 2.287 us | 0.853 us | -62.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| MACD | 256 | fast-ta | Prepared Batch Runner | 2.107 us | 0.749 us | -64.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| MACD | 256 | fast-ta | Streaming Computation | 2.427 us | 3.639 us | +49.9% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| MACD | 256 | fast-ta | caller-owned Batch Computation | 2.145 us | 0.754 us | -64.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| MACD | 4096 | fast-ta | Owned Compact Output | 35.291 us | 14.078 us | -60.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| MACD | 4096 | fast-ta | Prepared Batch Runner | 33.907 us | 12.864 us | -62.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| MACD | 4096 | fast-ta | Streaming Computation | 40.044 us | 60.315 us | +50.6% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| MACD | 4096 | fast-ta | caller-owned Batch Computation | 33.646 us | 12.796 us | -62.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| MACD | 65536 | fast-ta | Owned Compact Output | 558.419 us | 215.467 us | -61.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| MACD | 65536 | fast-ta | Prepared Batch Runner | 546.110 us | 205.955 us | -62.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| MACD | 65536 | fast-ta | Streaming Computation | 668.370 us | 987.068 us | +47.7% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| MACD | 65536 | fast-ta | caller-owned Batch Computation | 542.822 us | 206.358 us | -62.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 256 | fast-ta | Owned Compact Output | 0.469 us | 0.316 us | -32.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 256 | fast-ta | Prepared Batch Runner | 0.432 us | 0.281 us | -34.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 256 | fast-ta | Streaming Computation | 1.444 us | 1.592 us | +10.2% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| OBV | 256 | fast-ta | caller-owned Batch Computation | 0.433 us | 0.282 us | -34.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 4096 | fast-ta | Owned Compact Output | 7.539 us | 5.323 us | -29.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 4096 | fast-ta | Prepared Batch Runner | 6.865 us | 4.810 us | -29.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 4096 | fast-ta | Streaming Computation | 23.226 us | 25.886 us | +11.5% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| OBV | 4096 | fast-ta | caller-owned Batch Computation | 6.846 us | 4.718 us | -31.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 65536 | TA-Lib C | direct C caller-owned | 58.744 us | 63.183 us | +7.6% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| OBV | 65536 | fast-ta | Owned Compact Output | 116.953 us | 80.052 us | -31.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 65536 | fast-ta | Prepared Batch Runner | 110.376 us | 83.020 us | -24.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| OBV | 65536 | fast-ta | Streaming Computation | 372.231 us | 440.522 us | +18.3% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| OBV | 65536 | fast-ta | caller-owned Batch Computation | 112.289 us | 75.109 us | -33.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| RSI | 256 | fast-ta | Owned Compact Output | 1.385 us | 1.311 us | -5.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| RSI | 256 | fast-ta | caller-owned Batch Computation | 1.352 us | 1.275 us | -5.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| RSI | 4096 | fast-ta | Owned Compact Output | 23.429 us | 21.865 us | -6.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| RSI | 4096 | fast-ta | Prepared Batch Runner | 22.635 us | 21.424 us | -5.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| RSI | 4096 | fast-ta | caller-owned Batch Computation | 22.926 us | 21.325 us | -7.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| RSI | 65536 | fast-ta | Owned Compact Output | 369.772 us | 347.168 us | -6.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| RSI | 65536 | fast-ta | Prepared Batch Runner | 362.429 us | 342.975 us | -5.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| RSI | 65536 | fast-ta | caller-owned Batch Computation | 362.508 us | 342.299 us | -5.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SIN | 256 | fast-ta | Owned Compact Output | 1.001 us | 0.919 us | -8.2% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SIN | 256 | fast-ta | Prepared Batch Runner | 0.974 us | 0.879 us | -9.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SIN | 256 | fast-ta | caller-owned Batch Computation | 0.980 us | 0.885 us | -9.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SIN | 4096 | fast-ta | Prepared Batch Runner | 15.660 us | 14.476 us | -7.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SIN | 4096 | fast-ta | Streaming Computation | 15.861 us | 15.024 us | -5.3% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| SIN | 4096 | fast-ta | caller-owned Batch Computation | 15.990 us | 14.464 us | -9.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SIN | 65536 | TA-Lib Python | official Python NumPy API | 224.845 us | 240.153 us | +6.8% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| SIN | 65536 | fast-ta | Owned Compact Output | 255.499 us | 235.257 us | -7.9% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SIN | 65536 | fast-ta | Prepared Batch Runner | 254.931 us | 232.510 us | -8.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SIN | 65536 | fast-ta | caller-owned Batch Computation | 260.683 us | 232.133 us | -11.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 256 | fast-ta | Owned Compact Output | 0.369 us | 0.290 us | -21.4% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 256 | fast-ta | Prepared Batch Runner | 0.340 us | 0.256 us | -24.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 256 | fast-ta | caller-owned Batch Computation | 0.330 us | 0.258 us | -21.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 4096 | fast-ta | Owned Compact Output | 5.875 us | 4.780 us | -18.6% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 4096 | fast-ta | Prepared Batch Runner | 5.616 us | 4.333 us | -22.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 4096 | fast-ta | caller-owned Batch Computation | 5.436 us | 4.341 us | -20.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 65536 | fast-ta | Owned Compact Output | 97.371 us | 73.667 us | -24.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 65536 | fast-ta | Prepared Batch Runner | 90.739 us | 69.842 us | -23.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| SMA | 65536 | fast-ta | Streaming Computation | 327.410 us | 353.419 us | +7.9% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| SMA | 65536 | fast-ta | caller-owned Batch Computation | 87.381 us | 75.163 us | -14.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 256 | TA-Lib C | direct C caller-owned | 0.105 us | 0.097 us | -6.8% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| TYPPRICE | 256 | fast-ta | Owned Compact Output | 0.419 us | 0.207 us | -50.7% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 256 | fast-ta | Prepared Batch Runner | 0.379 us | 0.173 us | -54.5% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 256 | fast-ta | Streaming Computation | 0.926 us | 1.949 us | +110.4% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| TYPPRICE | 256 | fast-ta | caller-owned Batch Computation | 0.382 us | 0.172 us | -55.0% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 4096 | fast-ta | Owned Compact Output | 6.163 us | 3.094 us | -49.8% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 4096 | fast-ta | Prepared Batch Runner | 5.793 us | 2.540 us | -56.2% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 4096 | fast-ta | Streaming Computation | 14.779 us | 31.050 us | +110.1% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| TYPPRICE | 4096 | fast-ta | caller-owned Batch Computation | 5.674 us | 2.536 us | -55.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 65536 | TA-Lib Python | official Python NumPy API | 18.256 us | 20.639 us | +13.1% | external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source |
+| TYPPRICE | 65536 | fast-ta | Owned Compact Output | 107.088 us | 50.172 us | -53.1% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 65536 | fast-ta | Prepared Batch Runner | 100.924 us | 43.161 us | -57.2% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
+| TYPPRICE | 65536 | fast-ta | Streaming Computation | 239.960 us | 494.505 us | +106.1% | untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim |
+| TYPPRICE | 65536 | fast-ta | caller-owned Batch Computation | 97.364 us | 43.482 us | -55.3% | clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies |
 
-Preserved diagnostic baseline comparison and regression dispositions
+Runtime platform qualification from committed JSONL
 
-Comparison source: commit b156ac1ec5c781af0a386c4deab4769a4c5479c1 (dirty: true), 270 rows. Changes use Rust/C ratio normalization to reduce host-load drift. Because this predecessor is dirty and cross-run, changes above 5% are documented but are not presented as source-level regression verdicts.
+These rows are parsed from the named JSONL artifacts. Speedup is scalar median divided by the matching backend median only when mode, precision, input size, and timed boundary match. A value below 1x means the SIMD backend was slower on this runner. The public x86 row has no matching public scalar row and is therefore not compared with the validation-excluded explicit scalar kernel.
 
-| Definition | Input | Diagnostic Rust/C | Final Rust/C | Change | Explicit disposition |
-|---|---:|---:|---:|---:|---|
-| ADD | 256 | 4.063x | 1.721x | -57.6% | directional improvement; dirty cross-run predecessor |
-| ADD | 4096 | 7.703x | 2.396x | -68.9% | directional improvement; dirty cross-run predecessor |
-| ADD | 65536 | 4.442x | 1.878x | -57.7% | directional improvement; dirty cross-run predecessor |
-| ADX | 256 | 1.208x | 1.088x | -9.9% | directional improvement; dirty cross-run predecessor |
-| ADX | 4096 | 1.188x | 1.067x | -10.2% | directional improvement; dirty cross-run predecessor |
-| ADX | 65536 | 1.179x | 1.058x | -10.2% | directional improvement; dirty cross-run predecessor |
-| ATR | 256 | 1.153x | 0.986x | -14.5% | directional improvement; dirty cross-run predecessor |
-| ATR | 4096 | 1.199x | 0.944x | -21.3% | directional improvement; dirty cross-run predecessor |
-| ATR | 65536 | 1.142x | 1.015x | -11.1% | directional improvement; dirty cross-run predecessor |
-| BBANDS | 256 | 0.976x | 0.834x | -14.5% | directional improvement; dirty cross-run predecessor |
-| BBANDS | 4096 | 0.975x | 0.842x | -13.7% | directional improvement; dirty cross-run predecessor |
-| BBANDS | 65536 | 0.735x | 0.682x | -7.2% | directional improvement; dirty cross-run predecessor |
-| CDL3WHITESOLDIERS | 256 | unavailable | 4.255x | unavailable | no matching diagnostic row |
-| CDL3WHITESOLDIERS | 4096 | unavailable | 4.029x | unavailable | no matching diagnostic row |
-| CDL3WHITESOLDIERS | 65536 | unavailable | 4.642x | unavailable | no matching diagnostic row |
-| CDLDOJI | 256 | 3.031x | 2.248x | -25.8% | directional improvement; dirty cross-run predecessor |
-| CDLDOJI | 4096 | 3.383x | 2.553x | -24.6% | directional improvement; dirty cross-run predecessor |
-| CDLDOJI | 65536 | 3.193x | 2.432x | -23.8% | directional improvement; dirty cross-run predecessor |
-| CDLENGULFING | 256 | 2.912x | 1.823x | -37.4% | directional improvement; dirty cross-run predecessor |
-| CDLENGULFING | 4096 | 3.433x | 2.112x | -38.5% | directional improvement; dirty cross-run predecessor |
-| CDLENGULFING | 65536 | 3.361x | 2.310x | -31.2% | directional improvement; dirty cross-run predecessor |
-| HT_DCPHASE | 256 | 1.215x | 1.162x | -4.4% | within 5% normalized cross-run band |
-| HT_DCPHASE | 4096 | 1.220x | 1.229x | +0.7% | within 5% normalized cross-run band |
-| HT_DCPHASE | 65536 | 1.251x | 1.324x | +5.8% | documented >5% worsening; dirty cross-run predecessor cannot establish a source regression |
-| LINEARREG | 256 | 1.015x | 0.969x | -4.5% | within 5% normalized cross-run band |
-| LINEARREG | 4096 | 0.958x | 0.942x | -1.7% | within 5% normalized cross-run band |
-| LINEARREG | 65536 | 1.014x | 0.986x | -2.8% | within 5% normalized cross-run band |
-| MACD | 256 | 0.540x | 0.495x | -8.4% | directional improvement; dirty cross-run predecessor |
-| MACD | 4096 | 0.510x | 0.461x | -9.6% | directional improvement; dirty cross-run predecessor |
-| MACD | 65536 | 0.514x | 0.461x | -10.4% | directional improvement; dirty cross-run predecessor |
-| OBV | 256 | 1.757x | 1.158x | -34.1% | directional improvement; dirty cross-run predecessor |
-| OBV | 4096 | 1.842x | 1.197x | -35.0% | directional improvement; dirty cross-run predecessor |
-| OBV | 65536 | 1.893x | 1.189x | -37.2% | directional improvement; dirty cross-run predecessor |
-| RSI | 256 | 0.943x | 0.912x | -3.3% | within 5% normalized cross-run band |
-| RSI | 4096 | 0.976x | 0.927x | -5.1% | directional improvement; dirty cross-run predecessor |
-| RSI | 65536 | 0.987x | 0.930x | -5.7% | directional improvement; dirty cross-run predecessor |
-| SIN | 256 | 1.090x | 1.004x | -7.9% | directional improvement; dirty cross-run predecessor |
-| SIN | 4096 | 1.003x | 1.035x | +3.3% | within 5% normalized cross-run band |
-| SIN | 65536 | 1.139x | 1.031x | -9.4% | directional improvement; dirty cross-run predecessor |
-| SMA | 256 | 0.699x | 0.562x | -19.6% | directional improvement; dirty cross-run predecessor |
-| SMA | 4096 | 5.348x | 0.592x | -88.9% | directional improvement; dirty cross-run predecessor |
-| SMA | 65536 | 0.726x | 0.639x | -12.0% | directional improvement; dirty cross-run predecessor |
-| TYPPRICE | 256 | 3.961x | 1.764x | -55.5% | directional improvement; dirty cross-run predecessor |
-| TYPPRICE | 4096 | 7.193x | 2.965x | -58.8% | directional improvement; dirty cross-run predecessor |
-| TYPPRICE | 65536 | 5.128x | 2.117x | -58.7% | directional improvement; dirty cross-run predecessor |
+| Artifact | Platform | Precision | Runtime / CPU | Active backend | Equivalence | Workflow provenance | Commit |
+|---|---|---|---|---|---|---|---|
+| crates/ta-benchmarks/baselines/typprice_x86_f64_qualification.jsonl | x86_64 | f64 | rustc 1.97.1 (8bab26f4f 2026-07-14) / INTEL(R) XEON(R) PLATINUM 8573C | avx512f | all measurement rows verified | run [31513123909](https://github.com/XMethues/fast-ta/actions/runs/31513123909), job 93851587082 | 0306801184363ae472b8fffab036ef8aa1740afd |
+| crates/ta-benchmarks/baselines/typprice_x86_f32_qualification.jsonl | x86_64 | f32 | rustc 1.97.1 (8bab26f4f 2026-07-14) / INTEL(R) XEON(R) PLATINUM 8573C | avx512f | all measurement rows verified | run [31513123909](https://github.com/XMethues/fast-ta/actions/runs/31513123909), job 93851587082 | 0306801184363ae472b8fffab036ef8aa1740afd |
+| crates/ta-benchmarks/baselines/typprice_wasm_qualification.jsonl | wasm32-unknown-unknown | f64 | Node.js v22.23.1 / AMD EPYC 7763 64-Core Processor | simd128 | all measurement rows verified | run [31513123909](https://github.com/XMethues/fast-ta/actions/runs/31513123909), job 93851587045 | 0306801184363ae472b8fffab036ef8aa1740afd |
+
+| Platform | Precision | Input | Mode | Backend | Median [95% CI] | Throughput | Speedup vs matching scalar | Disposition |
+|---|---|---:|---|---|---:|---:|---:|---|
+| x86_64 | f64 | 256 | explicit kernel | avx2 | 4.367 us [4.366, 4.371] | 58.623 Mobs/s | 0.403x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 256 | explicit kernel | avx512f | 3.839 us [3.837, 3.842] | 66.690 Mobs/s | 0.459x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 256 | explicit kernel | scalar | 1.761 us [1.704, 1.770] | 145.372 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f64 | 256 | public TYPPRICE | avx512f | 9.623 us [9.591, 9.693] | 26.603 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f64 | 4096 | explicit kernel | avx2 | 70.919 us [70.864, 71.041] | 57.756 Mobs/s | 0.399x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 4096 | explicit kernel | avx512f | 62.524 us [62.426, 62.836] | 65.511 Mobs/s | 0.453x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 4096 | explicit kernel | scalar | 28.315 us [27.936, 28.562] | 144.657 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f64 | 4096 | public TYPPRICE | avx512f | 152.944 us [152.645, 153.759] | 26.781 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f64 | 65536 | explicit kernel | avx2 | 1149.706 us [1148.793, 1152.454] | 57.002 Mobs/s | 0.370x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 65536 | explicit kernel | avx512f | 1021.110 us [1020.291, 1023.281] | 64.181 Mobs/s | 0.417x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f64 | 65536 | explicit kernel | scalar | 425.395 us [423.657, 428.187] | 154.059 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f64 | 65536 | public TYPPRICE | avx512f | 2459.657 us [2457.219, 2469.729] | 26.644 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f32 | 256 | explicit kernel | avx2 | 2.176 us [2.175, 2.179] | 117.642 Mobs/s | 0.792x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f32 | 256 | explicit kernel | avx512f | 1.916 us [1.914, 1.929] | 133.622 Mobs/s | 0.899x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f32 | 256 | explicit kernel | scalar | 1.723 us [1.681, 1.791] | 148.614 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f32 | 256 | public TYPPRICE | avx512f | 4.931 us [4.926, 4.967] | 51.915 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f32 | 4096 | explicit kernel | avx2 | 35.472 us [35.040, 35.917] | 115.473 Mobs/s | 0.767x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f32 | 4096 | explicit kernel | avx512f | 30.969 us [30.935, 30.994] | 132.262 Mobs/s | 0.878x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f32 | 4096 | explicit kernel | scalar | 27.196 us [26.698, 28.299] | 150.608 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f32 | 4096 | public TYPPRICE | avx512f | 77.277 us [77.179, 77.427] | 53.004 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| x86_64 | f32 | 65536 | explicit kernel | avx2 | 568.253 us [566.595, 569.271] | 115.329 Mobs/s | 0.759x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f32 | 65536 | explicit kernel | avx512f | 496.464 us [496.025, 497.357] | 132.006 Mobs/s | 0.868x | slower than scalar on this runner; no practical benefit |
+| x86_64 | f32 | 65536 | explicit kernel | scalar | 431.033 us [424.076, 432.954] | 152.044 Mobs/s | 1.000x | scalar reference |
+| x86_64 | f32 | 65536 | public TYPPRICE | avx512f | 1236.320 us [1234.333, 1240.567] | 53.009 Mobs/s | unavailable | no matching scalar row with the same timed boundary |
+| wasm32-unknown-unknown | f64 | 256 | public WASM typprice | scalar | 4.556 us [4.190, 5.229] | 56.185 Mobs/s | 1.000x | scalar reference |
+| wasm32-unknown-unknown | f64 | 256 | public WASM typprice | simd128 | 2.615 us [2.207, 3.152] | 97.907 Mobs/s | 1.743x | practical benefit on this runner |
+| wasm32-unknown-unknown | f64 | 4096 | public WASM typprice | scalar | 20.894 us [20.327, 27.815] | 196.034 Mobs/s | 1.000x | scalar reference |
+| wasm32-unknown-unknown | f64 | 4096 | public WASM typprice | simd128 | 12.793 us [12.692, 12.923] | 320.163 Mobs/s | 1.633x | practical benefit on this runner |
+| wasm32-unknown-unknown | f64 | 65536 | public WASM typprice | scalar | 338.469 us [331.961, 374.564] | 193.625 Mobs/s | 1.000x | scalar reference |
+| wasm32-unknown-unknown | f64 | 65536 | public WASM typprice | simd128 | 212.544 us [206.725, 268.432] | 308.340 Mobs/s | 1.592x | practical benefit on this runner |
 
 Validation and allocation boundaries
 
-The Rust timings retain the public finite-input validation, capacity, Output Range, and validation-before-mutation contracts. Validation and computation were not timed separately in this matrix; the direct C row is therefore a comparative kernel reference, not evidence that Rust validation should be removed.
+The Rust matrix timings retain public finite-input validation, capacity, Output Range, and validation-before-mutation contracts. Validation and computation were not timed separately in the catalogue matrix; the direct C row is a comparative kernel reference, not evidence that Rust validation should be removed.
 
 | Implementation | Mode | Timed allocation/boundary evidence from raw rows |
 |---|---|---|
@@ -233,13 +427,9 @@ The Rust timings retain the public finite-input validation, capacity, Output Ran
 | fast-ta | Streaming Computation | StreamingComputation::reset plus one next call per observation; stream and output allocation excluded |
 | fast-ta | caller-owned Batch Computation | IndicatorConfig::compute_into; caller output allocation excluded |
 
-Platform SIMD qualification
+Final AArch64 qualification
 
-| Platform | Status | Speed claim |
-|---|---|---|
-| AArch64 | public TYPPRICE batch path exercised on Apple M2 with std/f64; scalar fallback remains available | measured only on this Apple M2 run |
-| x86_64 | AVX-512F/AVX2 dispatch and scalar fallback compile-verified at 079a39c; not executed on this AArch64 host | no x86 speed measurement |
-| wasm32 | SIMD128 and scalar fallback compile-verified at 079a39c; not executed as a speed benchmark on this host | no WASM speed measurement |
+The clean final matrix exercised the public TYPPRICE caller-owned path on Apple M2 / Darwin 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:27:52 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T8112 with architecture `aarch64` and commit 1d6b6be76456ee53f6748ed537ef155146203047. This is the only AArch64 timing claim; scalar fallback remains available. x86_64 and WASM claims above come only from their committed runtime JSONL artifacts.
 
 Detailed raw-row projection
 

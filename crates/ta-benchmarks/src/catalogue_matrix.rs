@@ -1,6 +1,7 @@
 //! Deterministic fixtures, semantic gates, raw rows, statistics, and reporting
 //! for the opt-in representative Indicator Catalogue comparison.
 
+use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -632,17 +633,18 @@ pub fn parse_raw_rows(input: &str) -> Result<Vec<BenchmarkRow>, String> {
         .collect()
 }
 
-pub const OPTIMIZATION_EVIDENCE_HEADER: &str =
-    "stage\tcase_id\tinput_length\trust_median_ns\tc_median_ns\tsource";
+pub const OPTIMIZATION_EVIDENCE_HEADER: &str = "ticket\tcase_ids\tfocused_commands\thypotheses\tconfirmed_evidence_kind\tconfirmed_evidence\tneighboring_workloads\tneighboring_disposition";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct OptimizationEvidenceRow {
-    pub stage: String,
-    pub case_id: String,
-    pub input_length: usize,
-    pub rust_median_ns: f64,
-    pub c_median_ns: f64,
-    pub source: String,
+    pub ticket: String,
+    pub case_ids: Vec<String>,
+    pub focused_commands: Vec<String>,
+    pub hypotheses: Vec<String>,
+    pub confirmed_evidence_kind: String,
+    pub confirmed_evidence: String,
+    pub neighboring_workloads: String,
+    pub neighboring_disposition: String,
 }
 
 pub fn read_optimization_evidence(path: &Path) -> Result<Vec<OptimizationEvidenceRow>, String> {
@@ -661,31 +663,250 @@ pub fn parse_optimization_evidence(input: &str) -> Result<Vec<OptimizationEviden
         .filter(|(_, line)| !line.is_empty())
         .map(|(index, line)| {
             let fields = line.split('\t').collect::<Vec<_>>();
-            if fields.len() != 6 {
+            if fields.len() != 8 {
                 return Err(format!(
-                    "optimization evidence row {} has {} fields, expected 6",
+                    "optimization evidence row {} has {} fields, expected 8",
                     index + 2,
                     fields.len()
                 ));
             }
-            let rust_median_ns = parse::<f64>(fields[3], "rust_median_ns")?;
-            let c_median_ns = parse::<f64>(fields[4], "c_median_ns")?;
-            if rust_median_ns <= 0.0 || c_median_ns <= 0.0 {
+            let case_ids = split_evidence_list(fields[1]);
+            let focused_commands = split_evidence_list(fields[2]);
+            let hypotheses = split_evidence_list(fields[3]);
+            if case_ids.is_empty() || case_ids.len() != focused_commands.len() {
                 return Err(format!(
-                    "optimization evidence row {} has a non-positive median",
+                    "optimization evidence row {} must have one focused command per case",
                     index + 2
                 ));
             }
+            if !(3..=5).contains(&hypotheses.len()) {
+                return Err(format!(
+                    "optimization evidence row {} must contain 3 to 5 ranked hypotheses",
+                    index + 2
+                ));
+            }
+            if fields[4] != "source" && fields[4] != "profile" && fields[4] != "disassembly" {
+                return Err(format!(
+                    "optimization evidence row {} has unsupported confirmed evidence kind {:?}",
+                    index + 2,
+                    fields[4]
+                ));
+            }
             Ok(OptimizationEvidenceRow {
-                stage: fields[0].to_owned(),
-                case_id: fields[1].to_owned(),
-                input_length: parse(fields[2], "input_length")?,
-                rust_median_ns,
-                c_median_ns,
-                source: fields[5].to_owned(),
+                ticket: fields[0].to_owned(),
+                case_ids,
+                focused_commands,
+                hypotheses,
+                confirmed_evidence_kind: fields[4].to_owned(),
+                confirmed_evidence: fields[5].to_owned(),
+                neighboring_workloads: fields[6].to_owned(),
+                neighboring_disposition: fields[7].to_owned(),
             })
         })
         .collect()
+}
+
+fn split_evidence_list(value: &str) -> Vec<String> {
+    value
+        .split(" || ")
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlatformQualification {
+    pub artifact: String,
+    pub platform: String,
+    pub precision: String,
+    pub runtime: String,
+    pub cpu: String,
+    pub os: String,
+    pub commit: String,
+    pub workflow_run_id: u64,
+    pub workflow_run_url: String,
+    pub workflow_job_id: u64,
+    pub active_backend: String,
+    pub feature_flags: String,
+    pub measurements: Vec<QualificationMeasurement>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct QualificationMeasurement {
+    pub mode: String,
+    pub backend: String,
+    pub input_length: usize,
+    pub equivalent_to_scalar: bool,
+    pub semantic_status: String,
+    pub timing_status: String,
+    pub median_ns: f64,
+    pub ci95_lower_ns: f64,
+    pub ci95_upper_ns: f64,
+    pub throughput_observations_per_second: f64,
+    pub sample_count: usize,
+    pub timed_boundary: String,
+}
+
+pub fn read_platform_qualification(path: &Path) -> Result<PlatformQualification, String> {
+    let input =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    parse_platform_qualification(&input, &path.display().to_string())
+}
+
+pub fn parse_platform_qualification(
+    input: &str,
+    artifact: &str,
+) -> Result<PlatformQualification, String> {
+    let mut metadata = None;
+    let mut measurements = Vec::new();
+    for (index, line) in input
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.is_empty())
+    {
+        let value: Value = serde_json::from_str(line)
+            .map_err(|error| format!("{artifact} JSONL row {}: {error}", index + 1))?;
+        match json_string(&value, "record")?.as_str() {
+            "metadata" => {
+                if metadata.is_some() {
+                    return Err(format!("{artifact} has more than one metadata record"));
+                }
+                let active_backend = value
+                    .get("active_backend")
+                    .and_then(Value::as_str)
+                    .or_else(|| value.get("simd_backend").and_then(Value::as_str))
+                    .ok_or_else(|| format!("{artifact} metadata is missing a runtime backend"))?
+                    .to_owned();
+                let feature_flags = ["scalar_feature_flags", "simd_feature_flags"]
+                    .into_iter()
+                    .filter_map(|key| {
+                        value
+                            .get(key)
+                            .and_then(Value::as_str)
+                            .map(|flag| format!("{key}={flag}"))
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                metadata = Some((
+                    json_string(&value, "platform")?,
+                    json_string(&value, "precision")?,
+                    json_string(&value, "runtime")?,
+                    json_string(&value, "cpu")?,
+                    json_optional_string(&value, "os"),
+                    json_string(&value, "commit")?,
+                    json_u64(&value, "workflow_run_id")?,
+                    json_string(&value, "workflow_run_url")?,
+                    json_u64(&value, "workflow_job_id")?,
+                    active_backend,
+                    feature_flags,
+                ));
+            }
+            "measurement" => {
+                let measurement = QualificationMeasurement {
+                    mode: json_string(&value, "mode")?,
+                    backend: json_string(&value, "backend")?,
+                    input_length: json_u64(&value, "input_length")? as usize,
+                    equivalent_to_scalar: json_bool(&value, "equivalent_to_scalar")?,
+                    semantic_status: json_string(&value, "semantic_status")?,
+                    timing_status: json_string(&value, "timing_status")?,
+                    median_ns: json_f64(&value, "median_ns")?,
+                    ci95_lower_ns: json_f64(&value, "ci95_lower_ns")?,
+                    ci95_upper_ns: json_f64(&value, "ci95_upper_ns")?,
+                    throughput_observations_per_second: json_f64(
+                        &value,
+                        "throughput_observations_per_second",
+                    )?,
+                    sample_count: json_u64(&value, "sample_count")? as usize,
+                    timed_boundary: json_string(&value, "timed_boundary")?,
+                };
+                if !INPUT_LENGTHS.contains(&measurement.input_length) {
+                    return Err(format!(
+                        "{artifact} has unsupported input length {}",
+                        measurement.input_length
+                    ));
+                }
+                if measurement.median_ns <= 0.0
+                    || measurement.ci95_lower_ns <= 0.0
+                    || measurement.ci95_upper_ns <= 0.0
+                    || measurement.throughput_observations_per_second <= 0.0
+                {
+                    return Err(format!("{artifact} has non-positive timing evidence"));
+                }
+                measurements.push(measurement);
+            }
+            "validation" => {}
+            other => return Err(format!("{artifact} has unsupported record type {other:?}")),
+        }
+    }
+    let (
+        platform,
+        precision,
+        runtime,
+        cpu,
+        os,
+        commit,
+        workflow_run_id,
+        workflow_run_url,
+        workflow_job_id,
+        active_backend,
+        feature_flags,
+    ) = metadata.ok_or_else(|| format!("{artifact} has no metadata record"))?;
+    if measurements.is_empty() {
+        return Err(format!("{artifact} has no measurement records"));
+    }
+    Ok(PlatformQualification {
+        artifact: artifact.to_owned(),
+        platform,
+        precision,
+        runtime,
+        cpu,
+        os,
+        commit,
+        workflow_run_id,
+        workflow_run_url,
+        workflow_job_id,
+        active_backend,
+        feature_flags,
+        measurements,
+    })
+}
+
+fn json_string(value: &Value, key: &str) -> Result<String, String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("JSON record is missing string field {key:?}"))
+}
+
+fn json_optional_string(value: &Value, key: &str) -> String {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn json_u64(value: &Value, key: &str) -> Result<u64, String> {
+    value
+        .get(key)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("JSON record is missing integer field {key:?}"))
+}
+
+fn json_f64(value: &Value, key: &str) -> Result<f64, String> {
+    value
+        .get(key)
+        .and_then(Value::as_f64)
+        .ok_or_else(|| format!("JSON record is missing numeric field {key:?}"))
+}
+
+fn json_bool(value: &Value, key: &str) -> Result<bool, String> {
+    value
+        .get(key)
+        .and_then(Value::as_bool)
+        .ok_or_else(|| format!("JSON record is missing boolean field {key:?}"))
 }
 
 pub fn render_report(rows: &[BenchmarkRow]) -> Result<String, String> {
@@ -893,7 +1114,14 @@ pub fn render_report_with_comparison(
     rows: &[BenchmarkRow],
     baseline_rows: &[BenchmarkRow],
     optimization_evidence: &[OptimizationEvidenceRow],
+    platform_qualifications: &[PlatformQualification],
 ) -> Result<String, String> {
+    if baseline_rows.is_empty() {
+        return Err("clean pre-optimization baseline rows are required".to_owned());
+    }
+    if baseline_rows.iter().any(|row| row.dirty) {
+        return Err("the canonical pre-optimization baseline must be clean".to_owned());
+    }
     let report = render_report(rows)?;
     let marker = "\nDetailed raw-row projection\n";
     let (summary, details) = report
@@ -902,6 +1130,9 @@ pub fn render_report_with_comparison(
     let first = rows
         .first()
         .ok_or_else(|| "cannot render a comparison report without raw rows".to_owned())?;
+    let baseline_first = baseline_rows
+        .first()
+        .ok_or_else(|| "clean pre-optimization baseline rows are required".to_owned())?;
     let mut comparison = String::new();
 
     let verified = rows
@@ -929,18 +1160,34 @@ pub fn render_report_with_comparison(
             .collect::<Vec<_>>()
             .join(", "),
         if clean_run {
-            "clean canonical run"
+            "clean canonical final run"
         } else {
             "dirty diagnostic run"
         }
     ));
+    comparison.push_str(&format!(
+        "\nCanonical comparison baseline\n\nThe committed clean pre-optimization matrix is the sole comparison baseline: commit {} (dirty: {}), {} rows, {} on {} {}. The historical post-scalar dirty diagnostic is not an input to this report.\n",
+        baseline_first.commit,
+        baseline_first.dirty,
+        baseline_rows.len(),
+        clean(&baseline_first.cpu),
+        clean(&baseline_first.os),
+        clean(&baseline_first.arch)
+    ));
 
     let current_pairs = primary_pairs(rows);
+    let baseline_pairs = primary_pairs(baseline_rows);
     let current_by_case = current_pairs
         .iter()
         .cloned()
         .map(|pair| ((pair.case_id.clone(), pair.input_length), pair))
         .collect::<BTreeMap<_, _>>();
+    let baseline_by_case = baseline_pairs
+        .iter()
+        .cloned()
+        .map(|pair| ((pair.case_id.clone(), pair.input_length), pair))
+        .collect::<BTreeMap<_, _>>();
+
     comparison.push_str(
         "\nPer-case caller-owned Rust/C latency ratios\n\n| Definition | 256 | 4,096 | 65,536 | 65,536 disposition |\n|---|---:|---:|---:|---|\n",
     );
@@ -955,7 +1202,7 @@ pub fn render_report_with_comparison(
                 .map(|pair| pair.ratio)
         });
         let large_disposition = match ratios[2] {
-            Some(ratio) if ratio > 1.05 => "unresolved gap above the 5% band",
+            Some(ratio) if ratio > 1.05 => "remaining gap above the 5% band",
             Some(ratio) if ratio < 0.95 => "fast-ta faster",
             Some(_) => "parity band",
             None => "unavailable",
@@ -969,7 +1216,7 @@ pub fn render_report_with_comparison(
     }
 
     comparison.push_str(
-        "\nExecution-path cost summaries\n\nRatios are geometric path/C latency indices over matching cases. Only the caller-owned Rust/C row is a kernel comparison; the other rows deliberately expose distinct public or user-facing costs.\n\n| Input | Path | Cases | Geometric path/C ratio | Interpretation |\n|---:|---|---:|---:|---|\n",
+        "\nExecution-path cost summaries\n\nRatios are geometric path/C latency indices over matching cases. Only the caller-owned Rust/C row is a kernel comparison; the other rows expose distinct public or user-facing costs.\n\n| Input | Path | Cases | Geometric path/C ratio | Interpretation |\n|---:|---|---:|---:|---|\n",
     );
     let paths = [
         (
@@ -1021,94 +1268,238 @@ pub fn render_report_with_comparison(
     }
 
     comparison.push_str(
-        "\nTargeted optimization effects\n\nThe before values below are parsed from the committed evidence TSV. Issue 56 did not retain a clean complete first-delivery raw artifact, so each row names its actual evidence stage rather than promoting a dirty diagnostic run to a canonical baseline.\n\n| Definition | Input | Evidence stage | Source | Before Rust/C | Final Rust/C | Ratio change | Disposition |\n|---|---:|---|---|---:|---:|---:|---|\n",
+        "\nDurable optimization diagnosis and reproduction evidence\n\nEvidence kinds below are literal. `source` means source inspection and clean matrix behavior, not a sampled profiler or invented profiler percentage.\n\n| Ticket | Cases | Exact focused command(s) | Generated verdict from final clean rows |\n|---|---|---|---|\n",
     );
-    let mut evidence = optimization_evidence.to_vec();
-    evidence.sort_by(|left, right| {
-        left.case_id
-            .cmp(&right.case_id)
-            .then_with(|| left.input_length.cmp(&right.input_length))
-    });
-    for historical in evidence {
-        let before_ratio = historical.rust_median_ns / historical.c_median_ns;
-        let Some(current) =
-            current_by_case.get(&(historical.case_id.clone(), historical.input_length))
-        else {
-            comparison.push_str(&format!(
-                "| {} | {} | {} | {} | {before_ratio:.3}x | unavailable | unavailable | final comparable row absent |\n",
-                historical.case_id,
-                historical.input_length,
-                clean(&historical.stage),
-                clean(&historical.source)
-            ));
-            continue;
-        };
-        let change = (current.ratio / before_ratio - 1.0) * 100.0;
-        let disposition = if historical.stage.contains("baseline unavailable") {
-            "post-fusion stability only; no retained pre-fusion measurement"
-        } else if change < -5.0 {
-            "practical improvement"
-        } else if change > 5.0 {
-            "documented cross-run worsening above 5%"
-        } else {
-            "within the 5% cross-run band"
-        };
+    for evidence in optimization_evidence {
+        let verdicts = evidence
+            .case_ids
+            .iter()
+            .map(|case_id| focused_verdict(case_id, &current_by_case))
+            .collect::<Vec<_>>()
+            .join("; ");
         comparison.push_str(&format!(
-            "| {} | {} | {} | {} | {before_ratio:.3}x | {:.3}x | {change:+.1}% | {disposition} |\n",
-            historical.case_id,
-            historical.input_length,
-            clean(&historical.stage),
-            clean(&historical.source),
-            current.ratio
+            "| {} | {} | {} | {} |\n",
+            clean(&evidence.ticket),
+            evidence.case_ids.join(", "),
+            evidence
+                .focused_commands
+                .iter()
+                .map(|command| format!("`{}`", clean(command)))
+                .collect::<Vec<_>>()
+                .join("<br>"),
+            verdicts
+        ));
+    }
+    comparison.push_str(
+        "\n| Ticket | Ranked falsifiable hypotheses | Confirmed evidence | Neighboring-workload disposition |\n|---|---|---|---|\n",
+    );
+    for evidence in optimization_evidence {
+        comparison.push_str(&format!(
+            "| {} | {} | {}: {} | {} — {} |\n",
+            clean(&evidence.ticket),
+            evidence
+                .hypotheses
+                .iter()
+                .enumerate()
+                .map(|(index, hypothesis)| format!("{}. {}", index + 1, clean(hypothesis)))
+                .collect::<Vec<_>>()
+                .join("<br>"),
+            evidence.confirmed_evidence_kind,
+            clean(&evidence.confirmed_evidence),
+            clean(&evidence.neighboring_workloads),
+            clean(&evidence.neighboring_disposition)
         ));
     }
 
-    comparison
-        .push_str("\nPreserved diagnostic baseline comparison and regression dispositions\n\n");
-    if baseline_rows.is_empty() {
-        comparison.push_str(
-            "Unavailable: issue 56 did not retain a clean complete first-delivery raw artifact, and no diagnostic comparison rows were supplied.\n",
+    comparison.push_str(
+        "\nClean before/after optimization effects\n\nEvery number in this table is read from matching caller-owned fast-ta rows in the committed clean pre-optimization and final matrices. Throughput is observations per second from those raw rows; the verdict is regenerated from the final same-run Rust/C pair.\n\n| Ticket | Definition | Input | Clean pre median [95% CI] | Clean pre throughput | Final median [95% CI] | Final throughput | Rust latency change | Focused verdict |\n|---|---|---:|---:|---:|---:|---:|---:|---|\n",
+    );
+    for evidence in optimization_evidence {
+        for case_id in &evidence.case_ids {
+            for input_length in INPUT_LENGTHS {
+                let before = find_measured_row(
+                    baseline_rows,
+                    "fast-ta",
+                    case_id,
+                    RUST_CALLER_MODE,
+                    input_length,
+                );
+                let after =
+                    find_measured_row(rows, "fast-ta", case_id, RUST_CALLER_MODE, input_length);
+                match (before, after) {
+                    (Some(before), Some(after)) => {
+                        let before_stats = before.stats.as_ref().expect("measured row has stats");
+                        let after_stats = after.stats.as_ref().expect("measured row has stats");
+                        let change = (after_stats.median_ns / before_stats.median_ns - 1.0) * 100.0;
+                        let verdict = current_by_case
+                            .get(&(case_id.clone(), input_length))
+                            .map_or_else(
+                                || "unavailable".to_owned(),
+                                |pair| focused_verdict_label(pair.ratio),
+                            );
+                        comparison.push_str(&format!(
+                            "| {} | {case_id} | {input_length} | {} | {:.3} Mobs/s | {} | {:.3} Mobs/s | {change:+.1}% | {verdict} |\n",
+                            clean(&evidence.ticket),
+                            format_median_ci(before_stats),
+                            before_stats.throughput_observations_per_second / 1.0e6,
+                            format_median_ci(after_stats),
+                            after_stats.throughput_observations_per_second / 1.0e6
+                        ));
+                    }
+                    _ => comparison.push_str(&format!(
+                        "| {} | {case_id} | {input_length} | unavailable | unavailable | unavailable | unavailable | unavailable | matching clean rows absent |\n",
+                        clean(&evidence.ticket)
+                    )),
+                }
+            }
+        }
+    }
+
+    comparison.push_str(
+        "\nCDLDOJI clean-data investigation\n\nThe clean comparison, not the historical dirty diagnostic, shows whether the representative regressed. Source inspection identifies the only CDLDOJI batch change as migration to the shared `compute_single_setting_batch_into` rolling helper; Streaming did not take that helper. The table keeps raw and Rust/C-normalized changes separate so reference-run movement cannot be mistaken for a source effect.\n\n| Input | Pre Rust | Final Rust | Rust change | Pre Rust/C | Final Rust/C | Normalized ratio change | Disposition |\n|---:|---:|---:|---:|---:|---:|---:|---|\n",
+    );
+    for input_length in INPUT_LENGTHS {
+        let before = find_measured_row(
+            baseline_rows,
+            "fast-ta",
+            "CDLDOJI",
+            RUST_CALLER_MODE,
+            input_length,
         );
-    } else {
-        let baseline_first = &baseline_rows[0];
-        comparison.push_str(&format!(
-            "Comparison source: commit {} (dirty: {}), {} rows. Changes use Rust/C ratio normalization to reduce host-load drift. Because this predecessor is dirty and cross-run, changes above 5% are documented but are not presented as source-level regression verdicts.\n\n",
-            baseline_first.commit,
-            baseline_first.dirty,
-            baseline_rows.len()
-        ));
-        comparison.push_str(
-            "| Definition | Input | Diagnostic Rust/C | Final Rust/C | Change | Explicit disposition |\n|---|---:|---:|---:|---:|---|\n",
-        );
-        let baseline_by_case = primary_pairs(baseline_rows)
-            .into_iter()
-            .map(|pair| ((pair.case_id.clone(), pair.input_length), pair))
-            .collect::<BTreeMap<_, _>>();
-        for (key, current) in &current_by_case {
-            let Some(baseline) = baseline_by_case.get(key) else {
-                comparison.push_str(&format!(
-                    "| {} | {} | unavailable | {:.3}x | unavailable | no matching diagnostic row |\n",
-                    key.0, key.1, current.ratio
-                ));
-                continue;
-            };
-            let change = (current.ratio / baseline.ratio - 1.0) * 100.0;
-            let disposition = if change < -5.0 {
-                "directional improvement; dirty cross-run predecessor"
-            } else if change > 5.0 {
-                "documented >5% worsening; dirty cross-run predecessor cannot establish a source regression"
+        let after = find_measured_row(rows, "fast-ta", "CDLDOJI", RUST_CALLER_MODE, input_length);
+        let before_pair = baseline_by_case.get(&("CDLDOJI".to_owned(), input_length));
+        let after_pair = current_by_case.get(&("CDLDOJI".to_owned(), input_length));
+        if let (Some(before), Some(after), Some(before_pair), Some(after_pair)) =
+            (before, after, before_pair, after_pair)
+        {
+            let before_stats = before.stats.as_ref().expect("measured row has stats");
+            let after_stats = after.stats.as_ref().expect("measured row has stats");
+            let rust_change = (after_stats.median_ns / before_stats.median_ns - 1.0) * 100.0;
+            let ratio_change = (after_pair.ratio / before_pair.ratio - 1.0) * 100.0;
+            let disposition = if ratio_change > 5.0 {
+                "confirmed clean batch regression; source-correlated with shared-helper migration; unresolved"
+            } else if ratio_change < -5.0 {
+                "clean normalized improvement"
             } else {
-                "within 5% normalized cross-run band"
+                "within the 5% normalized band"
             };
             comparison.push_str(&format!(
-                "| {} | {} | {:.3}x | {:.3}x | {change:+.1}% | {disposition} |\n",
-                key.0, key.1, baseline.ratio, current.ratio
+                "| {input_length} | {:.3} us | {:.3} us | {rust_change:+.1}% | {:.3}x | {:.3}x | {ratio_change:+.1}% | {disposition} |\n",
+                before_stats.median_ns / 1_000.0,
+                after_stats.median_ns / 1_000.0,
+                before_pair.ratio,
+                after_pair.ratio
+            ));
+        }
+    }
+
+    let baseline_by_row = baseline_rows
+        .iter()
+        .map(|row| (comparison_row_key(row), row))
+        .collect::<BTreeMap<_, _>>();
+    let mut changes = rows
+        .iter()
+        .filter_map(|current| {
+            let baseline = baseline_by_row.get(&comparison_row_key(current))?;
+            let before = baseline.stats.as_ref()?;
+            let after = current.stats.as_ref()?;
+            let change = (after.median_ns / before.median_ns - 1.0) * 100.0;
+            (change.abs() > 5.0).then_some((*baseline, current, change))
+        })
+        .collect::<Vec<_>>();
+    changes.sort_by(|left, right| {
+        left.1
+            .case_id
+            .cmp(&right.1.case_id)
+            .then_with(|| left.1.input_length.cmp(&right.1.input_length))
+            .then_with(|| left.1.implementation.cmp(&right.1.implementation))
+            .then_with(|| left.1.mode.cmp(&right.1.mode))
+    });
+    comparison.push_str(&format!(
+        "\nComplete >5% clean pre/final classification\n\n{} matching raw rows changed by more than 5%. This list is exhaustive for measured rows shared by the two committed clean artifacts. An investigation classification is not a same-run causal claim; the matrices were separate clean runs, and external C/Python movement is retained as a control.\n\n| Definition | Input | Implementation | Mode | Pre median | Final median | Change | Classification |\n|---|---:|---|---|---:|---:|---:|---|\n",
+        changes.len()
+    ));
+    for (baseline, current, change) in changes {
+        let before = baseline.stats.as_ref().expect("change row has stats");
+        let after = current.stats.as_ref().expect("change row has stats");
+        comparison.push_str(&format!(
+            "| {} | {} | {} | {} | {:.3} us | {:.3} us | {change:+.1}% | {} |\n",
+            current.case_id,
+            current.input_length,
+            current.implementation,
+            current.mode,
+            before.median_ns / 1_000.0,
+            after.median_ns / 1_000.0,
+            clean_change_classification(current, change)
+        ));
+    }
+
+    comparison.push_str(
+        "\nRuntime platform qualification from committed JSONL\n\nThese rows are parsed from the named JSONL artifacts. Speedup is scalar median divided by the matching backend median only when mode, precision, input size, and timed boundary match. A value below 1x means the SIMD backend was slower on this runner. The public x86 row has no matching public scalar row and is therefore not compared with the validation-excluded explicit scalar kernel.\n\n| Artifact | Platform | Precision | Runtime / CPU | Active backend | Equivalence | Workflow provenance | Commit |\n|---|---|---|---|---|---|---|---|\n",
+    );
+    for qualification in platform_qualifications {
+        let equivalent = qualification.measurements.iter().all(|measurement| {
+            measurement.equivalent_to_scalar
+                && measurement.semantic_status == "verified"
+                && measurement.timing_status == "measured"
+        });
+        comparison.push_str(&format!(
+            "| {} | {} | {} | {} / {} | {} | {} | run [{}]({}), job {} | {} |\n",
+            clean(&qualification.artifact),
+            clean(&qualification.platform),
+            clean(&qualification.precision),
+            clean(&qualification.runtime),
+            clean(&qualification.cpu),
+            clean(&qualification.active_backend),
+            if equivalent {
+                "all measurement rows verified"
+            } else {
+                "qualification contains an unverified row"
+            },
+            qualification.workflow_run_id,
+            clean(&qualification.workflow_run_url),
+            qualification.workflow_job_id,
+            qualification.commit
+        ));
+    }
+    comparison.push_str(
+        "\n| Platform | Precision | Input | Mode | Backend | Median [95% CI] | Throughput | Speedup vs matching scalar | Disposition |\n|---|---|---:|---|---|---:|---:|---:|---|\n",
+    );
+    for qualification in platform_qualifications {
+        let mut measurements = qualification.measurements.iter().collect::<Vec<_>>();
+        measurements.sort_by(|left, right| {
+            left.input_length
+                .cmp(&right.input_length)
+                .then_with(|| left.mode.cmp(&right.mode))
+                .then_with(|| left.backend.cmp(&right.backend))
+        });
+        for measurement in measurements {
+            let scalar = qualification.measurements.iter().find(|candidate| {
+                candidate.mode == measurement.mode
+                    && candidate.input_length == measurement.input_length
+                    && candidate.backend == "scalar"
+                    && candidate.timed_boundary == measurement.timed_boundary
+            });
+            let speedup = scalar.map(|scalar| scalar.median_ns / measurement.median_ns);
+            let disposition = qualification_disposition(measurement, speedup);
+            comparison.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {:.3} us [{:.3}, {:.3}] | {:.3} Mobs/s | {} | {disposition} |\n",
+                clean(&qualification.platform),
+                clean(&qualification.precision),
+                measurement.input_length,
+                clean(&measurement.mode),
+                clean(&measurement.backend),
+                measurement.median_ns / 1_000.0,
+                measurement.ci95_lower_ns / 1_000.0,
+                measurement.ci95_upper_ns / 1_000.0,
+                measurement.throughput_observations_per_second / 1.0e6,
+                format_ratio(speedup)
             ));
         }
     }
 
     comparison.push_str(
-        "\nValidation and allocation boundaries\n\nThe Rust timings retain the public finite-input validation, capacity, Output Range, and validation-before-mutation contracts. Validation and computation were not timed separately in this matrix; the direct C row is therefore a comparative kernel reference, not evidence that Rust validation should be removed.\n\n| Implementation | Mode | Timed allocation/boundary evidence from raw rows |\n|---|---|---|\n",
+        "\nValidation and allocation boundaries\n\nThe Rust matrix timings retain public finite-input validation, capacity, Output Range, and validation-before-mutation contracts. Validation and computation were not timed separately in the catalogue matrix; the direct C row is a comparative kernel reference, not evidence that Rust validation should be removed.\n\n| Implementation | Mode | Timed allocation/boundary evidence from raw rows |\n|---|---|---|\n",
     );
     let boundaries = rows
         .iter()
@@ -1127,27 +1518,119 @@ pub fn render_report_with_comparison(
         ));
     }
 
-    comparison.push_str(
-        "\nPlatform SIMD qualification\n\n| Platform | Status | Speed claim |\n|---|---|---|\n",
-    );
-    if first.arch == "aarch64" && current_by_case.contains_key(&("TYPPRICE".to_owned(), 65_536)) {
-        comparison.push_str(&format!(
-            "| AArch64 | public TYPPRICE batch path exercised on {} with std/f64; scalar fallback remains available | measured only on this Apple M2 run |\n",
-            clean(&first.cpu)
-        ));
-    } else {
-        comparison.push_str(
-            "| AArch64 | unavailable in these raw rows; scalar fallback remains available | no measurement |\n",
-        );
-    }
-    comparison.push_str(
-        "| x86_64 | AVX-512F/AVX2 dispatch and scalar fallback compile-verified at 079a39c; not executed on this AArch64 host | no x86 speed measurement |\n",
-    );
-    comparison.push_str(
-        "| wasm32 | SIMD128 and scalar fallback compile-verified at 079a39c; not executed as a speed benchmark on this host | no WASM speed measurement |\n",
-    );
+    comparison.push_str(&format!(
+        "\nFinal AArch64 qualification\n\nThe clean final matrix exercised the public TYPPRICE caller-owned path on {} / {} with architecture `{}` and commit {}. This is the only AArch64 timing claim; scalar fallback remains available. x86_64 and WASM claims above come only from their committed runtime JSONL artifacts.\n",
+        clean(&first.cpu),
+        clean(&first.os),
+        clean(&first.arch),
+        first.commit
+    ));
 
     Ok(format!("{summary}{comparison}{marker}{details}"))
+}
+
+fn find_measured_row<'a>(
+    rows: &'a [BenchmarkRow],
+    implementation: &str,
+    case_id: &str,
+    mode: &str,
+    input_length: usize,
+) -> Option<&'a BenchmarkRow> {
+    rows.iter().find(|row| {
+        row.implementation == implementation
+            && row.case_id == case_id
+            && row.mode == mode
+            && row.input_length == input_length
+            && row.semantic_status == "verified"
+            && row.timing_status == "measured"
+            && row.stats.is_some()
+    })
+}
+
+fn format_median_ci(stats: &TimingStats) -> String {
+    format!(
+        "{:.3} us [{:.3}, {:.3}]",
+        stats.median_ns / 1_000.0,
+        stats.ci95_lower_ns / 1_000.0,
+        stats.ci95_upper_ns / 1_000.0
+    )
+}
+
+fn focused_verdict(
+    case_id: &str,
+    current_by_case: &BTreeMap<(String, usize), PrimaryPair>,
+) -> String {
+    let verdicts = INPUT_LENGTHS.map(|input_length| {
+        current_by_case
+            .get(&(case_id.to_owned(), input_length))
+            .map_or_else(
+                || format!("{input_length} unavailable"),
+                |pair| format!("{input_length} {}", focused_verdict_label(pair.ratio)),
+            )
+    });
+    format!("{case_id}: {}", verdicts.join(", "))
+}
+
+fn focused_verdict_label(ratio: f64) -> String {
+    if ratio <= 1.05 {
+        format!("PASS ({ratio:.3}x)")
+    } else {
+        format!("FAIL ({ratio:.3}x)")
+    }
+}
+
+fn comparison_row_key(
+    row: &BenchmarkRow,
+) -> (String, String, String, String, usize, String, usize) {
+    (
+        row.implementation.clone(),
+        row.case_id.clone(),
+        row.mode.clone(),
+        row.parameters.clone(),
+        row.input_length,
+        row.fixture.clone(),
+        row.float_width,
+    )
+}
+
+fn clean_change_classification(row: &BenchmarkRow, change: f64) -> &'static str {
+    if row.implementation != "fast-ta" {
+        return "external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source";
+    }
+    if row.mode == RUST_STREAMING_MODE {
+        return "untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim";
+    }
+    if row.case_id == "CDLDOJI" && change > 5.0 {
+        return "investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved";
+    }
+    if row.case_id == "HT_DCPHASE" && change > 5.0 {
+        return "investigated clean large-input regression despite ring-wrap source change; unresolved";
+    }
+    if change < -5.0 {
+        return "clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies";
+    }
+    "clean batch regression above 5%; classified as unresolved"
+}
+
+fn qualification_disposition(
+    measurement: &QualificationMeasurement,
+    speedup: Option<f64>,
+) -> &'static str {
+    if !measurement.equivalent_to_scalar || measurement.semantic_status != "verified" {
+        "invalid for performance comparison: equivalence not verified"
+    } else if measurement.backend == "scalar" {
+        "scalar reference"
+    } else if let Some(speedup) = speedup {
+        if speedup > 1.05 {
+            "practical benefit on this runner"
+        } else if speedup < 0.95 {
+            "slower than scalar on this runner; no practical benefit"
+        } else {
+            "within the 5% band on this runner"
+        }
+    } else {
+        "no matching scalar row with the same timed boundary"
+    }
 }
 
 fn format_ratio(ratio: Option<f64>) -> String {

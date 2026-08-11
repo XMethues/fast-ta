@@ -2,7 +2,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use ta_benchmarks::catalogue_matrix::{
-    read_optimization_evidence, read_raw_rows, render_report_with_comparison,
+    read_optimization_evidence, read_platform_qualification, read_raw_rows,
+    render_report_with_comparison,
 };
 
 #[derive(Debug)]
@@ -11,6 +12,7 @@ struct Args {
     report: PathBuf,
     baseline: Option<PathBuf>,
     optimization_evidence: Option<PathBuf>,
+    platform_qualifications: Vec<PathBuf>,
 }
 
 fn main() {
@@ -35,7 +37,17 @@ fn run() -> Result<(), String> {
         .map(read_optimization_evidence)
         .transpose()?
         .unwrap_or_default();
-    let report = render_report_with_comparison(&rows, &baseline_rows, &optimization_evidence)?;
+    let platform_qualifications = args
+        .platform_qualifications
+        .iter()
+        .map(|path| read_platform_qualification(path))
+        .collect::<Result<Vec<_>, _>>()?;
+    let report = render_report_with_comparison(
+        &rows,
+        &baseline_rows,
+        &optimization_evidence,
+        &platform_qualifications,
+    )?;
     if let Some(parent) = args.report.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("create {}: {error}", parent.display()))?;
@@ -51,6 +63,7 @@ fn parse_args() -> Result<Args, String> {
     let mut report = None;
     let mut baseline = None;
     let mut optimization_evidence = None;
+    let mut platform_qualifications = Vec::new();
     let mut arguments = std::env::args_os().skip(1);
     while let Some(argument) = arguments.next() {
         match argument.to_str() {
@@ -59,6 +72,14 @@ fn parse_args() -> Result<Args, String> {
             Some("--baseline") => baseline = arguments.next().map(PathBuf::from),
             Some("--optimization-evidence") => {
                 optimization_evidence = arguments.next().map(PathBuf::from)
+            }
+            Some("--platform-qualification") => {
+                platform_qualifications.push(
+                    arguments
+                        .next()
+                        .map(PathBuf::from)
+                        .ok_or_else(|| "--platform-qualification requires PATH".to_owned())?,
+                );
             }
             Some(other) => return Err(format!("unknown argument {other:?}")),
             None => return Err("arguments must be valid UTF-8".to_owned()),
@@ -69,5 +90,6 @@ fn parse_args() -> Result<Args, String> {
         report: report.ok_or_else(|| "--report PATH is required".to_owned())?,
         baseline,
         optimization_evidence,
+        platform_qualifications,
     })
 }

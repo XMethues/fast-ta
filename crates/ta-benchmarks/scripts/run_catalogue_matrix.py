@@ -39,9 +39,14 @@ MINIMUM_PYTHON = (3, 10)
 REPOSITORY = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = REPOSITORY / "target" / "catalogue-matrix"
 BENCHMARK_CRATE = REPOSITORY / "crates" / "ta-benchmarks"
-DEFAULT_BASELINE = BENCHMARK_CRATE / "baselines" / "catalogue_matrix_post_scalar_diagnostic.tsv"
+DEFAULT_BASELINE = BENCHMARK_CRATE / "baselines" / "catalogue_matrix_pre_optimization.tsv"
 DEFAULT_OPTIMIZATION_EVIDENCE = (
     BENCHMARK_CRATE / "baselines" / "catalogue_matrix_optimization_evidence.tsv"
+)
+DEFAULT_PLATFORM_QUALIFICATIONS = (
+    BENCHMARK_CRATE / "baselines" / "typprice_x86_f64_qualification.jsonl",
+    BENCHMARK_CRATE / "baselines" / "typprice_x86_f32_qualification.jsonl",
+    BENCHMARK_CRATE / "baselines" / "typprice_wasm_qualification.jsonl",
 )
 PUBLISHED_RAW = BENCHMARK_CRATE / "baselines" / "catalogue_matrix_optimized.tsv"
 PUBLISHED_REPORT = BENCHMARK_CRATE / "CATALOGUE_MATRIX_REPORT.txt"
@@ -385,6 +390,8 @@ def generate_report(args: argparse.Namespace, output_dir: Path) -> None:
         arguments.extend(
             ("--optimization-evidence", str(args.optimization_evidence.resolve()))
         )
+    for qualification in DEFAULT_PLATFORM_QUALIFICATIONS:
+        arguments.extend(("--platform-qualification", str(qualification.resolve())))
     run(arguments, cwd=REPOSITORY)
 
 

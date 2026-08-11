@@ -3,10 +3,11 @@ use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ta_benchmarks::catalogue_matrix::{
-    catalogue_fixture, fixture_checksum, read_raw_rows, render_report,
-    render_report_with_comparison, timing_stats, validate_outputs, write_raw_rows, BenchmarkRow,
-    CaseKind, OptimizationEvidenceRow, OutputValues, TimingStats, VerifiedOutput, C_DIRECT_MODE,
-    FIXTURE_ID, INPUT_LENGTHS, MATRIX, PATTERN_SHAPES, RUST_CALLER_MODE,
+    catalogue_fixture, fixture_checksum, parse_optimization_evidence, parse_platform_qualification,
+    read_platform_qualification, read_raw_rows, render_report, render_report_with_comparison,
+    timing_stats, validate_outputs, write_raw_rows, BenchmarkRow, CaseKind,
+    OptimizationEvidenceRow, OutputValues, TimingStats, VerifiedOutput, C_DIRECT_MODE, FIXTURE_ID,
+    INPUT_LENGTHS, MATRIX, PATTERN_SHAPES, RUST_CALLER_MODE,
 };
 
 static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
@@ -297,14 +298,32 @@ fn report_is_generated_from_reread_rows_and_separates_comparable_from_unavailabl
         })
         .collect::<Vec<_>>();
     let evidence = [OptimizationEvidenceRow {
-        stage: "pre-target".to_owned(),
-        case_id: "SMA".to_owned(),
-        input_length: 65_536,
-        rust_median_ns: 4_000.0,
-        c_median_ns: 1_000.0,
-        source: "test raw rows".to_owned(),
+        ticket: "test-ticket".to_owned(),
+        case_ids: vec!["SMA".to_owned()],
+        focused_commands: vec![
+            "python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case SMA".to_owned(),
+        ],
+        hypotheses: vec![
+            "validation dominates".to_owned(),
+            "batch state dominates".to_owned(),
+            "output writes dominate".to_owned(),
+        ],
+        confirmed_evidence_kind: "source".to_owned(),
+        confirmed_evidence: "test source seam".to_owned(),
+        neighboring_workloads: "EMA".to_owned(),
+        neighboring_disposition: "not measured in test fixture".to_owned(),
     }];
-    let report = render_report_with_comparison(&reread, &baseline, &evidence)
+    let baseline_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("baselines");
+    let qualifications = [
+        "typprice_x86_f64_qualification.jsonl",
+        "typprice_x86_f32_qualification.jsonl",
+        "typprice_wasm_qualification.jsonl",
+    ]
+    .map(|name| {
+        read_platform_qualification(&baseline_dir.join(name))
+            .expect("read committed qualification for renderer")
+    });
+    let report = render_report_with_comparison(&reread, &baseline, &evidence, &qualifications)
         .expect("render report from reread raw rows");
     fs::remove_file(&path).expect("remove test raw rows");
 
@@ -319,7 +338,75 @@ fn report_is_generated_from_reread_rows_and_separates_comparable_from_unavailabl
     assert!(report.contains("65536 | caller-owned Batch Computation vs direct C caller-owned"));
     assert!(report.contains("Run completeness and semantic gate"));
     assert!(report.contains("Per-case caller-owned Rust/C latency ratios"));
-    assert!(report.contains("Targeted optimization effects"));
-    assert!(report.contains("4.000x | 2.000x | -50.0% | practical improvement"));
-    assert!(report.contains("Platform SIMD qualification"));
+    assert!(report.contains("Clean before/after optimization effects"));
+    assert!(report.contains("4.000 us [3.600, 4.400]"));
+    assert!(report.contains("Runtime platform qualification from committed JSONL"));
+    assert!(report.contains("run [31513123909]"));
+    assert!(report.contains("slower than scalar on this runner; no practical benefit"));
+    assert!(report.contains("practical benefit on this runner"));
+    assert!(report.contains("Canonical comparison baseline"));
+    assert!(!report.contains("clean baseline missing"));
+}
+
+#[test]
+fn durable_evidence_requires_ranked_hypotheses_and_source_kind() {
+    let input = concat!(
+        "ticket\tcase_ids\tfocused_commands\thypotheses\tconfirmed_evidence_kind\tconfirmed_evidence\tneighboring_workloads\tneighboring_disposition\n",
+        "issue\tADX\tpython3 runner.py --case ADX\tvalidation || state || writes\tsource\tAdxBatchState\tADXR\tnot represented\n",
+    );
+    let rows = parse_optimization_evidence(input).expect("parse durable evidence");
+    assert_eq!(rows[0].case_ids, ["ADX"]);
+    assert_eq!(rows[0].hypotheses.len(), 3);
+
+    let too_few = input.replace("validation || state || writes", "validation || state");
+    assert!(parse_optimization_evidence(&too_few)
+        .expect_err("two hypotheses must fail")
+        .contains("3 to 5"));
+}
+
+#[test]
+fn platform_qualification_parser_requires_provenance_and_preserves_timings() {
+    let input = concat!(
+        r#"{"record":"metadata","platform":"x86_64","precision":"f64","runtime":"rustc test","cpu":"test cpu","commit":"abc","workflow_run_id":42,"workflow_run_url":"https://example.test/runs/42","workflow_job_id":7,"active_backend":"avx2"}"#,
+        "\n",
+        r#"{"record":"measurement","mode":"explicit kernel","backend":"scalar","input_length":256,"equivalent_to_scalar":true,"semantic_status":"verified","timing_status":"measured","median_ns":100.0,"ci95_lower_ns":90.0,"ci95_upper_ns":110.0,"throughput_observations_per_second":2560000000.0,"sample_count":31,"timed_boundary":"kernel"}"#,
+        "\n",
+    );
+    let qualification =
+        parse_platform_qualification(input, "test.jsonl").expect("parse qualification JSONL");
+    assert_eq!(qualification.workflow_run_id, 42);
+    assert_eq!(qualification.active_backend, "avx2");
+    assert_eq!(qualification.measurements[0].median_ns, 100.0);
+
+    let missing_run = input.replace("\"workflow_run_id\":42,", "");
+    assert!(parse_platform_qualification(&missing_run, "test.jsonl")
+        .expect_err("workflow run is required")
+        .contains("workflow_run_id"));
+}
+
+#[test]
+fn committed_platform_qualification_artifacts_are_runtime_evidence() {
+    let baseline_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("baselines");
+    let expected = [
+        ("typprice_x86_f64_qualification.jsonl", "x86_64", "f64", 12),
+        ("typprice_x86_f32_qualification.jsonl", "x86_64", "f32", 12),
+        (
+            "typprice_wasm_qualification.jsonl",
+            "wasm32-unknown-unknown",
+            "f64",
+            6,
+        ),
+    ];
+    for (name, platform, precision, measurement_count) in expected {
+        let qualification = read_platform_qualification(&baseline_dir.join(name))
+            .expect("read committed qualification");
+        assert_eq!(qualification.platform, platform);
+        assert_eq!(qualification.precision, precision);
+        assert_eq!(qualification.workflow_run_id, 31_513_123_909);
+        assert_eq!(qualification.measurements.len(), measurement_count);
+        assert!(qualification
+            .measurements
+            .iter()
+            .all(|measurement| measurement.equivalent_to_scalar));
+    }
 }

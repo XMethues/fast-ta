@@ -130,22 +130,42 @@ crates/ta-benchmarks/baselines/catalogue_matrix_optimized.tsv
 crates/ta-benchmarks/CATALOGUE_MATRIX_REPORT.txt
 ```
 
-To regenerate and republish only the human report from an existing raw run:
+The canonical comparison input is
+`baselines/catalogue_matrix_pre_optimization.tsv`, a clean complete 270-row
+pre-optimization matrix. The historical
+`baselines/catalogue_matrix_post_scalar_diagnostic.tsv` is retained only as a
+dirty historical diagnostic and is not read by the canonical report generator.
+Durable ticket diagnosis, hypotheses, focused commands, and neighboring
+dispositions come from
+`baselines/catalogue_matrix_optimization_evidence.tsv`. Before/final medians,
+95% confidence intervals, throughput, verdicts, and every change above 5% are
+derived by the renderer from the two clean raw matrices rather than copied into
+prose.
+
+To regenerate the committed report only from committed evidence artifacts:
 
 ```bash
-python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --publish-existing
+cargo run --release -p ta-benchmarks --features catalogue-matrix \
+  --bin catalogue-report -- \
+  --raw crates/ta-benchmarks/baselines/catalogue_matrix_optimized.tsv \
+  --baseline crates/ta-benchmarks/baselines/catalogue_matrix_pre_optimization.tsv \
+  --optimization-evidence crates/ta-benchmarks/baselines/catalogue_matrix_optimization_evidence.tsv \
+  --platform-qualification crates/ta-benchmarks/baselines/typprice_x86_f64_qualification.jsonl \
+  --platform-qualification crates/ta-benchmarks/baselines/typprice_x86_f32_qualification.jsonl \
+  --platform-qualification crates/ta-benchmarks/baselines/typprice_wasm_qualification.jsonl \
+  --report crates/ta-benchmarks/CATALOGUE_MATRIX_REPORT.txt
 ```
 
-The generated report also reads
-`baselines/catalogue_matrix_post_scalar_diagnostic.tsv` and
-`baselines/catalogue_matrix_optimization_evidence.tsv`. The former is
-explicitly a dirty diagnostic comparison, not a replacement for the missing
-clean issue-56 first-delivery artifact; every cross-run change beyond 5% is
-therefore listed with that limitation. Output Range, per-column count, float
-values, and exact Pattern Signal codes are checked before any row for a case is
-timed. Mismatches suppress that case's timings and fail the command. The
-published Apple M2 report measures the AArch64 path only: x86 and WASM variants
-are compile-verified but have no speed measurements in that artifact.
+The platform JSONL inputs are runtime evidence from successful GitHub Actions
+run `31513123909` at commit
+`0306801184363ae472b8fffab036ef8aa1740afd`. The report parser preserves the
+runtime backend, scalar equivalence, per-size medians, confidence intervals,
+throughput, speedup, timed boundary, workflow run/job, and commit provenance.
+x86 public validated timings are not compared with validation-excluded explicit
+kernel timings; WASM rows cover the public `wasm-bindgen` TYPPRICE boundary.
+Output Range, per-column count, float values, and exact Pattern Signal codes are
+checked before any catalogue row is timed. Mismatches suppress that case's
+timings and fail the command.
 
 For focused diagnosis, run one case at a time. Each command below exercises all
 three canonical input lengths while reusing the pinned dependency cache:

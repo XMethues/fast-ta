@@ -22,13 +22,14 @@ fi
 
 export QUALIFICATION_OUTPUT="${output_dir}/x86_typprice_f64.jsonl"
 cargo test --locked -p ta-core \
+  --release \
   --features simd-qualification \
   --test x86_typprice_qualification \
   -- qualify_public_typprice_on_x86_simd --exact --ignored --nocapture
 
 export QUALIFICATION_OUTPUT="${output_dir}/x86_typprice_f32.jsonl"
 cargo test --locked -p ta-core \
-  --no-default-features \
+  --release \
   --features f32,std,simd-qualification \
   --test x86_typprice_qualification \
   -- qualify_public_typprice_on_x86_simd --exact --ignored --nocapture
