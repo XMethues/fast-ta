@@ -10,6 +10,7 @@ if [[ "$(uname -m)" != "x86_64" ]]; then
 fi
 
 mkdir -p "${output_dir}"
+output_dir="$(cd "${output_dir}" && pwd)"
 cd "${repo_root}"
 export QUALIFICATION_COMMIT="${QUALIFICATION_COMMIT:-$(git rev-parse HEAD)}"
 export QUALIFICATION_RUNTIME="${QUALIFICATION_RUNTIME:-$(rustc --version)}"
