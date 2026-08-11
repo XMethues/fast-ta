@@ -17,35 +17,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # x86_64 Linux (default)
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             rust: stable
-            flags: ""
+            rustflags: ""
+            mode: test
 
-          # x86_64 Linux with AVX2
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             rust: stable
-            flags: "-C target-feature=+avx2"
+            rustflags: "-C target-feature=+avx2"
+            mode: test
 
-          # ARM64 Linux
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            rust: stable
-            flags: ""
-
-          # ARM64 macOS (Apple Silicon)
           - target: aarch64-apple-darwin
             os: macos-latest
             rust: stable
-            flags: ""
+            rustflags: ""
+            mode: test
 
-          # WASM
           - target: wasm32-unknown-unknown
             os: ubuntu-latest
             rust: stable
-            flags: ""
+            rustflags: ""
+            mode: check
 
     steps:
       - name: Checkout code
@@ -56,26 +50,35 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           override: true
+          target: ${{ matrix.target }}
 
       - name: Build and test
-        run: |
-          cd crates/ta-core
-          cargo test --all-targets --verbose ${{ matrix.flags }}
+        if: matrix.mode == 'test'
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: cargo test -p ta-core --all-targets --verbose --target ${{ matrix.target }}
+
+      - name: Check cross-compiled target
+        if: matrix.mode == 'check'
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: cargo check -p ta-core --all-targets --verbose --target ${{ matrix.target }}
 
       - name: Test f32 correctness
-        if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.flags == ''
+        if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.rustflags == ''
         run: cargo test -p ta-core --no-default-features --features f32,std
 
       - name: Check no-std float modes
-        if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.flags == ''
+        if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.rustflags == ''
         run: |
           cargo check -p ta-core --lib --no-default-features --features f64,core_error
           cargo check -p ta-core --lib --no-default-features --features f32,core_error
 
       - name: Run clippy
-        run: |
-          cd crates/ta-core
-          cargo clippy --all-targets --verbose ${{ matrix.flags }}
+        if: matrix.mode == 'test'
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: cargo clippy -p ta-core --all-targets --verbose --target ${{ matrix.target }}
 
       - name: Run rustfmt check
         run: |
