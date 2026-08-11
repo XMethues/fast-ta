@@ -15,7 +15,7 @@ pub(crate) struct OhlcFixture {
     pub(crate) volume: Vec<Float>,
 }
 
-pub(crate) use ta_benchmarks::catalogue_matrix::series_fixture;
+pub(crate) use ta_benchmarks::fixture::series_fixture;
 
 pub(crate) fn ohlc_fixture(size: usize) -> OhlcFixture {
     let close = series_fixture(size, 0);

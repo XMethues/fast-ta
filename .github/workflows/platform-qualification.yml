@@ -1,0 +1,69 @@
+name: Platform qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  x86-typprice:
+    name: x86 TYPPRICE runtime qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Execute AVX2 and available AVX-512 qualification
+        env:
+          QUALIFICATION_COMMIT: ${{ github.sha }}
+        run: crates/ta-core/scripts/qualify_typprice_x86.sh target/qualification/x86
+
+      - name: Retain x86 timing and equivalence evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: typprice-x86-${{ github.sha }}
+          path: target/qualification/x86/*.jsonl
+          if-no-files-found: error
+          retention-days: 30
+
+  wasm-typprice:
+    name: WASM scalar and SIMD128 runtime qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain with WASM target
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Install matching wasm-bindgen CLI
+        run: cargo install wasm-bindgen-cli --version 0.2.126 --locked
+
+      - name: Execute scalar and SIMD128 public WASM qualification
+        env:
+          QUALIFICATION_COMMIT: ${{ github.sha }}
+        run: crates/ta-wasm/scripts/qualify_typprice_runtime.sh target/qualification/wasm/typprice.jsonl
+
+      - name: Retain WASM timing and equivalence evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: typprice-wasm-${{ github.sha }}
+          path: target/qualification/wasm/*.jsonl
+          if-no-files-found: error
+          retention-days: 30

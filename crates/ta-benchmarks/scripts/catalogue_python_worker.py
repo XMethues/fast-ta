@@ -24,7 +24,7 @@ EXPRESSIONS = {
     "HT_DCPHASE": "talib.HT_DCPHASE(close)",
     "CDLDOJI": "talib.CDLDOJI(open_, high, low, close)",
     "CDLENGULFING": "talib.CDLENGULFING(open_, high, low, close)",
-    "CDL3BLACKCROWS": "talib.CDL3BLACKCROWS(open_, high, low, close)",
+    "CDL3WHITESOLDIERS": "talib.CDL3WHITESOLDIERS(open_, high, low, close)",
     "LINEARREG": "talib.LINEARREG(close, timeperiod=14)",
     "TYPPRICE": "talib.TYPPRICE(high, low, close)",
     "OBV": "talib.OBV(close, volume)",
@@ -42,7 +42,7 @@ PARAMETERS = {
     "LINEARREG": {"timeperiod": 14},
 }
 
-INTEGER_CASES = {"CDLDOJI", "CDLENGULFING", "CDL3BLACKCROWS"}
+INTEGER_CASES = {"CDLDOJI", "CDLENGULFING", "CDL3WHITESOLDIERS"}
 
 
 def version_text(value: object) -> str:

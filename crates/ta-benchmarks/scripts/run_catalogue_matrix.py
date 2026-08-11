@@ -4,15 +4,18 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import csv
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import urllib.request
 
 TALIB_VERSION = "0.6.4"
@@ -43,6 +46,62 @@ DEFAULT_OPTIMIZATION_EVIDENCE = (
 PUBLISHED_RAW = BENCHMARK_CRATE / "baselines" / "catalogue_matrix_optimized.tsv"
 PUBLISHED_REPORT = BENCHMARK_CRATE / "CATALOGUE_MATRIX_REPORT.txt"
 
+CANONICAL_SAMPLES = 50
+CANONICAL_WARMUP_MS = 250
+CANONICAL_SAMPLE_MS = 10
+CASE_IDS = (
+    "SMA",
+    "BBANDS",
+    "RSI",
+    "MACD",
+    "ATR",
+    "ADX",
+    "HT_DCPHASE",
+    "CDLDOJI",
+    "CDLENGULFING",
+    "CDL3WHITESOLDIERS",
+    "LINEARREG",
+    "TYPPRICE",
+    "OBV",
+    "SIN",
+    "ADD",
+)
+INPUT_LENGTHS = (256, 4_096, 65_536)
+INPUT_CHECKSUMS = {
+    256: "fnv1a64:73fedfe0ae0a803f",
+    4_096: "fnv1a64:06be03be64d63c6c",
+    65_536: "fnv1a64:a4171d0a7611733a",
+}
+VARIANTS = (
+    ("fast-ta", "Owned Compact Output"),
+    ("fast-ta", "caller-owned Batch Computation"),
+    ("fast-ta", "Prepared Batch Runner"),
+    ("fast-ta", "Streaming Computation"),
+    ("TA-Lib C", "direct C caller-owned"),
+    ("TA-Lib Python", "official Python NumPy API"),
+)
+FIXED_PUBLICATION_FIELDS = {
+    "semantic_status": "verified",
+    "timing_status": "measured",
+    "sample_count": str(CANONICAL_SAMPLES),
+    "dirty": "false",
+    "fixture": "catalogue_fixture_v1:f64le",
+    "ta_lib_version": TALIB_VERSION,
+    "ta_lib_revision": TALIB_REVISION,
+    "python_binding_version": PYTHON_BINDING_VERSION,
+    "python_ta_lib_version": TALIB_VERSION,
+    "numpy_version": NUMPY_VERSION,
+    "float_width": "64",
+    "features": "ta-core=default(f64,std); ta-benchmarks=catalogue-matrix",
+}
+UNIFORM_PROVENANCE_FIELDS = (
+    "python_version",
+    "rustc",
+    "cpu",
+    "os",
+    "arch",
+    "commit",
+)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -121,6 +180,14 @@ def inspect_python(python: str) -> tuple[str, tuple[int, int, int]]:
 
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def checked_archive(source_archive: Path | None, deps_dir: Path) -> Path:
     archive = source_archive or deps_dir / f"ta-lib-{TALIB_VERSION}-src.tar.gz"
     if not archive.exists():
@@ -129,7 +196,7 @@ def checked_archive(source_archive: Path | None, deps_dir: Path) -> Path:
         print(f"Downloading {TALIB_ARCHIVE_URL}")
         urllib.request.urlretrieve(TALIB_ARCHIVE_URL, temporary)
         temporary.replace(archive)
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    digest = sha256_file(archive)
     if digest != TALIB_ARCHIVE_SHA256:
         raise RuntimeError(
             f"TA-Lib archive checksum mismatch: expected {TALIB_ARCHIVE_SHA256}, got {digest}"
@@ -137,20 +204,74 @@ def checked_archive(source_archive: Path | None, deps_dir: Path) -> Path:
     return archive
 
 
+def remove_staging_tree(staging: Path) -> None:
+    def make_directories_removable(directory: Path) -> None:
+        mode = stat.S_IMODE(directory.stat().st_mode)
+        directory.chmod(mode | stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+        with os.scandir(directory) as entries:
+            children = [
+                Path(entry.path)
+                for entry in entries
+                if entry.is_dir(follow_symlinks=False)
+            ]
+        for child in children:
+            make_directories_removable(child)
+
+    make_directories_removable(staging)
+    shutil.rmtree(staging)
+
+
 def extract_archive(archive: Path, destination: Path) -> Path:
+    archive_digest = sha256_file(archive)
+    if archive_digest != TALIB_ARCHIVE_SHA256:
+        raise RuntimeError(
+            f"TA-Lib archive checksum mismatch: expected {TALIB_ARCHIVE_SHA256}, "
+            f"got {archive_digest}"
+        )
+
     source = destination / f"ta-lib-{TALIB_VERSION}"
-    if source.exists():
-        return source
+    marker = source / ".fast-ta-source-pin"
+    expected_marker = (
+        f"version={TALIB_VERSION}\n"
+        f"revision={TALIB_REVISION}\n"
+        f"archive_sha256={archive_digest}\n"
+    )
+    try:
+        if marker.is_file() and marker.read_text(encoding="utf-8") == expected_marker:
+            return source
+    except (OSError, UnicodeError):
+        pass
+
     destination.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive, "r:gz") as bundle:
-        root = destination.resolve()
-        for member in bundle.getmembers():
-            member_path = (destination / member.name).resolve()
-            if root not in member_path.parents and member_path != root:
-                raise RuntimeError(f"unsafe TA-Lib archive member {member.name!r}")
-        bundle.extractall(destination)
-    if not source.exists():
-        raise RuntimeError(f"pinned archive did not contain {source.name}")
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{source.name}.extract-", dir=destination)
+    )
+    try:
+        with tarfile.open(archive, "r:gz") as bundle:
+            root = staging.resolve()
+            for member in bundle.getmembers():
+                member_path = (staging / member.name).resolve()
+                if root not in member_path.parents and member_path != root:
+                    raise RuntimeError(f"unsafe TA-Lib archive member {member.name!r}")
+                if not (member.isdir() or member.isfile()):
+                    raise RuntimeError(
+                        f"unsupported TA-Lib archive member {member.name!r}"
+                    )
+            bundle.extractall(staging)
+        extracted = staging / source.name
+        if not extracted.is_dir():
+            raise RuntimeError(f"pinned archive did not contain {source.name}")
+        extracted_mode = stat.S_IMODE(extracted.stat().st_mode)
+        extracted.chmod(extracted_mode | stat.S_IWUSR)
+        (extracted / marker.name).write_text(expected_marker, encoding="utf-8")
+        if source.exists() or source.is_symlink():
+            if source.is_dir() and not source.is_symlink():
+                shutil.rmtree(source)
+            else:
+                source.unlink()
+        extracted.replace(source)
+    finally:
+        remove_staging_tree(staging)
     return source
 
 
@@ -248,6 +369,8 @@ def generate_report(args: argparse.Namespace, output_dir: Path) -> None:
         "--release",
         "-p",
         "ta-benchmarks",
+        "--features",
+        "catalogue-matrix",
         "--bin",
         "catalogue-report",
         "--",
@@ -267,35 +390,154 @@ def generate_report(args: argparse.Namespace, output_dir: Path) -> None:
 
 def validate_publishable(raw_path: Path) -> None:
     with raw_path.open(newline="", encoding="utf-8") as raw:
-        rows = list(csv.DictReader(raw, delimiter="\t"))
-    if len(rows) != 15 * 3 * 6:
-        raise RuntimeError(f"expected 270 full-matrix rows, found {len(rows)}")
-    requirements = {
-        "semantic_status": "verified",
-        "timing_status": "measured",
-        "sample_count": "50",
-        "dirty": "false",
+        reader = csv.DictReader(raw, delimiter="\t")
+        rows = list(reader)
+        fields = set(reader.fieldnames or ())
+
+    required_fields = {
+        "case_id",
+        "input_length",
+        "implementation",
+        "mode",
+        "indicator_family",
+        "indicator_definition",
+        "parameters",
+        "output_kind",
+        "output_arity",
+        "input_checksum",
+        *FIXED_PUBLICATION_FIELDS,
+        *UNIFORM_PROVENANCE_FIELDS,
     }
-    for field, expected in requirements.items():
-        invalid = sum(row.get(field) != expected for row in rows)
+    missing_fields = sorted(required_fields - fields)
+    if missing_fields:
+        raise RuntimeError(
+            "cannot publish raw rows missing fields: " + ", ".join(missing_fields)
+        )
+
+    expected = Counter(
+        (case_id, str(input_length), implementation, mode)
+        for case_id in CASE_IDS
+        for input_length in INPUT_LENGTHS
+        for implementation, mode in VARIANTS
+    )
+    actual = Counter(
+        (
+            row["case_id"],
+            row["input_length"],
+            row["implementation"],
+            row["mode"],
+        )
+        for row in rows
+    )
+    if actual != expected:
+        missing = list((expected - actual).elements())
+        unexpected = list((actual - expected).elements())
+        raise RuntimeError(
+            "cannot publish incomplete case/input/mode matrix: "
+            f"missing={missing[:5]!r}; unexpected_or_duplicate={unexpected[:5]!r}"
+        )
+
+    for field, expected_value in FIXED_PUBLICATION_FIELDS.items():
+        invalid = sum(row[field] != expected_value for row in rows)
         if invalid:
             raise RuntimeError(
-                f"cannot publish: {invalid} rows have {field} other than {expected!r}"
+                f"cannot publish: {invalid} rows have {field} other than "
+                f"{expected_value!r}"
             )
-    commits = {row["commit"] for row in rows}
-    if len(commits) != 1 or "unavailable" in commits:
-        raise RuntimeError(f"cannot publish inconsistent commit provenance: {commits}")
+
+    for field in UNIFORM_PROVENANCE_FIELDS:
+        values = {row[field] for row in rows}
+        if len(values) != 1 or not next(iter(values), "") or "unavailable" in values:
+            raise RuntimeError(
+                f"cannot publish inconsistent {field} provenance: {values}"
+            )
+
+    for input_length, expected_checksum in INPUT_CHECKSUMS.items():
+        invalid = sum(
+            row["input_checksum"] != expected_checksum
+            for row in rows
+            if row["input_length"] == str(input_length)
+        )
+        if invalid:
+            raise RuntimeError(
+                f"cannot publish: {invalid} rows have noncanonical input checksum "
+                f"provenance for {input_length}"
+            )
+
+    definition_fields = (
+        "indicator_family",
+        "indicator_definition",
+        "parameters",
+        "output_kind",
+        "output_arity",
+    )
+    for case_id in CASE_IDS:
+        definitions = {
+            tuple(row[field] for field in definition_fields)
+            for row in rows
+            if row["case_id"] == case_id
+        }
+        if len(definitions) != 1:
+            raise RuntimeError(
+                f"cannot publish inconsistent case provenance for {case_id}: "
+                f"{definitions}"
+            )
 
 
 def publish(output_dir: Path) -> None:
     raw_path = output_dir / "catalogue-matrix-raw.tsv"
     report_path = output_dir / "catalogue-matrix-report.txt"
     validate_publishable(raw_path)
+    if not report_path.is_file():
+        raise RuntimeError(f"cannot publish missing generated report {report_path}")
     shutil.copy2(raw_path, PUBLISHED_RAW)
     shutil.copy2(report_path, PUBLISHED_REPORT)
     print(f"published raw rows: {PUBLISHED_RAW}")
     print(f"published human report: {PUBLISHED_REPORT}")
 
+
+def validate_publication_args(args: argparse.Namespace) -> None:
+    if args.publish and args.publish_existing:
+        raise SystemExit("--publish and --publish-existing are mutually exclusive")
+    if not (args.publish or args.publish_existing):
+        return
+
+    canonical_inputs = {
+        "--baseline": (args.baseline, DEFAULT_BASELINE),
+        "--optimization-evidence": (
+            args.optimization_evidence,
+            DEFAULT_OPTIMIZATION_EVIDENCE,
+        ),
+    }
+    invalid_inputs = [
+        flag
+        for flag, (actual, expected) in canonical_inputs.items()
+        if actual is None or actual.resolve() != expected.resolve()
+    ]
+    if invalid_inputs:
+        raise SystemExit(
+            "publication requires canonical comparison inputs: "
+            + ", ".join(invalid_inputs)
+        )
+
+    if args.publish:
+        if args.case is not None or args.input_length is not None:
+            raise SystemExit("--publish requires the complete matrix")
+        canonical_timing = {
+            "--samples": (args.samples, CANONICAL_SAMPLES),
+            "--warmup-ms": (args.warmup_ms, CANONICAL_WARMUP_MS),
+            "--sample-ms": (args.sample_ms, CANONICAL_SAMPLE_MS),
+        }
+        invalid_timing = [
+            f"{flag}={actual} (canonical {expected})"
+            for flag, (actual, expected) in canonical_timing.items()
+            if actual is not None and actual != expected
+        ]
+        if invalid_timing:
+            raise SystemExit(
+                "publication rejects noncanonical timing overrides: "
+                + ", ".join(invalid_timing)
+            )
 
 def validate_publish_existing_args(args: argparse.Namespace) -> None:
     incompatible = {
@@ -315,10 +557,12 @@ def validate_publish_existing_args(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = parse_args()
+    validate_publication_args(args)
+    if args.publish_existing:
+        validate_publish_existing_args(args)
     output_dir = output_directory(args)
     output_dir.mkdir(parents=True, exist_ok=True)
     if args.publish_existing:
-        validate_publish_existing_args(args)
         generate_report(args, output_dir)
         publish(output_dir)
         return
@@ -370,8 +614,6 @@ def main() -> None:
     )
     generate_report(args, output_dir)
     if args.publish:
-        if args.case is not None or args.input_length is not None:
-            raise SystemExit("--publish requires the complete matrix")
         publish(output_dir)
 
 

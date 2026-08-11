@@ -3,10 +3,10 @@ use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ta_benchmarks::catalogue_matrix::{
-    catalogue_fixture, fixture_checksum, read_raw_rows, render_report_with_comparison,
-    timing_stats, validate_outputs, write_raw_rows, BenchmarkRow, OptimizationEvidenceRow,
-    OutputValues, TimingStats, VerifiedOutput, C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS, MATRIX,
-    RUST_CALLER_MODE,
+    catalogue_fixture, fixture_checksum, read_raw_rows, render_report,
+    render_report_with_comparison, timing_stats, validate_outputs, write_raw_rows, BenchmarkRow,
+    CaseKind, OptimizationEvidenceRow, OutputValues, TimingStats, VerifiedOutput, C_DIRECT_MODE,
+    FIXTURE_ID, INPUT_LENGTHS, MATRIX, PATTERN_SHAPES, RUST_CALLER_MODE,
 };
 
 static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
@@ -98,6 +98,67 @@ fn matrix_is_the_representative_ticket_catalogue() {
     );
     assert_eq!(INPUT_LENGTHS, [256, 4_096, 65_536]);
     assert!(MATRIX.iter().all(|case| !case.parameters.is_empty()));
+}
+
+#[test]
+fn pattern_cases_cover_single_multi_and_setting_free_stateful_shapes() {
+    let expected = [
+        (
+            "CDLDOJI",
+            CaseKind::CdlDoji,
+            "single-setting stateful rolling average",
+            "BodyDoji",
+        ),
+        (
+            "CDL3WHITESOLDIERS",
+            CaseKind::Cdl3WhiteSoldiers,
+            "multi-setting stateful rolling averages",
+            "ShadowVeryShort, BodyShort, Far, and Near",
+        ),
+        (
+            "CDLENGULFING",
+            CaseKind::CdlEngulfing,
+            "setting-free cross-candle predicate",
+            "Streaming retains cross-candle state",
+        ),
+    ];
+    let pattern_cases = MATRIX
+        .iter()
+        .filter(|case| case.family == "Pattern Recognition")
+        .collect::<Vec<_>>();
+    assert_eq!(pattern_cases.len(), expected.len());
+
+    let mut report_rows = Vec::new();
+    for (case_id, kind, execution_shape, rationale_fragment) in expected {
+        let case = pattern_cases
+            .iter()
+            .find(|case| case.id == case_id)
+            .expect("representative Pattern case");
+        assert_eq!(case.kind, kind);
+        assert_eq!(case.parameters, "candle_settings=TA-Lib defaults");
+
+        let shape = PATTERN_SHAPES
+            .iter()
+            .find(|shape| shape.case_id == case_id)
+            .expect("Pattern execution-shape metadata");
+        assert_eq!(shape.execution_shape, execution_shape);
+        assert!(shape.rationale.contains(rationale_fragment));
+
+        let mut report_row = row("fast-ta", RUST_CALLER_MODE, 256, 1_000.0);
+        report_row.indicator_family = case.family.to_owned();
+        report_row.indicator_definition = case.definition.to_owned();
+        report_row.case_id = case.id.to_owned();
+        report_row.parameters = case.parameters.to_owned();
+        report_row.output_kind = case.output_kind.to_owned();
+        report_rows.push(report_row);
+    }
+
+    let report = render_report(&report_rows).expect("render Pattern shape metadata");
+    for shape in PATTERN_SHAPES {
+        assert!(report.contains(shape.case_id));
+        assert!(report.contains(shape.execution_shape));
+        assert!(report.contains(shape.rationale));
+    }
 }
 
 #[test]

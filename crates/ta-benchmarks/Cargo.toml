@@ -19,9 +19,15 @@ name = "catalogue-matrix"
 path = "src/bin/catalogue_matrix.rs"
 required-features = ["catalogue-matrix"]
 
+[[test]]
+name = "catalogue_matrix"
+path = "tests/catalogue_matrix.rs"
+required-features = ["catalogue-matrix"]
+
 [[bin]]
 name = "catalogue-report"
 path = "src/bin/catalogue_report.rs"
+required-features = ["catalogue-matrix"]
 
 [[bench]]
 name = "basic"

@@ -16,6 +16,7 @@ f32 = []
 f64 = []
 std = []
 core_error = []
+simd-qualification = []
 
 [dependencies]
 wide = { workspace = true, features = ["std"] }

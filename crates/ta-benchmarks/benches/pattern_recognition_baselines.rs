@@ -11,6 +11,7 @@ use std::sync::Once;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use support::ohlc_fixture;
+use ta_benchmarks::pattern_shapes::PATTERN_SHAPES;
 use ta_core::pattern_recognition::{
     CDL3BLACKCROWSConfig, CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig,
     CDLHIKKAKEConfig, CDLHIKKAKEMODConfig, CDLMORNINGSTARConfig, Candle, CandleInput,
@@ -78,8 +79,18 @@ fn record_environment_provenance() {
         let parallelism = std::thread::available_parallelism()
             .map(|value| value.get().to_string())
             .unwrap_or_else(|_| "unavailable".to_owned());
+        let representative_shapes = PATTERN_SHAPES
+            .iter()
+            .map(|shape| {
+                format!(
+                    "{}:{}:{}",
+                    shape.case_id, shape.execution_shape, shape.rationale
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" | ");
         let provenance = format!(
-            "suite=pattern_recognition\ncommit={commit}\ndirty={}\nrustc={rustc}\nhost={host}\ncpu_model={cpu_model}\nos={}\narch={}\nparallelism={parallelism}\nta_core_features=default(f64,std)\nfloat_bits={}\ncriterion=0.8.2\nprofile=bench\nsizes=256,4096,65536\nlarge_average_period={LARGE_AVERAGE_PERIOD}\n",
+            "suite=pattern_recognition\ncommit={commit}\ndirty={}\nrustc={rustc}\nhost={host}\ncpu_model={cpu_model}\nos={}\narch={}\nparallelism={parallelism}\nta_core_features=default(f64,std)\nfloat_bits={}\ncriterion=0.8.2\nprofile=bench\nsizes=256,4096,65536\nlarge_average_period={LARGE_AVERAGE_PERIOD}\nrepresentative_shapes={representative_shapes}\n",
             dirty,
             std::env::consts::OS,
             std::env::consts::ARCH,

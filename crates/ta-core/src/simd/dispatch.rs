@@ -49,6 +49,33 @@ pub type DotProductFn = fn(&[Float], &[Float]) -> Float;
 
 type FirstNonFiniteFn = fn(&[Float]) -> Option<usize>;
 type TypicalPriceFn = fn(&[Float], &[Float], &[Float], &mut [Float]);
+/// SIMD backend selected for validated Indicator batch kernels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndicatorBackend {
+    /// Portable scalar implementation.
+    Scalar,
+    /// x86_64 AVX2 implementation.
+    Avx2,
+    /// x86_64 AVX-512F implementation.
+    Avx512,
+    /// AArch64 NEON implementation.
+    Neon,
+    /// WebAssembly SIMD128 implementation.
+    Simd128,
+}
+
+impl IndicatorBackend {
+    /// Stable machine-readable backend name.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Scalar => "scalar",
+            Self::Avx2 => "avx2",
+            Self::Avx512 => "avx512f",
+            Self::Neon => "neon",
+            Self::Simd128 => "simd128",
+        }
+    }
+}
 
 /// Dispatch table containing function pointers for all SIMD operations.
 ///
@@ -64,12 +91,19 @@ pub struct DispatchTable {
 
 impl DispatchTable {
     /// Create a new dispatch table with the given function pointers.
-    #[cfg(all(
-        feature = "std",
-        any(
-            target_arch = "x86_64",
-            target_arch = "aarch64",
-            all(target_arch = "wasm32", target_feature = "simd128")
+    ///
+    /// `new` is a pure constructor (no CPU feature detection), so it stays
+    /// available to `no_std` unit tests via the `test` gate while the runtime
+    /// path remains precise about the architectures that support SIMD dispatch.
+    #[cfg(any(
+        test,
+        all(
+            feature = "std",
+            any(
+                target_arch = "x86_64",
+                target_arch = "aarch64",
+                all(target_arch = "wasm32", target_feature = "simd128")
+            )
         )
     ))]
     #[inline]
@@ -101,6 +135,7 @@ impl DispatchTable {
 #[derive(Clone, Copy)]
 struct IndicatorDispatchTable {
     first_non_finite: FirstNonFiniteFn,
+    backend: IndicatorBackend,
     typical_price: TypicalPriceFn,
 }
 
@@ -114,8 +149,13 @@ impl IndicatorDispatchTable {
         )
     ))]
     #[inline]
-    const fn new(first_non_finite: FirstNonFiniteFn, typical_price: TypicalPriceFn) -> Self {
+    const fn new(
+        backend: IndicatorBackend,
+        first_non_finite: FirstNonFiniteFn,
+        typical_price: TypicalPriceFn,
+    ) -> Self {
         Self {
+            backend,
             first_non_finite,
             typical_price,
         }
@@ -134,6 +174,7 @@ impl IndicatorDispatchTable {
     #[inline]
     const fn scalar() -> Self {
         Self {
+            backend: IndicatorBackend::Scalar,
             first_non_finite: scalar::first_non_finite,
             typical_price: scalar::typical_price,
         }
@@ -247,6 +288,7 @@ fn init_indicator_dispatch() -> IndicatorDispatchTable {
     {
         if std::is_x86_feature_detected!("avx512f") {
             return IndicatorDispatchTable::new(
+                IndicatorBackend::Avx512,
                 |values| unsafe { x86_64::avx512::first_non_finite(values) },
                 |high, low, close, output| unsafe {
                     x86_64::avx512::typical_price(high, low, close, output)
@@ -255,6 +297,7 @@ fn init_indicator_dispatch() -> IndicatorDispatchTable {
         }
         if std::is_x86_feature_detected!("avx2") {
             return IndicatorDispatchTable::new(
+                IndicatorBackend::Avx2,
                 |values| unsafe { x86_64::avx2::first_non_finite(values) },
                 |high, low, close, output| unsafe {
                     x86_64::avx2::typical_price(high, low, close, output)
@@ -267,6 +310,7 @@ fn init_indicator_dispatch() -> IndicatorDispatchTable {
     #[cfg(target_arch = "aarch64")]
     {
         IndicatorDispatchTable::new(
+            IndicatorBackend::Neon,
             |values| unsafe { aarch64::neon::first_non_finite(values) },
             |high, low, close, output| unsafe {
                 aarch64::neon::typical_price(high, low, close, output)
@@ -277,6 +321,7 @@ fn init_indicator_dispatch() -> IndicatorDispatchTable {
     #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
     {
         IndicatorDispatchTable::new(
+            IndicatorBackend::Simd128,
             |values| unsafe { wasm32::simd128::first_non_finite(values) },
             |high, low, close, output| unsafe {
                 wasm32::simd128::typical_price(high, low, close, output)
@@ -329,6 +374,14 @@ pub fn get_dispatch() -> &'static DispatchTable {
         &DISPATCH_SCALAR
     }
 }
+/// Returns the backend selected for validated Indicator batch kernels.
+///
+/// This is intended for runtime qualification and diagnostics. Indicator
+/// callers do not need to branch on the result.
+#[inline]
+pub fn active_indicator_backend() -> IndicatorBackend {
+    get_indicator_dispatch().backend
+}
 
 /// Returns the index of the first non-finite value, if any.
 ///
@@ -348,6 +401,66 @@ pub(crate) fn first_non_finite(values: &[Float]) -> Option<usize> {
 #[inline]
 pub(crate) fn typical_price(high: &[Float], low: &[Float], close: &[Float], output: &mut [Float]) {
     (get_indicator_dispatch().typical_price)(high, low, close, output);
+}
+
+/// Explicit x86 kernels used by the platform qualification harness.
+///
+/// The module is feature-gated so ordinary consumers cannot accidentally
+/// bypass the validated Indicator execution seam.
+#[cfg(all(
+    feature = "simd-qualification",
+    feature = "std",
+    target_arch = "x86_64"
+))]
+pub mod qualification {
+    use super::IndicatorBackend;
+    use crate::{simd, Float};
+
+    /// Reports whether the current CPU can execute a qualification backend.
+    pub fn backend_available(backend: IndicatorBackend) -> bool {
+        match backend {
+            IndicatorBackend::Scalar => true,
+            IndicatorBackend::Avx2 => std::is_x86_feature_detected!("avx2"),
+            IndicatorBackend::Avx512 => std::is_x86_feature_detected!("avx512f"),
+            IndicatorBackend::Neon | IndicatorBackend::Simd128 => false,
+        }
+    }
+
+    /// Executes one explicitly selected kernel for differential qualification.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the slices differ in length, the output is too short, or
+    /// the selected backend is unavailable on the current CPU.
+    pub fn typical_price(
+        backend: IndicatorBackend,
+        high: &[Float],
+        low: &[Float],
+        close: &[Float],
+        output: &mut [Float],
+    ) {
+        assert_eq!(high.len(), low.len());
+        assert_eq!(high.len(), close.len());
+        assert!(output.len() >= high.len());
+        assert!(
+            backend_available(backend),
+            "backend {} is unavailable",
+            backend.as_str()
+        );
+
+        match backend {
+            IndicatorBackend::Scalar => {
+                simd::scalar::typical_price(high, low, close, output);
+            }
+            IndicatorBackend::Avx2 => unsafe {
+                simd::arch::x86_64::avx2::typical_price(high, low, close, output);
+            },
+            IndicatorBackend::Avx512 => unsafe {
+                simd::arch::x86_64::avx512::typical_price(high, low, close, output);
+            },
+            IndicatorBackend::Neon | IndicatorBackend::Simd128 => unreachable!(),
+        }
+    }
 }
 
 /// Calculate the sum of all elements in a slice.

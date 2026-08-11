@@ -21,7 +21,7 @@ use ta_core::momentum::{
 };
 use ta_core::overlap::{BBANDSConfig, BBANDSValuesMut, PeriodMAType, SMAConfig};
 use ta_core::pattern_recognition::{
-    CDL3BLACKCROWSConfig, CDLDOJIConfig, CDLENGULFINGConfig, Candle, CandleInput, PatternSignal,
+    CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig, Candle, CandleInput, PatternSignal,
 };
 use ta_core::price_transform::{TYPPRICEConfig, TYPPRICEInput, TYPPRICETick};
 use ta_core::statistic::LINEARREGConfig;
@@ -140,7 +140,7 @@ unsafe extern "C" {
         output_count: *mut c_int,
         output: *mut c_int,
     ) -> c_int;
-    fn TA_CDL3BLACKCROWS(
+    fn TA_CDL3WHITESOLDIERS(
         start_idx: c_int,
         end_idx: c_int,
         open: *const c_double,
@@ -543,8 +543,8 @@ impl CBackend {
                     buffers.integers[0].as_mut_ptr(),
                 )
             },
-            CaseKind::Cdl3BlackCrows => unsafe {
-                TA_CDL3BLACKCROWS(
+            CaseKind::Cdl3WhiteSoldiers => unsafe {
+                TA_CDL3WHITESOLDIERS(
                     0,
                     end_idx,
                     fixture.open.as_ptr(),
@@ -1088,7 +1088,9 @@ fn rust_compute(
         CaseKind::HtDcPhase => rust_single(HT_DCPHASEConfig::new(), &fixture.close, mode),
         CaseKind::CdlDoji => rust_pattern(CDLDOJIConfig::default(), fixture, mode),
         CaseKind::CdlEngulfing => rust_pattern(CDLENGULFINGConfig::default(), fixture, mode),
-        CaseKind::Cdl3BlackCrows => rust_pattern(CDL3BLACKCROWSConfig::default(), fixture, mode),
+        CaseKind::Cdl3WhiteSoldiers => {
+            rust_pattern(CDL3WHITESOLDIERSConfig::default(), fixture, mode)
+        }
         CaseKind::LinearReg => rust_single(
             LINEARREGConfig::new(14).map_err(display_error)?,
             &fixture.close,
@@ -1126,8 +1128,8 @@ fn rust_operation<'a>(
         CaseKind::CdlEngulfing => {
             rust_pattern_operation(CDLENGULFINGConfig::default(), fixture, mode)
         }
-        CaseKind::Cdl3BlackCrows => {
-            rust_pattern_operation(CDL3BLACKCROWSConfig::default(), fixture, mode)
+        CaseKind::Cdl3WhiteSoldiers => {
+            rust_pattern_operation(CDL3WHITESOLDIERSConfig::default(), fixture, mode)
         }
         CaseKind::LinearReg => rust_single_operation(
             LINEARREGConfig::new(14).map_err(display_error)?,

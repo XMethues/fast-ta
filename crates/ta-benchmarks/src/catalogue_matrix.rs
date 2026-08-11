@@ -30,7 +30,7 @@ pub enum CaseKind {
     HtDcPhase,
     CdlDoji,
     CdlEngulfing,
-    Cdl3BlackCrows,
+    Cdl3WhiteSoldiers,
     LinearReg,
     TypPrice,
     Obv,
@@ -48,6 +48,8 @@ pub struct CaseSpec {
     pub output_kind: &'static str,
     pub output_arity: usize,
 }
+
+pub use crate::pattern_shapes::{PatternShapeSpec, PATTERN_SHAPES};
 
 pub const MATRIX: [CaseSpec; 15] = [
     CaseSpec {
@@ -132,10 +134,10 @@ pub const MATRIX: [CaseSpec; 15] = [
         output_arity: 1,
     },
     CaseSpec {
-        kind: CaseKind::Cdl3BlackCrows,
-        id: "CDL3BLACKCROWS",
+        kind: CaseKind::Cdl3WhiteSoldiers,
+        id: "CDL3WHITESOLDIERS",
         family: "Pattern Recognition",
-        definition: "CDL3BLACKCROWS: Three Black Crows",
+        definition: "CDL3WHITESOLDIERS: Three Advancing White Soldiers",
         parameters: "candle_settings=TA-Lib defaults",
         output_kind: "integer",
         output_arity: 1,
@@ -254,15 +256,7 @@ impl Fixture {
     }
 }
 
-pub fn series_fixture(size: usize, seed: usize) -> Vec<f64> {
-    (0..size)
-        .map(|index| {
-            let trend = index as f64 * 0.001;
-            let cycle = ((index * 37 + seed * 17) % 101) as f64;
-            trend + cycle + 1.0
-        })
-        .collect()
-}
+pub use crate::fixture::series_fixture;
 
 pub fn catalogue_fixture(size: usize) -> Fixture {
     let close = series_fixture(size, 0);
@@ -743,6 +737,20 @@ pub fn render_report(rows: &[BenchmarkRow]) -> Result<String, String> {
         report.push_str(&format!(
             "| {family} | {case_id} | {parameters} | {output} |\n"
         ));
+    }
+
+    let case_ids = rows
+        .iter()
+        .map(|row| row.case_id.as_str())
+        .collect::<BTreeSet<_>>();
+    report.push_str("\nPattern Recognition execution-shape coverage\n\n| Definition | Execution shape | Rationale |\n|---|---|---|\n");
+    for shape in PATTERN_SHAPES {
+        if case_ids.contains(shape.case_id) {
+            report.push_str(&format!(
+                "| {} | {} | {} |\n",
+                shape.case_id, shape.execution_shape, shape.rationale
+            ));
+        }
     }
 
     let pairs = primary_pairs(rows);
