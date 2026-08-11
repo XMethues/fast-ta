@@ -297,6 +297,11 @@ fn hilbert_outputs_match_checksum_pinned_talib_vectors_in_every_execution_mode()
             streamed_phase, replayed_phase,
             "{context}, phase reset replay"
         );
+        if degenerate_phase {
+            // InPhase, Quadrature, Sine, and LeadSine inherit the same undefined
+            // constant-series phase. Their non-degenerate vectors remain pinned below.
+            continue;
+        }
 
         let phasor_config = HT_PHASORConfig::new();
         assert_eq!(phasor_config.lookback(), HT_PHASOR_LOOKBACK);
