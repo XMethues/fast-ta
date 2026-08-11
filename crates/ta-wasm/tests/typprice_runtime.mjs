@@ -176,6 +176,14 @@ const records = [
     cpu: os.cpus()[0]?.model ?? "unknown",
     os: `${os.platform()} ${os.release()} ${os.arch()}`,
     commit: process.env.QUALIFICATION_COMMIT ?? "unknown",
+    workflow_run_id: process.env.GITHUB_RUN_ID ?? "unknown",
+    workflow_run_url:
+      process.env.GITHUB_RUN_ID &&
+      process.env.GITHUB_SERVER_URL &&
+      process.env.GITHUB_REPOSITORY
+        ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+        : "unknown",
+    workflow_job: process.env.GITHUB_JOB ?? "unknown",
     scalar_feature_flags: "-C target-feature=-simd128",
     simd_feature_flags: "-C target-feature=+simd128",
     scalar_backend: scalarBackend,

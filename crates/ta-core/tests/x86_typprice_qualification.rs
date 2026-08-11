@@ -211,14 +211,29 @@ fn qualify_public_typprice_on_x86_simd() {
     } else {
         "catalogue_fixture_v1:f64le"
     };
+    let workflow_run_id = std::env::var("GITHUB_RUN_ID").unwrap_or_else(|_| "unknown".to_owned());
+    let workflow_run_url = match (
+        std::env::var("GITHUB_SERVER_URL"),
+        std::env::var("GITHUB_REPOSITORY"),
+        workflow_run_id.as_str(),
+    ) {
+        (Ok(server), Ok(repository), run_id) if run_id != "unknown" => {
+            format!("{server}/{repository}/actions/runs/{run_id}")
+        }
+        _ => "unknown".to_owned(),
+    };
+    let workflow_job = std::env::var("GITHUB_JOB").unwrap_or_else(|_| "unknown".to_owned());
     writeln!(
         evidence,
-        "{{\"record\":\"metadata\",\"indicator\":\"TYPPRICE\",\"indicator_definition\":\"TYPPRICE: Typical Price\",\"parameters\":\"none\",\"fixture\":{},\"platform\":\"x86_64\",\"precision\":\"{}\",\"runtime\":{},\"cpu\":{},\"commit\":{},\"active_backend\":\"{}\",\"avx2_available\":true,\"avx512_available\":{}}}",
+        "{{\"record\":\"metadata\",\"indicator\":\"TYPPRICE\",\"indicator_definition\":\"TYPPRICE: Typical Price\",\"parameters\":\"none\",\"fixture\":{},\"platform\":\"x86_64\",\"precision\":\"{}\",\"runtime\":{},\"cpu\":{},\"commit\":{},\"workflow_run_id\":{},\"workflow_run_url\":{},\"workflow_job\":{},\"active_backend\":\"{}\",\"avx2_available\":true,\"avx512_available\":{}}}",
         json_string(fixture_id),
         precision,
         json_string(&std::env::var("QUALIFICATION_RUNTIME").unwrap_or_else(|_| "unknown".to_owned())),
         json_string(&std::env::var("QUALIFICATION_CPU").unwrap_or_else(|_| "unknown".to_owned())),
         json_string(&std::env::var("QUALIFICATION_COMMIT").unwrap_or_else(|_| "unknown".to_owned())),
+        json_string(&workflow_run_id),
+        json_string(&workflow_run_url),
+        json_string(&workflow_job),
         active.as_str(),
         backend_available(IndicatorBackend::Avx512),
     )
