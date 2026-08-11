@@ -26,7 +26,9 @@ class PublicationArgumentTests(unittest.TestCase):
             "publish": True,
             "publish_existing": False,
             "baseline": runner.DEFAULT_BASELINE,
-            "optimization_evidence": runner.DEFAULT_OPTIMIZATION_EVIDENCE,
+            "diagnostic_evidence": runner.DEFAULT_DIAGNOSTIC_EVIDENCE,
+            "criterion_diagnostics": runner.DEFAULT_CRITERION_DIAGNOSTICS,
+            "cycle_regression": runner.DEFAULT_CYCLE_REGRESSION,
             "case": None,
             "input_length": None,
             "samples": None,
@@ -61,7 +63,12 @@ class PublicationArgumentTests(unittest.TestCase):
     def test_publication_rejects_noncanonical_comparison_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             other = Path(temporary) / "other.tsv"
-            for field in ("baseline", "optimization_evidence"):
+            for field in (
+                "baseline",
+                "diagnostic_evidence",
+                "criterion_diagnostics",
+                "cycle_regression",
+            ):
                 with self.subTest(field=field), self.assertRaisesRegex(
                     SystemExit, "canonical comparison inputs"
                 ):

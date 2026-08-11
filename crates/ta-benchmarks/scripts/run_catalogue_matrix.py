@@ -41,12 +41,20 @@ REPOSITORY = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = REPOSITORY / "target" / "catalogue-matrix"
 BENCHMARK_CRATE = REPOSITORY / "crates" / "ta-benchmarks"
 DEFAULT_BASELINE = BENCHMARK_CRATE / "baselines" / "catalogue_matrix_pre_optimization.tsv"
-DEFAULT_OPTIMIZATION_EVIDENCE = (
-    BENCHMARK_CRATE / "baselines" / "catalogue_matrix_optimization_evidence.tsv"
+DEFAULT_DIAGNOSTIC_EVIDENCE = (
+    BENCHMARK_CRATE / "baselines" / "issue_57_62_diagnostic_evidence.json"
+)
+DEFAULT_CRITERION_DIAGNOSTICS = (
+    BENCHMARK_CRATE / "baselines" / "issue_57_62_criterion_diagnostics.json"
+)
+DEFAULT_CYCLE_REGRESSION = (
+    BENCHMARK_CRATE / "baselines" / "issue61_cycle_regression.jsonl"
 )
 DEFAULT_PLATFORM_QUALIFICATIONS = (
     BENCHMARK_CRATE / "baselines" / "typprice_x86_f64_qualification.jsonl",
     BENCHMARK_CRATE / "baselines" / "typprice_x86_f32_qualification.jsonl",
+    BENCHMARK_CRATE / "baselines" / "typprice_aarch64_f64_qualification.jsonl",
+    BENCHMARK_CRATE / "baselines" / "typprice_aarch64_f32_qualification.jsonl",
     BENCHMARK_CRATE / "baselines" / "typprice_wasm_qualification.jsonl",
 )
 PUBLISHED_RAW = BENCHMARK_CRATE / "baselines" / "catalogue_matrix_optimized.tsv"
@@ -117,9 +125,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--python", default=sys.executable, help="Python used to create the isolated environment")
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
     parser.add_argument(
-        "--optimization-evidence",
-        type=Path,
-        default=DEFAULT_OPTIMIZATION_EVIDENCE,
+        "--diagnostic-evidence", type=Path, default=DEFAULT_DIAGNOSTIC_EVIDENCE
+    )
+    parser.add_argument(
+        "--criterion-diagnostics", type=Path, default=DEFAULT_CRITERION_DIAGNOSTICS
+    )
+    parser.add_argument(
+        "--cycle-regression", type=Path, default=DEFAULT_CYCLE_REGRESSION
     )
     parser.add_argument(
         "--publish",
@@ -387,10 +399,15 @@ def generate_report(args: argparse.Namespace, output_dir: Path) -> None:
     ]
     if args.baseline is not None:
         arguments.extend(("--baseline", str(args.baseline.resolve())))
-    if args.optimization_evidence is not None:
-        arguments.extend(
-            ("--optimization-evidence", str(args.optimization_evidence.resolve()))
-        )
+    arguments.extend(
+        ("--diagnostic-evidence", str(args.diagnostic_evidence.resolve())),
+    )
+    arguments.extend(
+        ("--criterion-diagnostics", str(args.criterion_diagnostics.resolve())),
+    )
+    arguments.extend(
+        ("--cycle-regression", str(args.cycle_regression.resolve())),
+    )
     for qualification in DEFAULT_PLATFORM_QUALIFICATIONS:
         arguments.extend(("--platform-qualification", str(qualification.resolve())))
     run(arguments, cwd=REPOSITORY)
@@ -603,9 +620,17 @@ def validate_publication_args(args: argparse.Namespace) -> None:
 
     canonical_inputs = {
         "--baseline": (args.baseline, DEFAULT_BASELINE),
-        "--optimization-evidence": (
-            args.optimization_evidence,
-            DEFAULT_OPTIMIZATION_EVIDENCE,
+        "--diagnostic-evidence": (
+            args.diagnostic_evidence,
+            DEFAULT_DIAGNOSTIC_EVIDENCE,
+        ),
+        "--criterion-diagnostics": (
+            args.criterion_diagnostics,
+            DEFAULT_CRITERION_DIAGNOSTICS,
+        ),
+        "--cycle-regression": (
+            args.cycle_regression,
+            DEFAULT_CYCLE_REGRESSION,
         ),
     }
     invalid_inputs = [

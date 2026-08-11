@@ -3,11 +3,13 @@ use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ta_benchmarks::catalogue_matrix::{
-    catalogue_fixture, fixture_checksum, parse_optimization_evidence, parse_platform_qualification,
-    parse_raw_rows, read_platform_qualification, read_raw_rows, render_report,
-    render_report_with_comparison, timing_stats, validate_outputs, write_raw_rows, BenchmarkRow,
-    CaseKind, OptimizationEvidenceRow, OutputValues, TimingStats, VerifiedOutput, C_DIRECT_MODE,
-    FIXTURE_ID, INPUT_LENGTHS, MATRIX, PATTERN_SHAPES, RAW_HEADER, RUST_CALLER_MODE,
+    catalogue_fixture, fixture_checksum, parse_criterion_diagnostics, parse_cycle_regression,
+    parse_diagnostic_evidence, parse_platform_qualification, parse_raw_rows,
+    read_criterion_diagnostics, read_cycle_regression, read_diagnostic_evidence,
+    read_platform_qualification, read_raw_rows, render_report, render_report_with_comparison,
+    timing_stats, validate_outputs, write_raw_rows, BenchmarkRow, CaseKind, OutputValues,
+    TimingStats, VerifiedOutput, C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS, MATRIX, PATTERN_SHAPES,
+    RAW_HEADER, RUST_CALLER_MODE,
 };
 
 static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
@@ -304,113 +306,78 @@ fn committed_raw_matrices_pass_report_parse_validation() {
 }
 
 #[test]
-fn report_is_generated_from_reread_rows_and_separates_comparable_from_unavailable() {
-    let id = NEXT_PATH.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!(
-        "fast-ta-catalogue-matrix-{}-{id}.tsv",
-        std::process::id()
-    ));
-    let mut rows = Vec::new();
-    for input_length in INPUT_LENGTHS {
-        rows.push(row("fast-ta", RUST_CALLER_MODE, input_length, 2_000.0));
-        rows.push(row("TA-Lib C", C_DIRECT_MODE, input_length, 1_000.0));
-    }
-    let mut python = row("TA-Lib Python", "official Python NumPy API", 256, 3_000.0);
-    python.comparison_status = "unavailable".to_owned();
-    python.comparison_reason = "user-facing API is not a caller-owned kernel".to_owned();
-    rows.push(python);
-    let mut mismatch = row("fast-ta", "Streaming Computation", 256, 2_500.0);
-    mismatch.stats = None;
-    mismatch.semantic_status = "mismatch".to_owned();
-    mismatch.semantic_reason = "exact integer mismatch at compact index 7".to_owned();
-    mismatch.timing_status = "suppressed".to_owned();
-    mismatch.timing_reason = "semantic gate failed".to_owned();
-    mismatch.comparison_status = "unavailable".to_owned();
-    mismatch.comparison_reason = "separate Rust execution cost".to_owned();
-    mismatch.warmup_iterations = None;
-    mismatch.iterations_per_sample = None;
-    rows.push(mismatch);
+fn report_is_generated_from_all_committed_durable_evidence() {
+    let baseline_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("baselines");
+    let rows = read_raw_rows(&baseline_dir.join("catalogue_matrix_optimized.tsv"))
+        .expect("parse final matrix");
+    let baseline = read_raw_rows(&baseline_dir.join("catalogue_matrix_pre_optimization.tsv"))
+        .expect("parse pre matrix");
+    let diagnostic =
+        read_diagnostic_evidence(&baseline_dir.join("issue_57_62_diagnostic_evidence.json"))
+            .expect("parse diagnostic evidence");
+    let criterion =
+        read_criterion_diagnostics(&baseline_dir.join("issue_57_62_criterion_diagnostics.json"))
+            .expect("parse Criterion diagnostics");
+    let cycle = read_cycle_regression(&baseline_dir.join("issue61_cycle_regression.jsonl"))
+        .expect("parse cycle regression");
+    let qualifications = [
+        "typprice_x86_f64_qualification.jsonl",
+        "typprice_x86_f32_qualification.jsonl",
+        "typprice_aarch64_f64_qualification.jsonl",
+        "typprice_aarch64_f32_qualification.jsonl",
+        "typprice_wasm_qualification.jsonl",
+    ]
+    .into_iter()
+    .map(|name| read_platform_qualification(&baseline_dir.join(name)))
+    .collect::<Result<Vec<_>, _>>()
+    .expect("parse five platform qualifications");
 
-    write_raw_rows(&path, &rows).expect("write raw benchmark rows");
-    let reread = read_raw_rows(&path).expect("read raw benchmark rows");
-    let baseline = INPUT_LENGTHS
-        .into_iter()
-        .flat_map(|input_length| {
-            [
-                row("fast-ta", RUST_CALLER_MODE, input_length, 4_000.0),
-                row("TA-Lib C", C_DIRECT_MODE, input_length, 1_000.0),
-            ]
-        })
-        .collect::<Vec<_>>();
-    let evidence = [OptimizationEvidenceRow {
-        ticket: "test-ticket".to_owned(),
-        case_ids: vec!["SMA".to_owned()],
-        focused_commands: vec![
-            "python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --case SMA".to_owned(),
-        ],
-        hypotheses: vec![
-            "validation dominates".to_owned(),
-            "batch state dominates".to_owned(),
-            "output writes dominate".to_owned(),
-        ],
-        confirmed_evidence_kind: "source".to_owned(),
-        confirmed_evidence: "test source seam".to_owned(),
-        neighboring_workloads: "EMA".to_owned(),
-        neighboring_disposition: "not measured in test fixture".to_owned(),
-    }];
-    let qualification_input = concat!(
-        r#"{"record":"metadata","platform":"x86_64","precision":"f64","runtime":"rustc test","profile":"release","features":"simd-qualification","cpu":"test cpu","os":"linux","commit":"abc","workflow_run_id":31515400920,"workflow_run_url":"https://example.test/runs/31515400920","workflow_job":"x86-typprice","active_backend":"avx2"}"#,
-        "\n",
-        r#"{"record":"validation","indicator":"TYPPRICE","unequal_lengths_verified":true,"non_finite_verified":true,"scalar_unequal_lengths_error":"length","scalar_non_finite_error":"finite","simd_unequal_lengths_error":"length","simd_non_finite_error":"finite"}"#,
-        "\n",
-        r#"{"record":"measurement","mode":"public TYPPRICE","backend":"scalar","input_length":256,"equivalent_to_scalar":true,"semantic_status":"verified","timing_status":"measured","median_ns":200.0,"ci95_lower_ns":190.0,"ci95_upper_ns":210.0,"throughput_observations_per_second":1280000000.0,"sample_count":31,"timed_boundary":"public"}"#,
-        "\n",
-        r#"{"record":"measurement","mode":"public TYPPRICE","backend":"avx2","input_length":256,"equivalent_to_scalar":true,"semantic_status":"verified","timing_status":"measured","median_ns":100.0,"ci95_lower_ns":90.0,"ci95_upper_ns":110.0,"throughput_observations_per_second":2560000000.0,"sample_count":31,"timed_boundary":"public"}"#,
-        "\n",
-    );
-    let qualifications =
-        [
-            parse_platform_qualification(qualification_input, "qualification-fixture.jsonl")
-                .expect("parse renderer qualification fixture"),
-        ];
-    let report = render_report_with_comparison(&reread, &baseline, &evidence, &qualifications)
-        .expect("render report from reread raw rows");
-    fs::remove_file(&path).expect("remove test raw rows");
+    let report = render_report_with_comparison(
+        &rows,
+        &baseline,
+        &diagnostic,
+        &criterion,
+        &cycle,
+        &qualifications,
+    )
+    .expect("render canonical report");
 
-    assert_eq!(reread, rows);
-    assert!(report.contains("Pinned representative Indicator Catalogue performance matrix"));
-    assert!(report.contains("Geometric Rust/C latency ratio"));
-    assert!(report.contains("2.000x"));
-    assert!(report.contains("unavailable: user-facing API is not a caller-owned kernel"));
-    assert!(report.contains("exact integer mismatch at compact index 7"));
-    assert!(report.contains("256 | caller-owned Batch Computation vs direct C caller-owned"));
-    assert!(report.contains("4096 | caller-owned Batch Computation vs direct C caller-owned"));
-    assert!(report.contains("65536 | caller-owned Batch Computation vs direct C caller-owned"));
-    assert!(report.contains("Run completeness and semantic gate"));
-    assert!(report.contains("Per-case caller-owned Rust/C latency ratios"));
-    assert!(report.contains("Clean before/after optimization effects"));
-    assert!(report.contains("4.000 us [3.600, 4.400]"));
-    assert!(report.contains("Runtime platform qualification from committed JSONL"));
-    assert!(report.contains("run [31515400920]"));
-    assert!(report.contains("practical benefit on this runner"));
-    assert!(report.contains("Canonical comparison baseline"));
-    assert!(!report.contains("clean baseline missing"));
+    assert!(report.contains("Durable issue 57–62 diagnostic evidence"));
+    assert!(report.contains("Issue 59 diagnostic record"));
+    assert!(report.contains("Criterion same-session before/after diagnostics"));
+    assert!(report.contains("Same-run semantic Rust/C pairs"));
+    assert!(report.contains("Issue 61 Hilbert cycle regression control"));
+    assert!(report.contains("fixed_by_clean_revert_to_b156ac1_implementation"));
+    assert!(report.contains("typprice_aarch64_f32_qualification.jsonl"));
+    assert!(report.contains("Complete >5% clean pre/final classification"));
+    assert!(!report.contains("confirmed clean batch regression; source-correlated"));
 }
 
 #[test]
-fn durable_evidence_requires_ranked_hypotheses_and_source_kind() {
-    let input = concat!(
-        "ticket\tcase_ids\tfocused_commands\thypotheses\tconfirmed_evidence_kind\tconfirmed_evidence\tneighboring_workloads\tneighboring_disposition\n",
-        "issue\tADX\tpython3 runner.py --case ADX\tvalidation || state || writes\tsource\tAdxBatchState\tADXR\tnot represented\n",
-    );
-    let rows = parse_optimization_evidence(input).expect("parse durable evidence");
-    assert_eq!(rows[0].case_ids, ["ADX"]);
-    assert_eq!(rows[0].hypotheses.len(), 3);
+fn durable_diagnostic_parsers_reject_wrong_schemas() {
+    let baseline_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("baselines");
+    let diagnostic = fs::read_to_string(baseline_dir.join("issue_57_62_diagnostic_evidence.json"))
+        .expect("read diagnostic fixture");
+    let criterion = fs::read_to_string(baseline_dir.join("issue_57_62_criterion_diagnostics.json"))
+        .expect("read Criterion fixture");
+    let cycle = fs::read_to_string(baseline_dir.join("issue61_cycle_regression.jsonl"))
+        .expect("read cycle fixture");
 
-    let too_few = input.replace("validation || state || writes", "validation || state");
-    assert!(parse_optimization_evidence(&too_few)
-        .expect_err("two hypotheses must fail")
-        .contains("3 to 5"));
+    assert!(parse_diagnostic_evidence(
+        &diagnostic.replace("fast-ta.issue-57-62.diagnostic-evidence.v1", "wrong",)
+    )
+    .expect_err("wrong diagnostic schema must fail")
+    .contains("schema"));
+    assert!(parse_criterion_diagnostics(
+        &criterion.replace("fast-ta.issue-57-62.criterion-diagnostics.v1", "wrong",)
+    )
+    .expect_err("wrong Criterion schema must fail")
+    .contains("schema"));
+    assert!(
+        parse_cycle_regression(&cycle.replace("fast-ta.issue61.cycle-regression.v1", "wrong"))
+            .expect_err("wrong cycle schema must fail")
+            .contains("schema")
+    );
 }
 
 #[test]
@@ -548,8 +515,20 @@ fn platform_parser_accepts_aarch64_backend_validations_and_c_control() {
 fn committed_platform_qualifications_parse_or_name_missing_harness_fields() {
     let baseline_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("baselines");
     let expected = [
-        ("typprice_x86_f64_qualification.jsonl", "x86_64", "f64", 12),
-        ("typprice_x86_f32_qualification.jsonl", "x86_64", "f32", 12),
+        ("typprice_x86_f64_qualification.jsonl", "x86_64", "f64", 6),
+        ("typprice_x86_f32_qualification.jsonl", "x86_64", "f32", 6),
+        (
+            "typprice_aarch64_f64_qualification.jsonl",
+            "aarch64",
+            "f64",
+            9,
+        ),
+        (
+            "typprice_aarch64_f32_qualification.jsonl",
+            "aarch64",
+            "f32",
+            6,
+        ),
         (
             "typprice_wasm_qualification.jsonl",
             "wasm32-unknown-unknown",

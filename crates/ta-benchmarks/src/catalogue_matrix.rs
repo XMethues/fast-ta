@@ -635,85 +635,516 @@ pub fn parse_raw_rows(input: &str) -> Result<Vec<BenchmarkRow>, String> {
         .collect()
 }
 
-pub const OPTIMIZATION_EVIDENCE_HEADER: &str = "ticket\tcase_ids\tfocused_commands\thypotheses\tconfirmed_evidence_kind\tconfirmed_evidence\tneighboring_workloads\tneighboring_disposition";
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiagnosticEvidence {
+    pub captured_at_utc: String,
+    pub baseline_commit: String,
+    pub final_commit: String,
+    pub commands: BTreeMap<String, String>,
+    pub environment: BTreeMap<String, String>,
+    pub tickets: Vec<DiagnosticTicket>,
+}
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct OptimizationEvidenceRow {
-    pub ticket: String,
-    pub case_ids: Vec<String>,
-    pub focused_commands: Vec<String>,
-    pub hypotheses: Vec<String>,
-    pub confirmed_evidence_kind: String,
-    pub confirmed_evidence: String,
-    pub neighboring_workloads: String,
-    pub neighboring_disposition: String,
+pub struct DiagnosticTicket {
+    pub ticket: u64,
+    pub ranked_hypotheses: Vec<Value>,
+    pub profile_or_compiler_evidence: Value,
+    pub criterion_comparisons: Vec<Value>,
+    pub semantic_comparisons: Vec<Value>,
+    pub required_neighbor_coverage: Vec<Value>,
 }
 
-pub fn read_optimization_evidence(path: &Path) -> Result<Vec<OptimizationEvidenceRow>, String> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct CriterionDiagnostics {
+    pub pre_commit: String,
+    pub final_commit: String,
+    pub environment: BTreeMap<String, String>,
+    pub measurements: Vec<CriterionDiagnosticMeasurement>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CriterionDiagnosticMeasurement {
+    pub ticket: u64,
+    pub case_id: String,
+    pub role: String,
+    pub revision: String,
+    pub command: String,
+    pub cwd: String,
+    pub benchmark_id: String,
+    pub timed_boundary: String,
+    pub sample_count: usize,
+    pub observations_per_iteration: usize,
+    pub median_ns: f64,
+    pub ci95_lower_ns: f64,
+    pub ci95_upper_ns: f64,
+    pub throughput_observations_per_second: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CycleRegressionEvidence {
+    pub command: String,
+    pub cwd: String,
+    pub os: String,
+    pub arch: String,
+    pub cpu: String,
+    pub seam: String,
+    pub measurements: Vec<CycleMeasurement>,
+    pub comparisons: Vec<CycleComparison>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CycleMeasurement {
+    pub indicator: String,
+    pub input_length: usize,
+    pub variant: String,
+    pub source_provenance: String,
+    pub sample_count: usize,
+    pub median_ns: f64,
+    pub ci95_lower_ns: f64,
+    pub ci95_upper_ns: f64,
+    pub throughput_observations_per_second: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CycleComparison {
+    pub indicator: String,
+    pub input_length: usize,
+    pub before_variant: String,
+    pub after_variant: String,
+    pub cursor_vs_baseline_percent: f64,
+    pub after_vs_baseline_percent: f64,
+    pub source_proof: String,
+    pub disposition: String,
+}
+
+pub fn read_diagnostic_evidence(path: &Path) -> Result<DiagnosticEvidence, String> {
     let input =
         fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
-    parse_optimization_evidence(&input)
+    parse_diagnostic_evidence(&input)
 }
 
-pub fn parse_optimization_evidence(input: &str) -> Result<Vec<OptimizationEvidenceRow>, String> {
-    let mut lines = input.lines();
-    if lines.next() != Some(OPTIMIZATION_EVIDENCE_HEADER) {
-        return Err("unexpected optimization evidence header".to_owned());
+pub fn parse_diagnostic_evidence(input: &str) -> Result<DiagnosticEvidence, String> {
+    let root: Value = serde_json::from_str(input)
+        .map_err(|error| format!("diagnostic evidence JSON: {error}"))?;
+    if json_string(&root, "schema")? != "fast-ta.issue-57-62.diagnostic-evidence.v1" {
+        return Err("unsupported diagnostic evidence schema".to_owned());
     }
-    lines
+    let baseline_revision = json_object(&root, "baseline_revision")?;
+    let final_revision = json_object(&root, "final_revision")?;
+    let commands = json_string_map(json_object(&root, "commands")?, "commands")?;
+    let environment = json_scalar_map(json_object(&root, "environment")?, "environment")?;
+    let artifacts = json_array(&root, "artifacts")?;
+    for required in [
+        "issue_57_62_criterion_diagnostics.json",
+        "issue_57_62_semantic_pre.tsv",
+        "issue_57_62_semantic_final.tsv",
+    ] {
+        if !artifacts.iter().any(|artifact| {
+            artifact
+                .get("path")
+                .and_then(Value::as_str)
+                .is_some_and(|path| path.ends_with(required))
+        }) {
+            return Err(format!(
+                "diagnostic evidence is missing artifact {required}"
+            ));
+        }
+    }
+    let mut tickets = Vec::new();
+    for value in json_array(&root, "tickets")? {
+        let ticket = json_u64(value, "ticket")?;
+        let ranked_hypotheses = json_array(value, "ranked_hypotheses")?.to_vec();
+        if !(3..=5).contains(&ranked_hypotheses.len()) {
+            return Err(format!(
+                "issue {ticket} must contain 3 to 5 ranked hypotheses"
+            ));
+        }
+        for (index, hypothesis) in ranked_hypotheses.iter().enumerate() {
+            if json_u64(hypothesis, "rank")? != index as u64 + 1 {
+                return Err(format!(
+                    "issue {ticket} hypotheses are not consecutively ranked"
+                ));
+            }
+            for key in ["hypothesis", "prediction", "status", "evidence"] {
+                json_nonempty_string(hypothesis, key)?;
+            }
+        }
+        let profile = value
+            .get("profile_or_compiler_evidence")
+            .filter(|candidate| candidate.is_object())
+            .ok_or_else(|| format!("issue {ticket} is missing profile/compiler evidence"))?
+            .clone();
+        for key in [
+            "artifact",
+            "artifact_sha256",
+            "benchmark_command",
+            "profile_command",
+            "benchmark_id",
+            "case",
+            "cwd",
+        ] {
+            json_nonempty_string(&profile, key)?;
+        }
+        let criterion_comparisons =
+            json_array(value, "criterion_same_session_comparisons")?.to_vec();
+        let semantic_comparisons =
+            json_array(value, "semantic_same_run_rust_c_comparisons")?.to_vec();
+        let required_neighbor_coverage = json_array(value, "required_neighbor_coverage")?.to_vec();
+        if criterion_comparisons.is_empty()
+            || semantic_comparisons.is_empty()
+            || required_neighbor_coverage.is_empty()
+        {
+            return Err(format!(
+                "issue {ticket} is missing Criterion, semantic, or neighboring-workload evidence"
+            ));
+        }
+        for comparison in &criterion_comparisons {
+            if json_u64(comparison, "ticket")? != ticket {
+                return Err(format!(
+                    "issue {ticket} contains a cross-ticket Criterion row"
+                ));
+            }
+            for key in ["case_id", "role", "disposition"] {
+                json_nonempty_string(comparison, key)?;
+            }
+            for key in [
+                "pre_median_ns",
+                "final_median_ns",
+                "change_percent",
+                "speedup",
+                "noise_gate_percent",
+            ] {
+                json_numeric(comparison, key)?;
+            }
+        }
+        for semantic in &semantic_comparisons {
+            if json_u64(semantic, "ticket")? != ticket {
+                return Err(format!(
+                    "issue {ticket} contains a cross-ticket semantic row"
+                ));
+            }
+            json_nonempty_string(semantic, "case_id")?;
+            json_nonempty_string(semantic, "disposition")?;
+            json_u64(semantic, "input_length")?;
+            json_bool(semantic, "input_checksum_match")?;
+            json_bool(semantic, "output_checksum_match")?;
+            for revision in ["pre", "final"] {
+                format_json_timing(json_object(semantic, &format!("{revision}_fast_ta"))?)?;
+                format_json_timing(json_object(semantic, &format!("{revision}_ta_lib_c"))?)?;
+                json_numeric(semantic, &format!("{revision}_rust_over_c"))?;
+            }
+        }
+        for neighbor in &required_neighbor_coverage {
+            json_nonempty_string(neighbor, "workload")?;
+            json_nonempty_string(neighbor, "status")?;
+        }
+        tickets.push(DiagnosticTicket {
+            ticket,
+            ranked_hypotheses,
+            profile_or_compiler_evidence: profile,
+            criterion_comparisons,
+            semantic_comparisons,
+            required_neighbor_coverage,
+        });
+    }
+    let actual = tickets
+        .iter()
+        .map(|ticket| ticket.ticket)
+        .collect::<BTreeSet<_>>();
+    let expected = (57_u64..=62).collect::<BTreeSet<_>>();
+    if actual != expected || tickets.len() != expected.len() {
+        return Err(
+            "diagnostic evidence must contain issues 57 through 62 exactly once".to_owned(),
+        );
+    }
+    tickets.sort_by_key(|ticket| ticket.ticket);
+    Ok(DiagnosticEvidence {
+        captured_at_utc: json_nonempty_string(&root, "captured_at_utc")?,
+        baseline_commit: json_nonempty_string(baseline_revision, "commit")?,
+        final_commit: json_nonempty_string(final_revision, "commit")?,
+        commands,
+        environment,
+        tickets,
+    })
+}
+
+pub fn read_criterion_diagnostics(path: &Path) -> Result<CriterionDiagnostics, String> {
+    let input =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    parse_criterion_diagnostics(&input)
+}
+
+pub fn parse_criterion_diagnostics(input: &str) -> Result<CriterionDiagnostics, String> {
+    let root: Value = serde_json::from_str(input)
+        .map_err(|error| format!("Criterion diagnostics JSON: {error}"))?;
+    if json_string(&root, "schema")? != "fast-ta.issue-57-62.criterion-diagnostics.v1" {
+        return Err("unsupported Criterion diagnostics schema".to_owned());
+    }
+    let mut measurements = Vec::new();
+    for value in json_array(&root, "measurements")? {
+        let median = json_object(value, "median")?;
+        let measurement = CriterionDiagnosticMeasurement {
+            ticket: json_u64(value, "ticket")?,
+            case_id: json_nonempty_string(value, "case_id")?,
+            role: json_nonempty_string(value, "role")?,
+            revision: json_nonempty_string(value, "revision")?,
+            command: json_nonempty_string(value, "command")?,
+            cwd: json_nonempty_string(value, "cwd")?,
+            benchmark_id: json_nonempty_string(value, "benchmark_id")?,
+            timed_boundary: json_nonempty_string(value, "timed_boundary")?,
+            sample_count: json_u64(value, "sample_count")? as usize,
+            observations_per_iteration: json_u64(value, "observations_per_iteration")? as usize,
+            median_ns: json_f64(median, "point_estimate_ns")?,
+            ci95_lower_ns: json_f64(median, "ci95_lower_ns")?,
+            ci95_upper_ns: json_f64(median, "ci95_upper_ns")?,
+            throughput_observations_per_second: json_f64(
+                value,
+                "throughput_observations_per_second",
+            )?,
+        };
+        if !(57..=62).contains(&measurement.ticket)
+            || !matches!(measurement.revision.as_str(), "pre" | "final")
+        {
+            return Err("Criterion measurement has unsupported ticket or revision".to_owned());
+        }
+        validate_positive_timing_evidence(
+            measurement.median_ns,
+            measurement.ci95_lower_ns,
+            measurement.ci95_upper_ns,
+            measurement.throughput_observations_per_second,
+            measurement.sample_count,
+            measurement.observations_per_iteration,
+        )
+        .map_err(|error| format!("Criterion {}: {error}", measurement.case_id))?;
+        measurements.push(measurement);
+    }
+    if measurements.is_empty() {
+        return Err("Criterion diagnostics has no measurements".to_owned());
+    }
+    let grouped = measurements
+        .iter()
+        .map(|measurement| {
+            (
+                measurement.ticket,
+                measurement.case_id.as_str(),
+                measurement.revision.as_str(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    for measurement in &measurements {
+        let other = if measurement.revision == "pre" {
+            "final"
+        } else {
+            "pre"
+        };
+        if !grouped.contains(&(measurement.ticket, measurement.case_id.as_str(), other)) {
+            return Err(format!(
+                "Criterion {} is missing its {other} measurement",
+                measurement.case_id
+            ));
+        }
+    }
+    let mut comparison_keys = BTreeSet::new();
+    for comparison in json_array(&root, "comparisons")? {
+        let ticket = json_u64(comparison, "ticket")?;
+        let case_id = json_nonempty_string(comparison, "case_id")?;
+        if !comparison_keys.insert((ticket, case_id.clone())) {
+            return Err(format!("duplicate Criterion comparison for {case_id}"));
+        }
+        let pre = measurements
+            .iter()
+            .find(|measurement| {
+                measurement.ticket == ticket
+                    && measurement.case_id == case_id
+                    && measurement.revision == "pre"
+            })
+            .ok_or_else(|| format!("Criterion comparison {case_id} has no pre measurement"))?;
+        let final_measurement = measurements
+            .iter()
+            .find(|measurement| {
+                measurement.ticket == ticket
+                    && measurement.case_id == case_id
+                    && measurement.revision == "final"
+            })
+            .ok_or_else(|| format!("Criterion comparison {case_id} has no final measurement"))?;
+        if json_f64(comparison, "pre_median_ns")? != pre.median_ns
+            || json_f64(comparison, "final_median_ns")? != final_measurement.median_ns
+        {
+            return Err(format!(
+                "Criterion comparison {case_id} medians do not match its measurements"
+            ));
+        }
+        json_nonempty_string(comparison, "disposition")?;
+    }
+    if comparison_keys.len() * 2 != grouped.len() {
+        return Err("Criterion comparisons do not cover every measurement pair".to_owned());
+    }
+    Ok(CriterionDiagnostics {
+        pre_commit: json_nonempty_string(json_object(&root, "pre_revision")?, "commit")?,
+        final_commit: json_nonempty_string(json_object(&root, "final_revision")?, "commit")?,
+        environment: json_scalar_map(json_object(&root, "environment")?, "environment")?,
+        measurements,
+    })
+}
+
+pub fn read_cycle_regression(path: &Path) -> Result<CycleRegressionEvidence, String> {
+    let input =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    parse_cycle_regression(&input)
+}
+
+pub fn parse_cycle_regression(input: &str) -> Result<CycleRegressionEvidence, String> {
+    let mut run = None;
+    let mut measurements = Vec::new();
+    let mut comparisons = Vec::new();
+    for (index, line) in input
+        .lines()
         .enumerate()
         .filter(|(_, line)| !line.is_empty())
-        .map(|(index, line)| {
-            let fields = line.split('\t').collect::<Vec<_>>();
-            if fields.len() != 8 {
-                return Err(format!(
-                    "optimization evidence row {} has {} fields, expected 8",
-                    index + 2,
-                    fields.len()
+    {
+        let value: Value = serde_json::from_str(line)
+            .map_err(|error| format!("cycle regression JSONL row {}: {error}", index + 1))?;
+        match json_nonempty_string(&value, "record_type")?.as_str() {
+            "run" => {
+                if run.is_some() {
+                    return Err("cycle regression has multiple run records".to_owned());
+                }
+                if json_string(&value, "schema")? != "fast-ta.issue61.cycle-regression.v1" {
+                    return Err("unsupported cycle regression schema".to_owned());
+                }
+                let host = json_object(&value, "host")?;
+                run = Some((
+                    json_nonempty_string(&value, "command")?,
+                    json_nonempty_string(&value, "cwd")?,
+                    json_nonempty_string(host, "os")?,
+                    json_nonempty_string(host, "arch")?,
+                    json_nonempty_string(host, "cpu")?,
+                    json_nonempty_string(&value, "seam")?,
                 ));
             }
-            let case_ids = split_evidence_list(fields[1]);
-            let focused_commands = split_evidence_list(fields[2]);
-            let hypotheses = split_evidence_list(fields[3]);
-            if case_ids.is_empty() || case_ids.len() != focused_commands.len() {
+            "measurement" => {
+                let ci = json_array(&value, "median_95ci_ns")?;
+                if ci.len() != 2 {
+                    return Err("cycle measurement CI must have two bounds".to_owned());
+                }
+                let measurement = CycleMeasurement {
+                    indicator: json_nonempty_string(&value, "indicator")?,
+                    input_length: json_u64(&value, "size")? as usize,
+                    variant: json_nonempty_string(&value, "variant")?,
+                    source_provenance: json_nonempty_string(&value, "source_provenance")?,
+                    sample_count: json_u64(&value, "samples")? as usize,
+                    median_ns: json_f64(&value, "median_ns")?,
+                    ci95_lower_ns: ci[0]
+                        .as_f64()
+                        .ok_or_else(|| "cycle CI lower bound is not numeric".to_owned())?,
+                    ci95_upper_ns: ci[1]
+                        .as_f64()
+                        .ok_or_else(|| "cycle CI upper bound is not numeric".to_owned())?,
+                    throughput_observations_per_second: json_f64(
+                        &value,
+                        "throughput_observations_per_second",
+                    )?,
+                };
+                validate_positive_timing_evidence(
+                    measurement.median_ns,
+                    measurement.ci95_lower_ns,
+                    measurement.ci95_upper_ns,
+                    measurement.throughput_observations_per_second,
+                    measurement.sample_count,
+                    measurement.input_length,
+                )
+                .map_err(|error| format!("cycle {}: {error}", measurement.indicator))?;
+                measurements.push(measurement);
+            }
+            "comparison" => comparisons.push(CycleComparison {
+                indicator: json_nonempty_string(&value, "indicator")?,
+                input_length: json_u64(&value, "size")? as usize,
+                before_variant: json_nonempty_string(&value, "before_variant")?,
+                after_variant: json_nonempty_string(&value, "after_variant")?,
+                cursor_vs_baseline_percent: json_f64(&value, "cursor_vs_b156ac1_median_percent")?,
+                after_vs_baseline_percent: json_f64(&value, "after_vs_b156ac1_percent")?,
+                source_proof: json_nonempty_string(&value, "after_source_proof")?,
+                disposition: json_nonempty_string(&value, "disposition")?,
+            }),
+            other => return Err(format!("unsupported cycle record type {other:?}")),
+        }
+    }
+    let (command, cwd, os, arch, cpu, seam) =
+        run.ok_or_else(|| "cycle regression has no run record".to_owned())?;
+    if measurements.is_empty() || comparisons.is_empty() {
+        return Err("cycle regression is missing measurements or comparisons".to_owned());
+    }
+    for comparison in &comparisons {
+        for variant in ["b156ac1_modulo", comparison.before_variant.as_str()] {
+            if !measurements.iter().any(|measurement| {
+                measurement.indicator == comparison.indicator
+                    && measurement.input_length == comparison.input_length
+                    && measurement.variant == variant
+            }) {
                 return Err(format!(
-                    "optimization evidence row {} must have one focused command per case",
-                    index + 2
+                    "cycle comparison {} {} is missing variant {variant}",
+                    comparison.indicator, comparison.input_length
                 ));
             }
-            if !(3..=5).contains(&hypotheses.len()) {
-                return Err(format!(
-                    "optimization evidence row {} must contain 3 to 5 ranked hypotheses",
-                    index + 2
-                ));
-            }
-            if fields[4] != "source" && fields[4] != "profile" && fields[4] != "disassembly" {
-                return Err(format!(
-                    "optimization evidence row {} has unsupported confirmed evidence kind {:?}",
-                    index + 2,
-                    fields[4]
-                ));
-            }
-            Ok(OptimizationEvidenceRow {
-                ticket: fields[0].to_owned(),
-                case_ids,
-                focused_commands,
-                hypotheses,
-                confirmed_evidence_kind: fields[4].to_owned(),
-                confirmed_evidence: fields[5].to_owned(),
-                neighboring_workloads: fields[6].to_owned(),
-                neighboring_disposition: fields[7].to_owned(),
-            })
+        }
+    }
+    Ok(CycleRegressionEvidence {
+        command,
+        cwd,
+        os,
+        arch,
+        cpu,
+        seam,
+        measurements,
+        comparisons,
+    })
+}
+
+fn json_array<'a>(value: &'a Value, key: &str) -> Result<&'a [Value], String> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .ok_or_else(|| format!("JSON value is missing array field {key:?}"))
+}
+
+fn json_object<'a>(value: &'a Value, key: &str) -> Result<&'a Value, String> {
+    value
+        .get(key)
+        .filter(|value| value.is_object())
+        .ok_or_else(|| format!("JSON value is missing object field {key:?}"))
+}
+
+fn json_string_map(value: &Value, name: &str) -> Result<BTreeMap<String, String>, String> {
+    value
+        .as_object()
+        .expect("json_object checked the value")
+        .iter()
+        .map(|(key, value)| {
+            value
+                .as_str()
+                .filter(|value| !value.is_empty())
+                .map(|value| (key.clone(), value.to_owned()))
+                .ok_or_else(|| format!("{name}.{key} must be a non-empty string"))
         })
         .collect()
 }
 
-fn split_evidence_list(value: &str) -> Vec<String> {
+fn json_scalar_map(value: &Value, name: &str) -> Result<BTreeMap<String, String>, String> {
     value
-        .split(" || ")
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .map(str::to_owned)
+        .as_object()
+        .expect("json_object checked the value")
+        .iter()
+        .map(|(key, value)| {
+            let rendered = match value {
+                Value::String(value) if !value.is_empty() => value.clone(),
+                Value::Number(value) => value.to_string(),
+                Value::Bool(value) => value.to_string(),
+                _ => return Err(format!("{name}.{key} must be a non-empty scalar")),
+            };
+            Ok((key.clone(), rendered))
+        })
         .collect()
 }
 
@@ -1268,7 +1699,9 @@ pub fn render_report(rows: &[BenchmarkRow]) -> Result<String, String> {
 pub fn render_report_with_comparison(
     rows: &[BenchmarkRow],
     baseline_rows: &[BenchmarkRow],
-    optimization_evidence: &[OptimizationEvidenceRow],
+    diagnostic_evidence: &DiagnosticEvidence,
+    criterion_diagnostics: &CriterionDiagnostics,
+    cycle_regression: &CycleRegressionEvidence,
     platform_qualifications: &[PlatformQualification],
 ) -> Result<String, String> {
     if baseline_rows.is_empty() {
@@ -1276,6 +1709,35 @@ pub fn render_report_with_comparison(
     }
     if baseline_rows.iter().any(|row| row.dirty) {
         return Err("the canonical pre-optimization baseline must be clean".to_owned());
+    }
+    if criterion_diagnostics.pre_commit != diagnostic_evidence.baseline_commit
+        || criterion_diagnostics.final_commit != diagnostic_evidence.final_commit
+    {
+        return Err("diagnostic and Criterion revision provenance do not match".to_owned());
+    }
+    let platform_set = platform_qualifications
+        .iter()
+        .map(|qualification| {
+            (
+                qualification.platform.as_str(),
+                qualification.precision.as_str(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    let required_platforms = [
+        ("x86_64", "f64"),
+        ("x86_64", "f32"),
+        ("aarch64", "f64"),
+        ("aarch64", "f32"),
+        ("wasm32-unknown-unknown", "f64"),
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+    if platform_qualifications.len() != 5 || platform_set != required_platforms {
+        return Err(
+            "exactly x86 f64/f32, AArch64 f64/f32, and WASM f64 qualifications are required"
+                .to_owned(),
+        );
     }
     let report = render_report(rows)?;
     let marker = "\nDetailed raw-row projection\n";
@@ -1331,13 +1793,7 @@ pub fn render_report_with_comparison(
     ));
 
     let current_pairs = primary_pairs(rows);
-    let baseline_pairs = primary_pairs(baseline_rows);
     let current_by_case = current_pairs
-        .iter()
-        .cloned()
-        .map(|pair| ((pair.case_id.clone(), pair.input_length), pair))
-        .collect::<BTreeMap<_, _>>();
-    let baseline_by_case = baseline_pairs
         .iter()
         .cloned()
         .map(|pair| ((pair.case_id.clone(), pair.input_length), pair))
@@ -1422,130 +1878,218 @@ pub fn render_report_with_comparison(
         }
     }
 
-    comparison.push_str(
-        "\nDurable optimization diagnosis and reproduction evidence\n\nEvidence kinds below are literal. `source` means source inspection and clean matrix behavior, not a sampled profiler or invented profiler percentage.\n\n| Ticket | Cases | Exact focused command(s) | Generated verdict from final clean rows |\n|---|---|---|---|\n",
-    );
-    for evidence in optimization_evidence {
-        let verdicts = evidence
-            .case_ids
+    comparison.push_str(&format!(
+        "\nDurable issue 57–62 diagnostic evidence\n\nGenerated only from the diagnostic and Criterion JSON artifacts. The retired optimization-evidence TSV is not a numeric or narrative source. Capture: {}. Baseline revision: `{}`. Final diagnostic revision: `{}`.\n\nDiagnostic environment: {}.\n\nExact top-level reproduction commands\n\n| Purpose | Command |\n|---|---|\n",
+        clean(&diagnostic_evidence.captured_at_utc),
+        diagnostic_evidence.baseline_commit,
+        diagnostic_evidence.final_commit,
+        diagnostic_evidence
+            .environment
             .iter()
-            .map(|case_id| focused_verdict(case_id, &current_by_case))
+            .map(|(key, value)| format!("{key}={}", clean(value)))
             .collect::<Vec<_>>()
-            .join("; ");
-        comparison.push_str(&format!(
-            "| {} | {} | {} | {} |\n",
-            clean(&evidence.ticket),
-            evidence.case_ids.join(", "),
-            evidence
-                .focused_commands
-                .iter()
-                .map(|command| format!("`{}`", clean(command)))
-                .collect::<Vec<_>>()
-                .join("<br>"),
-            verdicts
-        ));
+            .join("; ")
+    ));
+    for (purpose, command) in &diagnostic_evidence.commands {
+        comparison.push_str(&format!("| {} | `{}` |\n", clean(purpose), clean(command)));
     }
-    comparison.push_str(
-        "\n| Ticket | Ranked falsifiable hypotheses | Confirmed evidence | Neighboring-workload disposition |\n|---|---|---|---|\n",
-    );
-    for evidence in optimization_evidence {
+    for ticket in &diagnostic_evidence.tickets {
+        let profile = &ticket.profile_or_compiler_evidence;
         comparison.push_str(&format!(
-            "| {} | {} | {}: {} | {} — {} |\n",
-            clean(&evidence.ticket),
-            evidence
-                .hypotheses
-                .iter()
-                .enumerate()
-                .map(|(index, hypothesis)| format!("{}. {}", index + 1, clean(hypothesis)))
-                .collect::<Vec<_>>()
-                .join("<br>"),
-            evidence.confirmed_evidence_kind,
-            clean(&evidence.confirmed_evidence),
-            clean(&evidence.neighboring_workloads),
-            clean(&evidence.neighboring_disposition)
+            "\nIssue {} diagnostic record\n\nPre-change sampled/compiler artifact: `{}` (`sha256:{}`). Benchmark ID: `{}`. Working directory: `{}`.\n\n- Benchmark command: `{}`\n- Capture command: `{}`\n",
+            ticket.ticket,
+            clean(&json_nonempty_string(profile, "artifact")?),
+            clean(&json_nonempty_string(profile, "artifact_sha256")?),
+            clean(&json_nonempty_string(profile, "benchmark_id")?),
+            clean(&json_nonempty_string(profile, "cwd")?),
+            clean(&json_nonempty_string(profile, "benchmark_command")?),
+            clean(&json_nonempty_string(profile, "profile_command")?)
+        ));
+        if let Ok(hot_leaves) = json_array(profile, "ranked_hot_leaves") {
+            comparison.push_str(
+                "\nPre-change sampled hot leaves\n\n| Rank | Symbol | Samples |\n|---:|---|---:|\n",
+            );
+            for (index, leaf) in hot_leaves.iter().enumerate() {
+                comparison.push_str(&format!(
+                    "| {} | {} | {} |\n",
+                    index + 1,
+                    clean(&json_nonempty_string(leaf, "symbol")?),
+                    json_u64(leaf, "samples")?
+                ));
+            }
+        }
+        if let Some(compiler) = profile.get("compiler_evidence") {
+            comparison.push_str(&format!(
+                "\nCompiler/objdump evidence: `{}` (`sha256:{}`). Command: `{}`. Finding: {}. Instruction count: {}; packed f64 add/divide: {}/{}; scalar validation load sites: {}.\n",
+                clean(&json_nonempty_string(compiler, "artifact")?),
+                clean(&json_nonempty_string(compiler, "artifact_sha256")?),
+                clean(&json_nonempty_string(compiler, "command")?),
+                clean(&json_nonempty_string(compiler, "finding")?),
+                json_u64(compiler, "instruction_count")?,
+                json_u64(compiler, "packed_f64_add_instructions")?,
+                json_u64(compiler, "packed_f64_divide_instructions")?,
+                json_u64(compiler, "scalar_validation_load_sites")?
+            ));
+        }
+        comparison.push_str(
+            "\nRanked falsifiable hypotheses\n\n| Rank | Hypothesis | Prediction | Status | Evidence |\n|---:|---|---|---|---|\n",
+        );
+        for hypothesis in &ticket.ranked_hypotheses {
+            comparison.push_str(&format!(
+                "| {} | {} | {} | {} | {} |\n",
+                json_u64(hypothesis, "rank")?,
+                clean(&json_nonempty_string(hypothesis, "hypothesis")?),
+                clean(&json_nonempty_string(hypothesis, "prediction")?),
+                clean(&json_nonempty_string(hypothesis, "status")?),
+                clean(&json_nonempty_string(hypothesis, "evidence")?)
+            ));
+        }
+        comparison.push_str(
+            "\nRequired target and neighboring-workload dispositions\n\n| Workload | Disposition |\n|---|---|\n",
+        );
+        for neighbor in &ticket.required_neighbor_coverage {
+            comparison.push_str(&format!(
+                "| {} | {} |\n",
+                clean(&json_nonempty_string(neighbor, "workload")?),
+                clean(&json_nonempty_string(neighbor, "status")?)
+            ));
+        }
+    }
+
+    comparison.push_str(&format!(
+        "\nCriterion same-session before/after diagnostics\n\nAll values are parsed from the durable Criterion JSON. Environment: {}.\n\n| Ticket | Workload / role | Exact command and provenance | Pre median [95% CI] / throughput | Final median [95% CI] / throughput | Change | Disposition |\n|---:|---|---|---:|---:|---:|---|\n",
+        criterion_diagnostics
+            .environment
+            .iter()
+            .map(|(key, value)| format!("{key}={}", clean(value)))
+            .collect::<Vec<_>>()
+            .join("; ")
+    ));
+    let criterion_keys = criterion_diagnostics
+        .measurements
+        .iter()
+        .map(|measurement| (measurement.ticket, measurement.case_id.as_str()))
+        .collect::<BTreeSet<_>>();
+    for (ticket_number, case_id) in criterion_keys {
+        let pre = criterion_diagnostics
+            .measurements
+            .iter()
+            .find(|measurement| {
+                measurement.ticket == ticket_number
+                    && measurement.case_id == case_id
+                    && measurement.revision == "pre"
+            })
+            .expect("validated pre Criterion pair");
+        let final_measurement = criterion_diagnostics
+            .measurements
+            .iter()
+            .find(|measurement| {
+                measurement.ticket == ticket_number
+                    && measurement.case_id == case_id
+                    && measurement.revision == "final"
+            })
+            .expect("validated final Criterion pair");
+        let disposition = diagnostic_evidence
+            .tickets
+            .iter()
+            .find(|ticket| ticket.ticket == ticket_number)
+            .and_then(|ticket| {
+                ticket
+                    .criterion_comparisons
+                    .iter()
+                    .find(|value| value.get("case_id").and_then(Value::as_str) == Some(case_id))
+            })
+            .and_then(|value| value.get("disposition"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                format!("issue {ticket_number} {case_id} has no diagnostic disposition")
+            })?;
+        let change = (final_measurement.median_ns / pre.median_ns - 1.0) * 100.0;
+        comparison.push_str(&format!(
+            "| {ticket_number} | {} / {} | `{}`<br>cwd `{}`<br>benchmark `{}`<br>{} samples; {} | {:.3} us [{:.3}, {:.3}] / {:.3} Mobs/s | {:.3} us [{:.3}, {:.3}] / {:.3} Mobs/s | {change:+.1}% | {} |\n",
+            clean(case_id),
+            clean(&pre.role),
+            clean(&pre.command),
+            clean(&pre.cwd),
+            clean(&pre.benchmark_id),
+            pre.sample_count,
+            clean(&pre.timed_boundary),
+            pre.median_ns / 1_000.0,
+            pre.ci95_lower_ns / 1_000.0,
+            pre.ci95_upper_ns / 1_000.0,
+            pre.throughput_observations_per_second / 1.0e6,
+            final_measurement.median_ns / 1_000.0,
+            final_measurement.ci95_lower_ns / 1_000.0,
+            final_measurement.ci95_upper_ns / 1_000.0,
+            final_measurement.throughput_observations_per_second / 1.0e6,
+            clean(disposition)
         ));
     }
 
     comparison.push_str(
-        "\nClean before/after optimization effects\n\nEvery number in this table is read from matching caller-owned fast-ta rows in the committed clean pre-optimization and final matrices. Throughput is observations per second from those raw rows; the verdict is regenerated from the final same-run Rust/C pair.\n\n| Ticket | Definition | Input | Clean pre median [95% CI] | Clean pre throughput | Final median [95% CI] | Final throughput | Rust latency change | Focused verdict |\n|---|---|---:|---:|---:|---:|---:|---:|---|\n",
+        "\nSame-run semantic Rust/C pairs\n\nThese values and checksums are parsed from the semantic pair records embedded in the durable diagnostic JSON.\n\n| Ticket | Definition | Input | Revision | fast-ta median [95% CI] / throughput | TA-Lib C median [95% CI] / throughput | Rust/C | Checksums / disposition |\n|---:|---|---:|---|---:|---:|---:|---|\n",
     );
-    for evidence in optimization_evidence {
-        for case_id in &evidence.case_ids {
-            for input_length in INPUT_LENGTHS {
-                let before = find_measured_row(
-                    baseline_rows,
-                    "fast-ta",
-                    case_id,
-                    RUST_CALLER_MODE,
-                    input_length,
-                );
-                let after =
-                    find_measured_row(rows, "fast-ta", case_id, RUST_CALLER_MODE, input_length);
-                match (before, after) {
-                    (Some(before), Some(after)) => {
-                        let before_stats = before.stats.as_ref().expect("measured row has stats");
-                        let after_stats = after.stats.as_ref().expect("measured row has stats");
-                        let change = (after_stats.median_ns / before_stats.median_ns - 1.0) * 100.0;
-                        let verdict = current_by_case
-                            .get(&(case_id.clone(), input_length))
-                            .map_or_else(
-                                || "unavailable".to_owned(),
-                                |pair| focused_verdict_label(pair.ratio),
-                            );
-                        comparison.push_str(&format!(
-                            "| {} | {case_id} | {input_length} | {} | {:.3} Mobs/s | {} | {:.3} Mobs/s | {change:+.1}% | {verdict} |\n",
-                            clean(&evidence.ticket),
-                            format_median_ci(before_stats),
-                            before_stats.throughput_observations_per_second / 1.0e6,
-                            format_median_ci(after_stats),
-                            after_stats.throughput_observations_per_second / 1.0e6
-                        ));
-                    }
-                    _ => comparison.push_str(&format!(
-                        "| {} | {case_id} | {input_length} | unavailable | unavailable | unavailable | unavailable | unavailable | matching clean rows absent |\n",
-                        clean(&evidence.ticket)
-                    )),
-                }
+    for ticket in &diagnostic_evidence.tickets {
+        for semantic in &ticket.semantic_comparisons {
+            for revision in ["pre", "final"] {
+                let rust = json_object(semantic, &format!("{revision}_fast_ta"))?;
+                let c = json_object(semantic, &format!("{revision}_ta_lib_c"))?;
+                let ratio = json_numeric(semantic, &format!("{revision}_rust_over_c"))?;
+                comparison.push_str(&format!(
+                    "| {} | {} | {} | {revision} | {} | {} | {:.3}x | input_match={}; output_match={}; {} |\n",
+                    ticket.ticket,
+                    clean(&json_nonempty_string(semantic, "case_id")?),
+                    json_u64(semantic, "input_length")?,
+                    format_json_timing(rust)?,
+                    format_json_timing(c)?,
+                    ratio,
+                    json_bool(semantic, "input_checksum_match")?,
+                    json_bool(semantic, "output_checksum_match")?,
+                    clean(&json_nonempty_string(semantic, "disposition")?)
+                ));
             }
         }
     }
 
-    comparison.push_str(
-        "\nCDLDOJI clean-data investigation\n\nThe clean comparison, not the historical dirty diagnostic, shows whether the representative regressed. Source inspection identifies the only CDLDOJI batch change as migration to the shared `compute_single_setting_batch_into` rolling helper; Streaming did not take that helper. The table keeps raw and Rust/C-normalized changes separate so reference-run movement cannot be mistaken for a source effect.\n\n| Input | Pre Rust | Final Rust | Rust change | Pre Rust/C | Final Rust/C | Normalized ratio change | Disposition |\n|---:|---:|---:|---:|---:|---:|---:|---|\n",
-    );
-    for input_length in INPUT_LENGTHS {
-        let before = find_measured_row(
-            baseline_rows,
-            "fast-ta",
-            "CDLDOJI",
-            RUST_CALLER_MODE,
-            input_length,
-        );
-        let after = find_measured_row(rows, "fast-ta", "CDLDOJI", RUST_CALLER_MODE, input_length);
-        let before_pair = baseline_by_case.get(&("CDLDOJI".to_owned(), input_length));
-        let after_pair = current_by_case.get(&("CDLDOJI".to_owned(), input_length));
-        if let (Some(before), Some(after), Some(before_pair), Some(after_pair)) =
-            (before, after, before_pair, after_pair)
-        {
-            let before_stats = before.stats.as_ref().expect("measured row has stats");
-            let after_stats = after.stats.as_ref().expect("measured row has stats");
-            let rust_change = (after_stats.median_ns / before_stats.median_ns - 1.0) * 100.0;
-            let ratio_change = (after_pair.ratio / before_pair.ratio - 1.0) * 100.0;
-            let disposition = if ratio_change > 5.0 {
-                "confirmed clean batch regression; source-correlated with shared-helper migration; unresolved"
-            } else if ratio_change < -5.0 {
-                "clean normalized improvement"
-            } else {
-                "within the 5% normalized band"
-            };
-            comparison.push_str(&format!(
-                "| {input_length} | {:.3} us | {:.3} us | {rust_change:+.1}% | {:.3}x | {:.3}x | {ratio_change:+.1}% | {disposition} |\n",
-                before_stats.median_ns / 1_000.0,
-                after_stats.median_ns / 1_000.0,
-                before_pair.ratio,
-                after_pair.ratio
-            ));
-        }
+    comparison.push_str(&format!(
+        "\nIssue 61 Hilbert cycle regression control\n\nCommand: `{}`. Working directory: `{}`. Host: {} / {} / {}. Timed seam: {}.\n\n| Indicator | Input | Cursor pre median [95% CI] / throughput | Final clean-revert median [95% CI] / throughput | Cursor vs baseline | Final vs baseline | Source proof and disposition |\n|---|---:|---:|---:|---:|---:|---|\n",
+        clean(&cycle_regression.command),
+        clean(&cycle_regression.cwd),
+        clean(&cycle_regression.cpu),
+        clean(&cycle_regression.os),
+        clean(&cycle_regression.arch),
+        clean(&cycle_regression.seam)
+    ));
+    for cycle_comparison in &cycle_regression.comparisons {
+        let before = cycle_regression
+            .measurements
+            .iter()
+            .find(|measurement| {
+                measurement.indicator == cycle_comparison.indicator
+                    && measurement.input_length == cycle_comparison.input_length
+                    && measurement.variant == cycle_comparison.before_variant
+            })
+            .expect("validated cycle pre measurement");
+        let after = cycle_regression
+            .measurements
+            .iter()
+            .find(|measurement| {
+                measurement.indicator == cycle_comparison.indicator
+                    && measurement.input_length == cycle_comparison.input_length
+                    && measurement.variant == "b156ac1_modulo"
+            })
+            .expect("validated cycle final measurement");
+        comparison.push_str(&format!(
+            "| {} | {} | {} | {} | {:+.1}% | {:+.1}% | {} — {} |\n",
+            clean(&cycle_comparison.indicator),
+            cycle_comparison.input_length,
+            format_cycle_timing(before),
+            format_cycle_timing(after),
+            cycle_comparison.cursor_vs_baseline_percent,
+            cycle_comparison.after_vs_baseline_percent,
+            clean(&cycle_comparison.source_proof),
+            clean(&cycle_comparison.disposition)
+        ));
     }
 
     let baseline_by_row = baseline_rows
@@ -1687,54 +2231,36 @@ pub fn render_report_with_comparison(
     Ok(format!("{summary}{comparison}{marker}{details}"))
 }
 
-fn find_measured_row<'a>(
-    rows: &'a [BenchmarkRow],
-    implementation: &str,
-    case_id: &str,
-    mode: &str,
-    input_length: usize,
-) -> Option<&'a BenchmarkRow> {
-    rows.iter().find(|row| {
-        row.implementation == implementation
-            && row.case_id == case_id
-            && row.mode == mode
-            && row.input_length == input_length
-            && row.semantic_status == "verified"
-            && row.timing_status == "measured"
-            && row.stats.is_some()
-    })
+fn json_numeric(value: &Value, key: &str) -> Result<f64, String> {
+    value
+        .get(key)
+        .and_then(|value| {
+            value
+                .as_f64()
+                .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
+        })
+        .filter(|value| value.is_finite())
+        .ok_or_else(|| format!("JSON value is missing finite numeric field {key:?}"))
 }
 
-fn format_median_ci(stats: &TimingStats) -> String {
+fn format_json_timing(value: &Value) -> Result<String, String> {
+    Ok(format!(
+        "{:.3} us [{:.3}, {:.3}] / {:.3} Mobs/s",
+        json_numeric(value, "median_ns")? / 1_000.0,
+        json_numeric(value, "ci95_lower_ns")? / 1_000.0,
+        json_numeric(value, "ci95_upper_ns")? / 1_000.0,
+        json_numeric(value, "throughput_observations_per_second")? / 1.0e6
+    ))
+}
+
+fn format_cycle_timing(value: &CycleMeasurement) -> String {
     format!(
-        "{:.3} us [{:.3}, {:.3}]",
-        stats.median_ns / 1_000.0,
-        stats.ci95_lower_ns / 1_000.0,
-        stats.ci95_upper_ns / 1_000.0
+        "{:.3} us [{:.3}, {:.3}] / {:.3} Mobs/s",
+        value.median_ns / 1_000.0,
+        value.ci95_lower_ns / 1_000.0,
+        value.ci95_upper_ns / 1_000.0,
+        value.throughput_observations_per_second / 1.0e6
     )
-}
-
-fn focused_verdict(
-    case_id: &str,
-    current_by_case: &BTreeMap<(String, usize), PrimaryPair>,
-) -> String {
-    let verdicts = INPUT_LENGTHS.map(|input_length| {
-        current_by_case
-            .get(&(case_id.to_owned(), input_length))
-            .map_or_else(
-                || format!("{input_length} unavailable"),
-                |pair| format!("{input_length} {}", focused_verdict_label(pair.ratio)),
-            )
-    });
-    format!("{case_id}: {}", verdicts.join(", "))
-}
-
-fn focused_verdict_label(ratio: f64) -> String {
-    if ratio <= 1.05 {
-        format!("PASS ({ratio:.3}x)")
-    } else {
-        format!("FAIL ({ratio:.3}x)")
-    }
 }
 
 fn comparison_row_key(

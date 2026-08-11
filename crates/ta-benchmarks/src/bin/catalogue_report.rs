@@ -2,16 +2,18 @@ use std::fs;
 use std::path::PathBuf;
 
 use ta_benchmarks::catalogue_matrix::{
-    read_optimization_evidence, read_platform_qualification, read_raw_rows,
-    render_report_with_comparison,
+    read_criterion_diagnostics, read_cycle_regression, read_diagnostic_evidence,
+    read_platform_qualification, read_raw_rows, render_report_with_comparison,
 };
 
 #[derive(Debug)]
 struct Args {
     raw: PathBuf,
     report: PathBuf,
-    baseline: Option<PathBuf>,
-    optimization_evidence: Option<PathBuf>,
+    baseline: PathBuf,
+    diagnostic_evidence: PathBuf,
+    criterion_diagnostics: PathBuf,
+    cycle_regression: PathBuf,
     platform_qualifications: Vec<PathBuf>,
 }
 
@@ -25,18 +27,10 @@ fn main() {
 fn run() -> Result<(), String> {
     let args = parse_args()?;
     let rows = read_raw_rows(&args.raw)?;
-    let baseline_rows = args
-        .baseline
-        .as_deref()
-        .map(read_raw_rows)
-        .transpose()?
-        .unwrap_or_default();
-    let optimization_evidence = args
-        .optimization_evidence
-        .as_deref()
-        .map(read_optimization_evidence)
-        .transpose()?
-        .unwrap_or_default();
+    let baseline_rows = read_raw_rows(&args.baseline)?;
+    let diagnostic_evidence = read_diagnostic_evidence(&args.diagnostic_evidence)?;
+    let criterion_diagnostics = read_criterion_diagnostics(&args.criterion_diagnostics)?;
+    let cycle_regression = read_cycle_regression(&args.cycle_regression)?;
     let platform_qualifications = args
         .platform_qualifications
         .iter()
@@ -45,7 +39,9 @@ fn run() -> Result<(), String> {
     let report = render_report_with_comparison(
         &rows,
         &baseline_rows,
-        &optimization_evidence,
+        &diagnostic_evidence,
+        &criterion_diagnostics,
+        &cycle_regression,
         &platform_qualifications,
     )?;
     if let Some(parent) = args.report.parent() {
@@ -62,7 +58,9 @@ fn parse_args() -> Result<Args, String> {
     let mut raw = None;
     let mut report = None;
     let mut baseline = None;
-    let mut optimization_evidence = None;
+    let mut diagnostic_evidence = None;
+    let mut criterion_diagnostics = None;
+    let mut cycle_regression = None;
     let mut platform_qualifications = Vec::new();
     let mut arguments = std::env::args_os().skip(1);
     while let Some(argument) = arguments.next() {
@@ -70,9 +68,13 @@ fn parse_args() -> Result<Args, String> {
             Some("--raw") => raw = arguments.next().map(PathBuf::from),
             Some("--report") => report = arguments.next().map(PathBuf::from),
             Some("--baseline") => baseline = arguments.next().map(PathBuf::from),
-            Some("--optimization-evidence") => {
-                optimization_evidence = arguments.next().map(PathBuf::from)
+            Some("--diagnostic-evidence") => {
+                diagnostic_evidence = arguments.next().map(PathBuf::from)
             }
+            Some("--criterion-diagnostics") => {
+                criterion_diagnostics = arguments.next().map(PathBuf::from)
+            }
+            Some("--cycle-regression") => cycle_regression = arguments.next().map(PathBuf::from),
             Some("--platform-qualification") => {
                 platform_qualifications.push(
                     arguments
@@ -88,8 +90,13 @@ fn parse_args() -> Result<Args, String> {
     Ok(Args {
         raw: raw.ok_or_else(|| "--raw PATH is required".to_owned())?,
         report: report.ok_or_else(|| "--report PATH is required".to_owned())?,
-        baseline,
-        optimization_evidence,
+        baseline: baseline.ok_or_else(|| "--baseline PATH is required".to_owned())?,
+        diagnostic_evidence: diagnostic_evidence
+            .ok_or_else(|| "--diagnostic-evidence PATH is required".to_owned())?,
+        criterion_diagnostics: criterion_diagnostics
+            .ok_or_else(|| "--criterion-diagnostics PATH is required".to_owned())?,
+        cycle_regression: cycle_regression
+            .ok_or_else(|| "--cycle-regression PATH is required".to_owned())?,
         platform_qualifications,
     })
 }

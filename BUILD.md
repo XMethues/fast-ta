@@ -121,12 +121,11 @@ or mismarked tree is discarded rather than treated as a usable source cache.
 Dependencies remain under `target/catalogue-matrix/deps`. Every run writes
 `target/catalogue-matrix/results/catalogue-matrix-raw.tsv`; its human report is
 generated only after rereading those rows. `--publish` rejects noncanonical
-sample, warm-up, sample-duration, baseline, and optimization-evidence inputs,
-malformed or non-positive timing evidence, confidence intervals that do not
-contain their median, incoherent throughput/outlier counts, and zero iteration
-counts. It then requires every expected case × input length ×
-implementation/mode cell with one consistent pinned provenance before copying
-the stable review paths:
+sample, warm-up, sample-duration, and baseline inputs, malformed or non-positive
+timing evidence, confidence intervals that do not contain their median,
+incoherent throughput/outlier counts, and zero iteration counts.
+It then requires every expected case × input length × implementation/mode cell
+with one consistent pinned provenance before copying the stable review paths:
 
 ```text
 crates/ta-benchmarks/baselines/catalogue_matrix_optimized.tsv
@@ -138,12 +137,13 @@ The canonical comparison input is
 pre-optimization matrix. The historical
 `baselines/catalogue_matrix_post_scalar_diagnostic.tsv` is retained only as a
 dirty historical diagnostic and is not read by the canonical report generator.
-Durable ticket diagnosis, hypotheses, focused commands, and neighboring
-dispositions come from
-`baselines/catalogue_matrix_optimization_evidence.tsv`. Before/final medians,
-95% confidence intervals, throughput, verdicts, and every change above 5% are
-derived by the renderer from the two clean raw matrices rather than copied into
-prose.
+Durable ticket hypotheses, pre-change sampled/objdump evidence, exact commands,
+Criterion before/after measurements, semantic Rust/C pairs, and neighboring
+dispositions come from `baselines/issue_57_62_diagnostic_evidence.json` and
+`baselines/issue_57_62_criterion_diagnostics.json`. The issue 61 clean-revert
+control comes from `baselines/issue61_cycle_regression.jsonl`. The renderer
+derives every numeric table from these artifacts or the two clean raw matrices;
+the older `catalogue_matrix_optimization_evidence.tsv` is not a report input.
 
 To regenerate the committed report only from committed evidence artifacts:
 
@@ -152,9 +152,13 @@ cargo run --release -p ta-benchmarks --features catalogue-matrix \
   --bin catalogue-report -- \
   --raw crates/ta-benchmarks/baselines/catalogue_matrix_optimized.tsv \
   --baseline crates/ta-benchmarks/baselines/catalogue_matrix_pre_optimization.tsv \
-  --optimization-evidence crates/ta-benchmarks/baselines/catalogue_matrix_optimization_evidence.tsv \
+  --diagnostic-evidence crates/ta-benchmarks/baselines/issue_57_62_diagnostic_evidence.json \
+  --criterion-diagnostics crates/ta-benchmarks/baselines/issue_57_62_criterion_diagnostics.json \
+  --cycle-regression crates/ta-benchmarks/baselines/issue61_cycle_regression.jsonl \
   --platform-qualification crates/ta-benchmarks/baselines/typprice_x86_f64_qualification.jsonl \
   --platform-qualification crates/ta-benchmarks/baselines/typprice_x86_f32_qualification.jsonl \
+  --platform-qualification crates/ta-benchmarks/baselines/typprice_aarch64_f64_qualification.jsonl \
+  --platform-qualification crates/ta-benchmarks/baselines/typprice_aarch64_f32_qualification.jsonl \
   --platform-qualification crates/ta-benchmarks/baselines/typprice_wasm_qualification.jsonl \
   --report crates/ta-benchmarks/CATALOGUE_MATRIX_REPORT.txt
 ```
