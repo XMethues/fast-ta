@@ -68,7 +68,7 @@ impl From<Candle> for WideCandle {
 
 impl Candle {
     #[inline]
-    fn real_body(self) -> PatternFloat {
+    pub(crate) fn real_body(self) -> PatternFloat {
         (widen(self.close) - widen(self.open)).abs()
     }
 
@@ -112,7 +112,7 @@ impl Candle {
     }
 
     #[inline]
-    fn range(self, range_kind: CandleRangeKind) -> PatternFloat {
+    pub(crate) fn range(self, range_kind: CandleRangeKind) -> PatternFloat {
         match range_kind {
             CandleRangeKind::RealBody => self.real_body(),
             CandleRangeKind::HighLow => self.high_low_range(),
@@ -313,6 +313,10 @@ pub(crate) trait PatternDefinition: Copy {
         context: &RecognitionContext<'_>,
         state: &mut Self::State,
     ) -> PatternSignal;
+
+    fn compute_batch_into(&self, _input: CandleInput<'_>, _output: &mut [PatternSignal]) -> bool {
+        false
+    }
 }
 
 /// Shared rolling lifecycle used by all four public execution modes.
@@ -423,12 +427,7 @@ where
                 output_index += 1;
             }
         }
-        debug_assert_eq!(output_index, shape.output_count);
-        if shape.output_count == 0 {
-            OutputRange::empty()
-        } else {
-            OutputRange::new(shape.lookback, shape.output_count)
-        }
+        shape.output_range()
     }
 }
 
@@ -437,6 +436,16 @@ pub(crate) struct BatchShape {
     lookback: usize,
     source_len: usize,
     output_count: usize,
+}
+
+impl BatchShape {
+    fn output_range(self) -> OutputRange {
+        if self.output_count == 0 {
+            OutputRange::empty()
+        } else {
+            OutputRange::new(self.lookback, self.output_count)
+        }
+    }
 }
 
 pub(crate) fn validate_batch<D: PatternDefinition>(
@@ -485,8 +494,11 @@ pub(crate) fn compute_owned<D: PatternDefinition>(
     let shape = validate_batch(definition, input)?;
     let mut values = Vec::with_capacity(shape.output_count);
     values.resize(shape.output_count, PatternSignal::NoMatch);
-    let mut engine = RecognitionEngine::new(definition);
-    let range = engine.run_validated(input, &mut values, shape);
+    let range = if definition.compute_batch_into(input, &mut values) {
+        shape.output_range()
+    } else {
+        RecognitionEngine::new(definition).run_validated(input, &mut values, shape)
+    };
     CompactOutput::new(shape.source_len, range, values)
 }
 
@@ -497,6 +509,9 @@ pub(crate) fn compute_into<D: PatternDefinition>(
 ) -> Result<OutputRange> {
     let shape = validate_batch(definition, input)?;
     validate_output_len(definition.name(), output.len(), shape.output_count)?;
+    if definition.compute_batch_into(input, output) {
+        return Ok(shape.output_range());
+    }
     let mut engine = RecognitionEngine::new(definition);
     Ok(engine.run_validated(input, output, shape))
 }
@@ -510,6 +525,9 @@ pub(crate) fn prepared_compute_into<D: PatternDefinition>(
     validate_prepared_capacity(input, max_input_len)?;
     let shape = validate_batch(engine.definition(), input)?;
     validate_output_len(engine.definition().name(), output.len(), shape.output_count)?;
+    if engine.definition().compute_batch_into(input, output) {
+        return Ok(shape.output_range());
+    }
     Ok(engine.run_validated(input, output, shape))
 }
 
