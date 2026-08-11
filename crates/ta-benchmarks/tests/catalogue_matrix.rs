@@ -374,7 +374,7 @@ fn platform_qualification_parser_requires_provenance_and_preserves_timings() {
     );
     let qualification =
         parse_platform_qualification(input, "test.jsonl").expect("parse qualification JSONL");
-    assert_eq!(qualification.workflow_run_id, 42);
+    assert_eq!(qualification.workflow_run_id, "42");
     assert_eq!(qualification.active_backend, "avx2");
     assert_eq!(qualification.measurements[0].median_ns, 100.0);
 

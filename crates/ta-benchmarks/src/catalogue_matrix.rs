@@ -724,9 +724,9 @@ pub struct PlatformQualification {
     pub cpu: String,
     pub os: String,
     pub commit: String,
-    pub workflow_run_id: u64,
+    pub workflow_run_id: String,
     pub workflow_run_url: String,
-    pub workflow_job_id: u64,
+    pub workflow_job: String,
     pub active_backend: String,
     pub feature_flags: String,
     pub measurements: Vec<QualificationMeasurement>,
@@ -795,9 +795,9 @@ pub fn parse_platform_qualification(
                     json_string(&value, "cpu")?,
                     json_optional_string(&value, "os"),
                     json_string(&value, "commit")?,
-                    json_u64(&value, "workflow_run_id")?,
+                    json_identifier(&value, "workflow_run_id")?,
                     json_string(&value, "workflow_run_url")?,
-                    json_u64(&value, "workflow_job_id")?,
+                    json_identifier_alias(&value, "workflow_job", "workflow_job_id")?,
                     active_backend,
                     feature_flags,
                 ));
@@ -848,7 +848,7 @@ pub fn parse_platform_qualification(
         commit,
         workflow_run_id,
         workflow_run_url,
-        workflow_job_id,
+        workflow_job,
         active_backend,
         feature_flags,
     ) = metadata.ok_or_else(|| format!("{artifact} has no metadata record"))?;
@@ -865,7 +865,7 @@ pub fn parse_platform_qualification(
         commit,
         workflow_run_id,
         workflow_run_url,
-        workflow_job_id,
+        workflow_job,
         active_backend,
         feature_flags,
         measurements,
@@ -893,6 +893,20 @@ fn json_u64(value: &Value, key: &str) -> Result<u64, String> {
         .get(key)
         .and_then(Value::as_u64)
         .ok_or_else(|| format!("JSON record is missing integer field {key:?}"))
+}
+
+fn json_identifier(value: &Value, key: &str) -> Result<String, String> {
+    match value.get(key) {
+        Some(Value::String(value)) => Ok(value.clone()),
+        Some(Value::Number(value)) => Ok(value.to_string()),
+        _ => Err(format!(
+            "JSON record is missing string or integer field {key:?}"
+        )),
+    }
+}
+
+fn json_identifier_alias(value: &Value, key: &str, alias: &str) -> Result<String, String> {
+    json_identifier(value, key).or_else(|_| json_identifier(value, alias))
 }
 
 fn json_f64(value: &Value, key: &str) -> Result<f64, String> {
@@ -1458,7 +1472,7 @@ pub fn render_report_with_comparison(
             },
             qualification.workflow_run_id,
             clean(&qualification.workflow_run_url),
-            qualification.workflow_job_id,
+            qualification.workflow_job,
             qualification.commit
         ));
     }
