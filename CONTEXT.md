@@ -16,9 +16,57 @@ _Avoid_: Catalogue expansion
 The mathematical meaning, parameters, edge behavior, and expected numerical result of an indicator. TA-Lib is the default reference, while a numerically more accurate implementation is preferred when it preserves that meaning.
 _Avoid_: TA-Lib call semantics
 
+**Pattern Recognition Indicator**:
+An Indicator Definition that independently evaluates an OHLC Observation Series for one TA-Lib-named candlestick pattern. It does not aggregate or arbitrate results across patterns.
+_Avoid_: Combined candlestick classifier, pattern scanner
+
 **Indicator Configuration**:
 The immutable parameter set that selects an indicator definition, such as a period or moving-average kind. It does not include observations accumulated while executing the indicator.
 _Avoid_: Indicator state, calculator state
+
+**Candle Settings**:
+The immutable eleven-setting threshold collection carried by a Pattern Recognition Indicator Configuration. Its default is the TA-Lib v0.7.1 collection; only settings referenced by the Indicator Definition affect its result, Lookback, and Warm-up.
+_Avoid_: Global candle settings, process-wide candle configuration
+
+**Candle Setting**:
+One candlestick threshold definition comprising a Candle Range Kind, an Average Period from zero through 100,000, and a finite nonnegative Factor. Period zero uses the current Observation range; a positive Period averages prior Observation ranges.
+_Avoid_: Unvalidated threshold triple, mutable candle setting
+
+**Candle Range Kind**:
+The measurement selected by a Candle Setting: Real Body, High-Low Range, or Shadows.
+_Avoid_: Arbitrary range function
+
+**Real Body**:
+The absolute difference between a Candle Observation's Close and Open.
+_Avoid_: Signed body, normalized body
+
+**High-Low Range**:
+The difference between a Candle Observation's High and Low.
+_Avoid_: True range, repaired range
+
+**Upper Shadow**:
+The difference between a Candle Observation's High and the greater of its Open and Close.
+_Avoid_: Clamped upper wick
+
+**Lower Shadow**:
+The difference between the lesser of a Candle Observation's Open and Close and its Low.
+_Avoid_: Clamped lower wick
+
+**Shadows**:
+The sum of a Candle Observation's Upper Shadow and Lower Shadow, equivalently its High-Low Range minus its Real Body.
+_Avoid_: One individual shadow, clamped shadows
+
+**Candle Color**:
+The binary direction used by Pattern Recognition Indicators: white or bullish when Close is greater than or equal to Open, and black or bearish otherwise. A zero-body candle is white when an Indicator Definition consults color; doji is a threshold classification, not a third color.
+_Avoid_: Three-state candle color, epsilon-based color
+
+**Candle Average**:
+The threshold derived from a Candle Setting at one source position. A positive Average Period averages the selected Candle Range Kind over immediately preceding Candle Observations, excluding the classified observation; period zero uses the current observation. The average is multiplied by the Factor and, only for Shadows, divided by two.
+_Avoid_: Average including the classified observation, moving average output
+
+**Penetration**:
+A finite nonnegative ratio configured by the seven Pattern Recognition Indicator Definitions that expose it. Values above one are valid; the fixed fifty-percent rule in CDLPIERCING is not a Penetration configuration.
+_Avoid_: Percentage restricted to zero through one
 
 **Period**:
 The configured observation count used by a rolling or recursive indicator.
@@ -33,6 +81,10 @@ _Avoid_: Generic moving-average type that includes MAMA
 **Observation**:
 One ordered input position containing the fields required by an indicator, such as a close value or an OHLCV tuple.
 _Avoid_: Row, record
+
+**Candle Observation**:
+One finite Observation containing Open, High, Low, and Close. It carries no timestamp, volume, instrument identity, or gap metadata; ordering and OHLC consistency remain Observation Series responsibilities.
+_Avoid_: Candlestick event, timestamped candle
 
 **Observation Series**:
 A dense, oldest-to-newest sequence of finite observations. Time gaps, resampling, missing-value repair, sign constraints, and OHLC consistency are responsibilities of the caller.
@@ -65,11 +117,11 @@ Incremental evaluation that consumes ticks in order and retains state between th
 _Avoid_: Batch loop, prepared batch
 
 **Lookback**:
-The number of leading source positions before the first valid batch result.
+The number of leading source positions before the first valid batch result; the first valid result is aligned to the zero-based source position equal to Lookback.
 _Avoid_: Padding length
 
 **Warm-up**:
-The streaming phase before enough ticks have arrived to produce the first valid result.
+The streaming phase spanning the first Lookback ticks. The following tick, at the source position equal to Lookback, produces the first valid result.
 _Avoid_: Error, missing result
 
 **Stabilization**:
@@ -77,6 +129,22 @@ A fixed initial observation span required by an Indicator Definition before its 
 _Avoid_: Unstable period, global compatibility setting
 
 ## Result language
+
+**Pattern Signal**:
+The source-aligned result of one Pattern Recognition Indicator: No Match, or a Match comprising a Pattern Direction and Pattern Strength. No Match is a valid result and is distinct from Warm-up, when no result exists yet.
+_Avoid_: Boolean pattern match, signed integer output
+
+**Pattern Direction**:
+The bullish or bearish direction of a matched Pattern Signal.
+_Avoid_: Integer sign, market trend
+
+**Pattern Strength**:
+The categorical strength of a matched Pattern Signal: Partial for the magnitude-80 Engulfing or Harami boundary result, Standard for an ordinary magnitude-100 formation, or Confirmed for a magnitude-200 Hikkake confirmation. Strength is neither probability nor generic confidence, and each Indicator Definition determines which strengths it can emit.
+_Avoid_: Match score, confidence percentage
+
+**Pending Confirmation**:
+The single unconfirmed Standard Hikkake formation retained for at most the next three source positions. A qualifying close produces a Confirmed Pattern Signal in the formation direction; a newer formation replaces it, including when that source position could also confirm it.
+_Avoid_: Confirmation queue, indefinite pending pattern
 
 **Compact Output**:
 A result containing only valid indicator values together with the source range to which they belong.
