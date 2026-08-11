@@ -1,0 +1,25 @@
+stage	case_id	input_length	rust_median_ns	c_median_ns	source
+issue-56 pre-target	ADX	256	2221.0	1477.0	issue-57 retained raw rows
+issue-56 pre-target	ADX	4096	36272.0	24393.0	issue-57 retained raw rows
+issue-56 pre-target	ADX	65536	584967.0	396265.0	issue-57 retained raw rows
+issue-56 pre-target	ATR	256	1550.0	1342.0	issue-60 retained raw rows
+issue-56 pre-target	ATR	4096	25517.0	23004.0	issue-60 retained raw rows
+issue-56 pre-target	ATR	65536	411855.0	352423.0	issue-60 retained raw rows
+issue-56 pre-target	HT_DCPHASE	256	24753.0	20108.0	issue-61 retained raw rows
+issue-56 pre-target	HT_DCPHASE	4096	448388.0	376080.0	issue-61 retained raw rows
+issue-56 pre-target	HT_DCPHASE	65536	7327552.0	5869115.0	issue-61 retained raw rows
+issue-56 pre-target	CDLDOJI	256	807.0	397.0	issue-59 retained raw rows
+issue-56 pre-target	CDLDOJI	4096	12620.0	5856.0	issue-59 retained raw rows
+issue-56 pre-target	CDLDOJI	65536	202112.0	90529.0	issue-59 retained raw rows
+issue-56 pre-target	CDLENGULFING	256	3016.0	300.0	issue-59 retained raw rows
+issue-56 pre-target	CDLENGULFING	4096	46064.0	3989.0	issue-59 retained raw rows
+issue-56 pre-target	CDLENGULFING	65536	749543.0	63094.0	issue-59 retained raw rows
+issue-56 pre-target	CDL3BLACKCROWS	256	3858.0	464.0	issue-59 retained raw rows
+issue-56 pre-target	CDL3BLACKCROWS	4096	62723.0	6642.0	issue-59 retained raw rows
+issue-56 pre-target	CDL3BLACKCROWS	65536	1000036.0	108563.0	issue-59 retained raw rows
+post-MACD diagnostic; pre-fusion baseline unavailable	MACD	256	829.7972440944882	1535.4666416791606	preserved dirty b156ac1 diagnostic raw rows
+post-MACD diagnostic; pre-fusion baseline unavailable	MACD	4096	14868.160447761193	29160.671232876713	preserved dirty b156ac1 diagnostic raw rows
+post-MACD diagnostic; pre-fusion baseline unavailable	MACD	65536	234405.05555555556	456062.5	preserved dirty b156ac1 diagnostic raw rows
+post-scalar pre-AArch64-SIMD diagnostic	TYPPRICE	256	412.33721946954245	104.08853125	preserved dirty b156ac1 diagnostic raw rows
+post-scalar pre-AArch64-SIMD diagnostic	TYPPRICE	4096	6075.797872340426	844.6887576552931	preserved dirty b156ac1 diagnostic raw rows
+post-scalar pre-AArch64-SIMD diagnostic	TYPPRICE	65536	102643.725	20018.0	preserved dirty b156ac1 diagnostic raw rows

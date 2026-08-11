@@ -19,6 +19,10 @@ name = "catalogue-matrix"
 path = "src/bin/catalogue_matrix.rs"
 required-features = ["catalogue-matrix"]
 
+[[bin]]
+name = "catalogue-report"
+path = "src/bin/catalogue_report.rs"
+
 [[bench]]
 name = "basic"
 harness = false

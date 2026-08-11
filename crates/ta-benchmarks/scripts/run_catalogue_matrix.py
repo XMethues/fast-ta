@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -34,6 +35,13 @@ MINIMUM_PYTHON = (3, 10)
 
 REPOSITORY = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = REPOSITORY / "target" / "catalogue-matrix"
+BENCHMARK_CRATE = REPOSITORY / "crates" / "ta-benchmarks"
+DEFAULT_BASELINE = BENCHMARK_CRATE / "baselines" / "catalogue_matrix_post_scalar_diagnostic.tsv"
+DEFAULT_OPTIMIZATION_EVIDENCE = (
+    BENCHMARK_CRATE / "baselines" / "catalogue_matrix_optimization_evidence.tsv"
+)
+PUBLISHED_RAW = BENCHMARK_CRATE / "baselines" / "catalogue_matrix_optimized.tsv"
+PUBLISHED_REPORT = BENCHMARK_CRATE / "CATALOGUE_MATRIX_REPORT.txt"
 
 
 def parse_args() -> argparse.Namespace:
@@ -42,6 +50,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--deps-dir", type=Path, default=DEFAULT_ROOT / "deps")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--python", default=sys.executable, help="Python used to create the isolated environment")
+    parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
+    parser.add_argument(
+        "--optimization-evidence",
+        type=Path,
+        default=DEFAULT_OPTIMIZATION_EVIDENCE,
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="publish a successful clean full run to the stable repository paths",
+    )
+    parser.add_argument(
+        "--publish-existing",
+        action="store_true",
+        help="regenerate and publish an existing full raw result without rerunning timings",
+    )
     parser.add_argument("--case", help="run one matrix case ID, for example ADX")
     parser.add_argument(
         "--input-length",
@@ -208,20 +232,100 @@ def prepare_python(
     return python_executable
 
 
+def output_directory(args: argparse.Namespace) -> Path:
+    if args.output_dir is not None:
+        return args.output_dir.resolve()
+    if args.case is not None or args.input_length is not None:
+        focus_name = f"{args.case or 'all'}-{args.input_length or 'all'}".lower()
+        return (DEFAULT_ROOT / "focused" / focus_name).resolve()
+    return (DEFAULT_ROOT / "results").resolve()
+
+
+def generate_report(args: argparse.Namespace, output_dir: Path) -> None:
+    arguments = [
+        "cargo",
+        "run",
+        "--release",
+        "-p",
+        "ta-benchmarks",
+        "--bin",
+        "catalogue-report",
+        "--",
+        "--raw",
+        str(output_dir / "catalogue-matrix-raw.tsv"),
+        "--report",
+        str(output_dir / "catalogue-matrix-report.txt"),
+    ]
+    if args.baseline is not None:
+        arguments.extend(("--baseline", str(args.baseline.resolve())))
+    if args.optimization_evidence is not None:
+        arguments.extend(
+            ("--optimization-evidence", str(args.optimization_evidence.resolve()))
+        )
+    run(arguments, cwd=REPOSITORY)
+
+
+def validate_publishable(raw_path: Path) -> None:
+    with raw_path.open(newline="", encoding="utf-8") as raw:
+        rows = list(csv.DictReader(raw, delimiter="\t"))
+    if len(rows) != 15 * 3 * 6:
+        raise RuntimeError(f"expected 270 full-matrix rows, found {len(rows)}")
+    requirements = {
+        "semantic_status": "verified",
+        "timing_status": "measured",
+        "sample_count": "50",
+        "dirty": "false",
+    }
+    for field, expected in requirements.items():
+        invalid = sum(row.get(field) != expected for row in rows)
+        if invalid:
+            raise RuntimeError(
+                f"cannot publish: {invalid} rows have {field} other than {expected!r}"
+            )
+    commits = {row["commit"] for row in rows}
+    if len(commits) != 1 or "unavailable" in commits:
+        raise RuntimeError(f"cannot publish inconsistent commit provenance: {commits}")
+
+
+def publish(output_dir: Path) -> None:
+    raw_path = output_dir / "catalogue-matrix-raw.tsv"
+    report_path = output_dir / "catalogue-matrix-report.txt"
+    validate_publishable(raw_path)
+    shutil.copy2(raw_path, PUBLISHED_RAW)
+    shutil.copy2(report_path, PUBLISHED_REPORT)
+    print(f"published raw rows: {PUBLISHED_RAW}")
+    print(f"published human report: {PUBLISHED_REPORT}")
+
+
+def validate_publish_existing_args(args: argparse.Namespace) -> None:
+    incompatible = {
+        "--source-archive": args.source_archive,
+        "--case": args.case,
+        "--input-length": args.input_length,
+        "--samples": args.samples,
+        "--warmup-ms": args.warmup_ms,
+        "--sample-ms": args.sample_ms,
+    }
+    supplied = [flag for flag, value in incompatible.items() if value is not None]
+    if supplied:
+        raise SystemExit(
+            "--publish-existing cannot be combined with " + ", ".join(supplied)
+        )
+
+
 def main() -> None:
     args = parse_args()
+    output_dir = output_directory(args)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.publish_existing:
+        validate_publish_existing_args(args)
+        generate_report(args, output_dir)
+        publish(output_dir)
+        return
+
     python_identity = inspect_python(args.python)
     deps_dir = args.deps_dir.resolve()
-    if args.output_dir is not None:
-        output_dir = args.output_dir.resolve()
-    elif args.case is not None or args.input_length is not None:
-        focus_name = f"{args.case or 'all'}-{args.input_length or 'all'}".lower()
-        output_dir = (DEFAULT_ROOT / "focused" / focus_name).resolve()
-    else:
-        output_dir = (DEFAULT_ROOT / "results").resolve()
     deps_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     archive = checked_archive(args.source_archive, deps_dir)
     talib_install = build_talib(archive, deps_dir)
     python = prepare_python(args.python, python_identity, deps_dir, talib_install)
@@ -264,6 +368,11 @@ def main() -> None:
         cwd=REPOSITORY,
         env=environment,
     )
+    generate_report(args, output_dir)
+    if args.publish:
+        if args.case is not None or args.input_length is not None:
+            raise SystemExit("--publish requires the complete matrix")
+        publish(output_dir)
 
 
 if __name__ == "__main__":

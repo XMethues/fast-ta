@@ -638,6 +638,62 @@ pub fn parse_raw_rows(input: &str) -> Result<Vec<BenchmarkRow>, String> {
         .collect()
 }
 
+pub const OPTIMIZATION_EVIDENCE_HEADER: &str =
+    "stage\tcase_id\tinput_length\trust_median_ns\tc_median_ns\tsource";
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct OptimizationEvidenceRow {
+    pub stage: String,
+    pub case_id: String,
+    pub input_length: usize,
+    pub rust_median_ns: f64,
+    pub c_median_ns: f64,
+    pub source: String,
+}
+
+pub fn read_optimization_evidence(path: &Path) -> Result<Vec<OptimizationEvidenceRow>, String> {
+    let input =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    parse_optimization_evidence(&input)
+}
+
+pub fn parse_optimization_evidence(input: &str) -> Result<Vec<OptimizationEvidenceRow>, String> {
+    let mut lines = input.lines();
+    if lines.next() != Some(OPTIMIZATION_EVIDENCE_HEADER) {
+        return Err("unexpected optimization evidence header".to_owned());
+    }
+    lines
+        .enumerate()
+        .filter(|(_, line)| !line.is_empty())
+        .map(|(index, line)| {
+            let fields = line.split('\t').collect::<Vec<_>>();
+            if fields.len() != 6 {
+                return Err(format!(
+                    "optimization evidence row {} has {} fields, expected 6",
+                    index + 2,
+                    fields.len()
+                ));
+            }
+            let rust_median_ns = parse::<f64>(fields[3], "rust_median_ns")?;
+            let c_median_ns = parse::<f64>(fields[4], "c_median_ns")?;
+            if rust_median_ns <= 0.0 || c_median_ns <= 0.0 {
+                return Err(format!(
+                    "optimization evidence row {} has a non-positive median",
+                    index + 2
+                ));
+            }
+            Ok(OptimizationEvidenceRow {
+                stage: fields[0].to_owned(),
+                case_id: fields[1].to_owned(),
+                input_length: parse(fields[2], "input_length")?,
+                rust_median_ns,
+                c_median_ns,
+                source: fields[5].to_owned(),
+            })
+        })
+        .collect()
+}
+
 pub fn render_report(rows: &[BenchmarkRow]) -> Result<String, String> {
     if rows.is_empty() {
         return Err(
@@ -664,7 +720,7 @@ pub fn render_report(rows: &[BenchmarkRow]) -> Result<String, String> {
     report.push_str(if first.dirty {
         "Run classification: diagnostic only; a dirty run cannot replace the canonical baseline.\n"
     } else {
-        "Run classification: clean canonical baseline candidate.\n"
+        "Run classification: clean reference run; completeness and publication status follow.\n"
     });
     report.push_str("95% intervals are deterministic bootstrap confidence intervals for the median (10,000 resamples). Outliers use Tukey's 1.5 IQR fences. Rust/C ratios below use only same-run caller-owned rows with identical case, parameters, fixture, and input length.\n\n");
 
@@ -722,10 +778,12 @@ pub fn render_report(rows: &[BenchmarkRow]) -> Result<String, String> {
         report.push_str("| - | - | unavailable | no comparable measured pairs |\n");
     } else {
         for (index, pair) in large.iter().enumerate() {
-            let disposition = if pair.ratio > 1.0 {
-                "fast-ta slower; optimization candidate"
+            let disposition = if pair.ratio > 1.05 {
+                "remaining comparative gap above 5%"
+            } else if pair.ratio < 0.95 {
+                "fast-ta faster"
             } else {
-                "fast-ta at parity or faster"
+                "parity band"
             };
             report.push_str(&format!(
                 "| {} | {} | {:.3}x | {disposition} |\n",
@@ -823,7 +881,328 @@ pub fn render_report(rows: &[BenchmarkRow]) -> Result<String, String> {
     Ok(report)
 }
 
-#[derive(Debug)]
+pub fn render_report_with_comparison(
+    rows: &[BenchmarkRow],
+    baseline_rows: &[BenchmarkRow],
+    optimization_evidence: &[OptimizationEvidenceRow],
+) -> Result<String, String> {
+    let report = render_report(rows)?;
+    let marker = "\nDetailed raw-row projection\n";
+    let (summary, details) = report
+        .split_once(marker)
+        .ok_or_else(|| "generated report is missing the detailed-row marker".to_owned())?;
+    let first = rows
+        .first()
+        .ok_or_else(|| "cannot render a comparison report without raw rows".to_owned())?;
+    let mut comparison = String::new();
+
+    let verified = rows
+        .iter()
+        .filter(|row| row.semantic_status == "verified")
+        .count();
+    let measured = rows
+        .iter()
+        .filter(|row| row.timing_status == "measured")
+        .count();
+    let sample_counts = rows
+        .iter()
+        .filter_map(|row| row.stats.as_ref().map(|stats| stats.sample_count))
+        .collect::<BTreeSet<_>>();
+    let clean_run = rows.iter().all(|row| !row.dirty);
+    comparison.push_str(
+        "\nRun completeness and semantic gate\n\n| Raw rows | Semantic verified | Measured | Sample counts | Provenance |\n|---:|---:|---:|---|---|\n",
+    );
+    comparison.push_str(&format!(
+        "| {} | {verified} | {measured} | {} | {} |\n",
+        rows.len(),
+        sample_counts
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        if clean_run {
+            "clean canonical run"
+        } else {
+            "dirty diagnostic run"
+        }
+    ));
+
+    let current_pairs = primary_pairs(rows);
+    let current_by_case = current_pairs
+        .iter()
+        .cloned()
+        .map(|pair| ((pair.case_id.clone(), pair.input_length), pair))
+        .collect::<BTreeMap<_, _>>();
+    comparison.push_str(
+        "\nPer-case caller-owned Rust/C latency ratios\n\n| Definition | 256 | 4,096 | 65,536 | 65,536 disposition |\n|---|---:|---:|---:|---|\n",
+    );
+    let case_ids = current_pairs
+        .iter()
+        .map(|pair| pair.case_id.clone())
+        .collect::<BTreeSet<_>>();
+    for case_id in case_ids {
+        let ratios = INPUT_LENGTHS.map(|input_length| {
+            current_by_case
+                .get(&(case_id.clone(), input_length))
+                .map(|pair| pair.ratio)
+        });
+        let large_disposition = match ratios[2] {
+            Some(ratio) if ratio > 1.05 => "unresolved gap above the 5% band",
+            Some(ratio) if ratio < 0.95 => "fast-ta faster",
+            Some(_) => "parity band",
+            None => "unavailable",
+        };
+        comparison.push_str(&format!(
+            "| {case_id} | {} | {} | {} | {large_disposition} |\n",
+            format_ratio(ratios[0]),
+            format_ratio(ratios[1]),
+            format_ratio(ratios[2])
+        ));
+    }
+
+    comparison.push_str(
+        "\nExecution-path cost summaries\n\nRatios are geometric path/C latency indices over matching cases. Only the caller-owned Rust/C row is a kernel comparison; the other rows deliberately expose distinct public or user-facing costs.\n\n| Input | Path | Cases | Geometric path/C ratio | Interpretation |\n|---:|---|---:|---:|---|\n",
+    );
+    let paths = [
+        (
+            "fast-ta",
+            RUST_OWNED_MODE,
+            "Owned Compact Output",
+            "API-owned compact allocation included",
+        ),
+        (
+            "fast-ta",
+            RUST_CALLER_MODE,
+            "caller-owned Rust/C kernel",
+            "primary comparable kernel seam",
+        ),
+        (
+            "fast-ta",
+            RUST_PREPARED_MODE,
+            "Prepared reuse",
+            "preparation and caller output allocation excluded",
+        ),
+        (
+            "fast-ta",
+            RUST_STREAMING_MODE,
+            "Streaming reset plus ticks",
+            "separate stateful execution cost",
+        ),
+        (
+            "TA-Lib Python",
+            PYTHON_MODE,
+            "official Python NumPy API",
+            "user-facing API-owned output cost",
+        ),
+    ];
+    for input_length in INPUT_LENGTHS {
+        for (implementation, mode, label, interpretation) in paths {
+            let ratios = path_ratios(rows, implementation, mode, input_length);
+            if ratios.is_empty() {
+                comparison.push_str(&format!(
+                    "| {input_length} | {label} | 0 | unavailable | {interpretation} |\n"
+                ));
+            } else {
+                comparison.push_str(&format!(
+                    "| {input_length} | {label} | {} | {:.3}x | {interpretation} |\n",
+                    ratios.len(),
+                    geometric_mean(&ratios)
+                ));
+            }
+        }
+    }
+
+    comparison.push_str(
+        "\nTargeted optimization effects\n\nThe before values below are parsed from the committed evidence TSV. Issue 56 did not retain a clean complete first-delivery raw artifact, so each row names its actual evidence stage rather than promoting a dirty diagnostic run to a canonical baseline.\n\n| Definition | Input | Evidence stage | Source | Before Rust/C | Final Rust/C | Ratio change | Disposition |\n|---|---:|---|---|---:|---:|---:|---|\n",
+    );
+    let mut evidence = optimization_evidence.to_vec();
+    evidence.sort_by(|left, right| {
+        left.case_id
+            .cmp(&right.case_id)
+            .then_with(|| left.input_length.cmp(&right.input_length))
+    });
+    for historical in evidence {
+        let before_ratio = historical.rust_median_ns / historical.c_median_ns;
+        let Some(current) =
+            current_by_case.get(&(historical.case_id.clone(), historical.input_length))
+        else {
+            comparison.push_str(&format!(
+                "| {} | {} | {} | {} | {before_ratio:.3}x | unavailable | unavailable | final comparable row absent |\n",
+                historical.case_id,
+                historical.input_length,
+                clean(&historical.stage),
+                clean(&historical.source)
+            ));
+            continue;
+        };
+        let change = (current.ratio / before_ratio - 1.0) * 100.0;
+        let disposition = if historical.stage.contains("baseline unavailable") {
+            "post-fusion stability only; no retained pre-fusion measurement"
+        } else if change < -5.0 {
+            "practical improvement"
+        } else if change > 5.0 {
+            "documented cross-run worsening above 5%"
+        } else {
+            "within the 5% cross-run band"
+        };
+        comparison.push_str(&format!(
+            "| {} | {} | {} | {} | {before_ratio:.3}x | {:.3}x | {change:+.1}% | {disposition} |\n",
+            historical.case_id,
+            historical.input_length,
+            clean(&historical.stage),
+            clean(&historical.source),
+            current.ratio
+        ));
+    }
+
+    comparison
+        .push_str("\nPreserved diagnostic baseline comparison and regression dispositions\n\n");
+    if baseline_rows.is_empty() {
+        comparison.push_str(
+            "Unavailable: issue 56 did not retain a clean complete first-delivery raw artifact, and no diagnostic comparison rows were supplied.\n",
+        );
+    } else {
+        let baseline_first = &baseline_rows[0];
+        comparison.push_str(&format!(
+            "Comparison source: commit {} (dirty: {}), {} rows. Changes use Rust/C ratio normalization to reduce host-load drift. Because this predecessor is dirty and cross-run, changes above 5% are documented but are not presented as source-level regression verdicts.\n\n",
+            baseline_first.commit,
+            baseline_first.dirty,
+            baseline_rows.len()
+        ));
+        comparison.push_str(
+            "| Definition | Input | Diagnostic Rust/C | Final Rust/C | Change | Explicit disposition |\n|---|---:|---:|---:|---:|---|\n",
+        );
+        let baseline_by_case = primary_pairs(baseline_rows)
+            .into_iter()
+            .map(|pair| ((pair.case_id.clone(), pair.input_length), pair))
+            .collect::<BTreeMap<_, _>>();
+        for (key, current) in &current_by_case {
+            let Some(baseline) = baseline_by_case.get(key) else {
+                comparison.push_str(&format!(
+                    "| {} | {} | unavailable | {:.3}x | unavailable | no matching diagnostic row |\n",
+                    key.0, key.1, current.ratio
+                ));
+                continue;
+            };
+            let change = (current.ratio / baseline.ratio - 1.0) * 100.0;
+            let disposition = if change < -5.0 {
+                "directional improvement; dirty cross-run predecessor"
+            } else if change > 5.0 {
+                "documented >5% worsening; dirty cross-run predecessor cannot establish a source regression"
+            } else {
+                "within 5% normalized cross-run band"
+            };
+            comparison.push_str(&format!(
+                "| {} | {} | {:.3}x | {:.3}x | {change:+.1}% | {disposition} |\n",
+                key.0, key.1, baseline.ratio, current.ratio
+            ));
+        }
+    }
+
+    comparison.push_str(
+        "\nValidation and allocation boundaries\n\nThe Rust timings retain the public finite-input validation, capacity, Output Range, and validation-before-mutation contracts. Validation and computation were not timed separately in this matrix; the direct C row is therefore a comparative kernel reference, not evidence that Rust validation should be removed.\n\n| Implementation | Mode | Timed allocation/boundary evidence from raw rows |\n|---|---|---|\n",
+    );
+    let boundaries = rows
+        .iter()
+        .map(|row| {
+            (
+                row.implementation.clone(),
+                row.mode.clone(),
+                row.timed_boundary.clone(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    for (implementation, mode, boundary) in boundaries {
+        comparison.push_str(&format!(
+            "| {implementation} | {mode} | {} |\n",
+            clean(&boundary)
+        ));
+    }
+
+    comparison.push_str(
+        "\nPlatform SIMD qualification\n\n| Platform | Status | Speed claim |\n|---|---|---|\n",
+    );
+    if first.arch == "aarch64" && current_by_case.contains_key(&("TYPPRICE".to_owned(), 65_536)) {
+        comparison.push_str(&format!(
+            "| AArch64 | public TYPPRICE batch path exercised on {} with std/f64; scalar fallback remains available | measured only on this Apple M2 run |\n",
+            clean(&first.cpu)
+        ));
+    } else {
+        comparison.push_str(
+            "| AArch64 | unavailable in these raw rows; scalar fallback remains available | no measurement |\n",
+        );
+    }
+    comparison.push_str(
+        "| x86_64 | AVX-512F/AVX2 dispatch and scalar fallback compile-verified at 079a39c; not executed on this AArch64 host | no x86 speed measurement |\n",
+    );
+    comparison.push_str(
+        "| wasm32 | SIMD128 and scalar fallback compile-verified at 079a39c; not executed as a speed benchmark on this host | no WASM speed measurement |\n",
+    );
+
+    Ok(format!("{summary}{comparison}{marker}{details}"))
+}
+
+fn format_ratio(ratio: Option<f64>) -> String {
+    ratio.map_or_else(|| "unavailable".to_owned(), |ratio| format!("{ratio:.3}x"))
+}
+
+fn geometric_mean(ratios: &[f64]) -> f64 {
+    (ratios.iter().map(|ratio| ratio.ln()).sum::<f64>() / ratios.len() as f64).exp()
+}
+
+fn path_ratios(
+    rows: &[BenchmarkRow],
+    implementation: &str,
+    mode: &str,
+    input_length: usize,
+) -> Vec<f64> {
+    type Key = (String, String, usize, String, String);
+    let mut c = BTreeMap::<Key, f64>::new();
+    for row in rows {
+        if row.implementation != "TA-Lib C"
+            || row.mode != C_DIRECT_MODE
+            || row.input_length != input_length
+            || row.semantic_status != "verified"
+            || row.timing_status != "measured"
+        {
+            continue;
+        }
+        if let Some(stats) = &row.stats {
+            c.insert(
+                (
+                    row.case_id.clone(),
+                    row.parameters.clone(),
+                    row.input_length,
+                    row.fixture.clone(),
+                    row.input_checksum.clone(),
+                ),
+                stats.median_ns,
+            );
+        }
+    }
+    rows.iter()
+        .filter(|row| {
+            row.implementation == implementation
+                && row.mode == mode
+                && row.input_length == input_length
+                && row.semantic_status == "verified"
+                && row.timing_status == "measured"
+        })
+        .filter_map(|row| {
+            let stats = row.stats.as_ref()?;
+            let key = (
+                row.case_id.clone(),
+                row.parameters.clone(),
+                row.input_length,
+                row.fixture.clone(),
+                row.input_checksum.clone(),
+            );
+            c.get(&key).map(|c_ns| stats.median_ns / c_ns)
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug)]
 struct PrimaryPair {
     case_id: String,
     input_length: usize,

@@ -2616,7 +2616,7 @@ fn provenance() -> Provenance {
         cpu: cpu_model(),
         os: command_text("uname", &["-srv"]),
         commit: command_text("git", &["rev-parse", "HEAD"]),
-        dirty: !command_text("git", &["status", "--porcelain"]).is_empty(),
+        dirty: git_dirty(),
     }
 }
 
@@ -2628,8 +2628,16 @@ fn command_text(program: &str, arguments: &[&str]) -> String {
         .filter(|output| output.status.success())
         .and_then(|output| String::from_utf8(output.stdout).ok())
         .map(|output| output.trim().to_owned())
-        .filter(|output| !output.is_empty())
         .unwrap_or_else(|| "unavailable".to_owned())
+}
+
+fn git_dirty() -> bool {
+    Command::new("git")
+        .args(["status", "--porcelain"])
+        .output()
+        .map_or(true, |output| {
+            !output.status.success() || !output.stdout.is_empty()
+        })
 }
 
 #[cfg(target_os = "macos")]

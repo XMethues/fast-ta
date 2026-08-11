@@ -81,36 +81,60 @@ unchanged. From the repository root, one unattended command downloads and
 checksum-verifies TA-Lib C 0.6.4, builds revision
 `43f9d5042ecc4bd367941846494ad907bf20ea50`, creates an interpreter-keyed isolated
 environment for the official `TA-Lib==0.6.4` Python binding and NumPy 2.2.3, then
-semantically qualifies every execution path before timing:
+semantically qualifies every execution path before timing. Select Python 3.10
+or newer explicitly when the system `python3` is older. Add `--publish` only
+for a clean complete canonical run:
 
 ```bash
-python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py
+python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py \
+  --python /path/to/python3.12 \
+  --publish
 ```
 
-The matrix runs at 256, 4,096, and 65,536 observations. It contains `SMA(14)`,
-`BBANDS(20, 2, 2, SMA)`, `RSI(14)`, `MACD(12, 26, 9)`, `ATR(14)`, `ADX(14)`,
-`HT_DCPHASE`, `CDLDOJI`, `CDLENGULFING`, `CDL3BLACKCROWS`, `LINEARREG(14)`,
-`TYPPRICE`, `OBV`, `SIN`, and `ADD`. The three Pattern Recognition cases use
-immutable TA-Lib-default Candle Settings. Each case reports fast-ta Owned Compact
-Output, caller-owned Batch Computation, Prepared Batch Runner, and Streaming
-Computation separately, alongside direct caller-owned TA-Lib C and the official
-Python NumPy API. Only caller-owned Rust/C pairs are marked comparable and enter
-same-size geometric summaries; other execution costs are explicitly unavailable
-for that aggregate.
+The canonical matrix uses 50 timed samples, a 250 ms warm-up, and a 10 ms
+target per sample for every variant at 256, 4,096, and 65,536 observations. It
+contains `SMA(14)`, `BBANDS(20, 2, 2, SMA)`, `RSI(14)`,
+`MACD(12, 26, 9)`, `ATR(14)`, `ADX(14)`, `HT_DCPHASE`, `CDLDOJI`,
+`CDLENGULFING`, `CDL3BLACKCROWS`, `LINEARREG(14)`, `TYPPRICE`, `OBV`, `SIN`,
+and `ADD`. The three Pattern Recognition cases use immutable TA-Lib-default
+Candle Settings. Each case reports fast-ta Owned Compact Output, caller-owned
+Batch Computation, Prepared Batch Runner, and Streaming Computation separately,
+alongside direct caller-owned TA-Lib C and the official Python NumPy API. Only
+caller-owned Rust/C pairs are marked comparable and enter same-size geometric
+summaries; the report presents the other paths as separate cost indices.
 
 Prerequisites are Python 3.10 or newer with `venv`, a C compiler, `make`, a
-POSIX shell, and the usual TA-Lib `configure` build prerequisites. Network access
-is needed only for the first dependency preparation. An already downloaded
-source archive can be selected with `--source-archive PATH`; it must match the
-recorded SHA-256. Dependencies remain under `target/catalogue-matrix/deps`.
-Successful and semantic-failure runs write stable machine-readable rows to
-`target/catalogue-matrix/results/catalogue-matrix-raw.tsv`; the human report at
-`catalogue-matrix-report.txt` is generated only after rereading those rows.
-Output Range, per-column count, float values, and exact Pattern Signal codes are
-checked before any row for a case is timed. Mismatches suppress that case's
-timings, retain a precise reason in both artifacts, and make the command fail.
-A dirty run is labeled diagnostic; only a clean successful run is a canonical
-baseline candidate.
+POSIX shell, and the usual TA-Lib `configure` build prerequisites. Network
+access is needed only for the first dependency preparation. An already
+downloaded source archive can be selected with `--source-archive PATH`; it must
+match the recorded SHA-256. Dependencies remain under
+`target/catalogue-matrix/deps`. Every run writes
+`target/catalogue-matrix/results/catalogue-matrix-raw.tsv`; its human report is
+generated only after rereading those rows. `--publish` validates the complete
+270-row, 50-sample, clean, fully verified result before copying it to the stable
+review paths:
+
+```text
+crates/ta-benchmarks/baselines/catalogue_matrix_optimized.tsv
+crates/ta-benchmarks/CATALOGUE_MATRIX_REPORT.txt
+```
+
+To regenerate and republish only the human report from an existing raw run:
+
+```bash
+python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py --publish-existing
+```
+
+The generated report also reads
+`baselines/catalogue_matrix_post_scalar_diagnostic.tsv` and
+`baselines/catalogue_matrix_optimization_evidence.tsv`. The former is
+explicitly a dirty diagnostic comparison, not a replacement for the missing
+clean issue-56 first-delivery artifact; every cross-run change beyond 5% is
+therefore listed with that limitation. Output Range, per-column count, float
+values, and exact Pattern Signal codes are checked before any row for a case is
+timed. Mismatches suppress that case's timings and fail the command. The
+published Apple M2 report measures the AArch64 path only: x86 and WASM variants
+are compile-verified but have no speed measurements in that artifact.
 
 ## All Workspace Members
 

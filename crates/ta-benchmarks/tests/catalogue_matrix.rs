@@ -3,9 +3,10 @@ use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ta_benchmarks::catalogue_matrix::{
-    catalogue_fixture, fixture_checksum, read_raw_rows, render_report, timing_stats,
-    validate_outputs, write_raw_rows, BenchmarkRow, OutputValues, TimingStats, VerifiedOutput,
-    C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS, MATRIX, RUST_CALLER_MODE,
+    catalogue_fixture, fixture_checksum, read_raw_rows, render_report_with_comparison,
+    timing_stats, validate_outputs, write_raw_rows, BenchmarkRow, OptimizationEvidenceRow,
+    OutputValues, TimingStats, VerifiedOutput, C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS, MATRIX,
+    RUST_CALLER_MODE,
 };
 
 static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
@@ -225,7 +226,25 @@ fn report_is_generated_from_reread_rows_and_separates_comparable_from_unavailabl
 
     write_raw_rows(&path, &rows).expect("write raw benchmark rows");
     let reread = read_raw_rows(&path).expect("read raw benchmark rows");
-    let report = render_report(&reread).expect("render report from reread raw rows");
+    let baseline = INPUT_LENGTHS
+        .into_iter()
+        .flat_map(|input_length| {
+            [
+                row("fast-ta", RUST_CALLER_MODE, input_length, 4_000.0),
+                row("TA-Lib C", C_DIRECT_MODE, input_length, 1_000.0),
+            ]
+        })
+        .collect::<Vec<_>>();
+    let evidence = [OptimizationEvidenceRow {
+        stage: "pre-target".to_owned(),
+        case_id: "SMA".to_owned(),
+        input_length: 65_536,
+        rust_median_ns: 4_000.0,
+        c_median_ns: 1_000.0,
+        source: "test raw rows".to_owned(),
+    }];
+    let report = render_report_with_comparison(&reread, &baseline, &evidence)
+        .expect("render report from reread raw rows");
     fs::remove_file(&path).expect("remove test raw rows");
 
     assert_eq!(reread, rows);
@@ -237,4 +256,9 @@ fn report_is_generated_from_reread_rows_and_separates_comparable_from_unavailabl
     assert!(report.contains("256 | caller-owned Batch Computation vs direct C caller-owned"));
     assert!(report.contains("4096 | caller-owned Batch Computation vs direct C caller-owned"));
     assert!(report.contains("65536 | caller-owned Batch Computation vs direct C caller-owned"));
+    assert!(report.contains("Run completeness and semantic gate"));
+    assert!(report.contains("Per-case caller-owned Rust/C latency ratios"));
+    assert!(report.contains("Targeted optimization effects"));
+    assert!(report.contains("4.000x | 2.000x | -50.0% | practical improvement"));
+    assert!(report.contains("Platform SIMD qualification"));
 }
