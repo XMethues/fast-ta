@@ -10,6 +10,15 @@ description = "Performance benchmarks for technical analysis indicators"
 keywords = ["benchmark", "performance", "technical-analysis", "indicators"]
 categories = ["development-tools::profiling", "development-tools::testing"]
 
+[features]
+default = []
+sma-three-way = []
+
+[[bin]]
+name = "sma-three-way"
+path = "src/bin/sma_three_way.rs"
+required-features = ["sma-three-way"]
+
 [[bench]]
 name = "basic"
 harness = false

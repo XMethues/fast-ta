@@ -15,15 +15,7 @@ pub(crate) struct OhlcFixture {
     pub(crate) volume: Vec<Float>,
 }
 
-pub(crate) fn series_fixture(size: usize, seed: usize) -> Vec<Float> {
-    (0..size)
-        .map(|index| {
-            let trend = index as Float * 0.001 as Float;
-            let cycle = ((index * 37 + seed * 17) % 101) as Float;
-            trend + cycle + 1.0 as Float
-        })
-        .collect()
-}
+pub(crate) use ta_benchmarks::sma_three_way::series_fixture;
 
 pub(crate) fn ohlc_fixture(size: usize) -> OhlcFixture {
     let close = series_fixture(size, 0);
