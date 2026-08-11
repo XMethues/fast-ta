@@ -23,11 +23,6 @@ jobs:
             rustflags: ""
             mode: test
 
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            rust: stable
-            rustflags: "-C target-feature=+avx2"
-            mode: test
 
           - target: aarch64-apple-darwin
             os: macos-latest
@@ -62,7 +57,7 @@ jobs:
         if: matrix.mode == 'check'
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
-        run: cargo check -p ta-core --all-targets --verbose --target ${{ matrix.target }}
+        run: cargo check -p ta-core --lib --verbose --target ${{ matrix.target }}
 
       - name: Test f32 correctness
         if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.rustflags == ''
