@@ -4,10 +4,11 @@
 //! architecture dispatch used by integrated Indicator batch kernels.
 //!
 //! [`crate::price_transform::TYPPRICEConfig`] is the first integrated Indicator
-//! path: with `std` on AArch64, its Owned, caller-owned, and Prepared batch
-//! executions use explicit NEON vector arithmetic. Other architectures and
-//! `no_std` builds use the scalar fallback, and streaming execution remains
-//! scalar because it processes one tick at a time.
+//! path. With `std`, AArch64 uses explicit NEON, x86_64 selects AVX-512F,
+//! AVX2, or scalar at runtime, and wasm32 uses SIMD128 when the module is
+//! compiled with `target_feature=+simd128`. Scalar WASM modules, `no_std`
+//! builds, and unsupported CPUs use the scalar fallback. Streaming execution
+//! remains scalar because it processes one tick at a time.
 //!
 //! ## Standalone API
 //!

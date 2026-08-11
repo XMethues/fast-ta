@@ -1,7 +1,9 @@
 //! Typical Price (TYPPRICE).
 //!
-//! Batch execution uses explicit NEON vector arithmetic on AArch64 with `std`.
-//! Other targets and `no_std` builds use the scalar fallback. Streaming
+//! With `std`, batch execution uses explicit NEON on AArch64, runtime
+//! AVX-512F/AVX2 dispatch on x86_64, and compile-time SIMD128 dispatch on
+//! wasm32 when `target_feature=+simd128` is enabled. Scalar WASM modules,
+//! unsupported CPUs, and `no_std` builds use the scalar fallback. Streaming
 //! computation remains scalar because each call processes one tick.
 
 use crate::{

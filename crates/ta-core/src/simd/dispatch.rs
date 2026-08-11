@@ -3,15 +3,26 @@
 //! This module provides runtime CPU feature detection and function pointer dispatch
 //! to select optimal SIMD implementation at startup time.
 //!
-//! The dispatch table is initialized once using `OnceLock`, and subsequent calls
-//! have minimal overhead (~5-10ns) by directly calling through function pointers.
+//! The dispatch tables are initialized once using `LazyLock`, and subsequent
+//! calls have minimal overhead (~5-10ns) through function pointers.
 
 #[cfg(feature = "std")]
 extern crate std;
 
 #[cfg(feature = "std")]
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 
+#[cfg(any(
+    test,
+    not(feature = "std"),
+    target_arch = "x86_64",
+    all(target_arch = "wasm32", not(target_feature = "simd128")),
+    not(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        target_arch = "wasm32"
+    ))
+))]
 use super::scalar;
 use crate::types::Float;
 
@@ -23,8 +34,7 @@ use super::arch::x86_64;
 #[allow(unused_imports)]
 use super::arch::aarch64;
 
-#[cfg(all(feature = "std", target_arch = "wasm32"))]
-#[allow(unused_imports)]
+#[cfg(all(feature = "std", target_arch = "wasm32", target_feature = "simd128"))]
 use super::arch::wasm32;
 
 /// Function pointer type for sum operations.
@@ -36,6 +46,9 @@ pub type SumFn = fn(&[Float]) -> Float;
 ///
 /// This type alias represents a function that computes the dot product of two Float slices.
 pub type DotProductFn = fn(&[Float], &[Float]) -> Float;
+
+type FirstNonFiniteFn = fn(&[Float]) -> Option<usize>;
+type TypicalPriceFn = fn(&[Float], &[Float], &[Float], &mut [Float]);
 
 /// Dispatch table containing function pointers for all SIMD operations.
 ///
@@ -51,15 +64,32 @@ pub struct DispatchTable {
 
 impl DispatchTable {
     /// Create a new dispatch table with the given function pointers.
+    #[cfg(all(
+        feature = "std",
+        any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            all(target_arch = "wasm32", target_feature = "simd128")
+        )
+    ))]
     #[inline]
-    #[allow(dead_code)]
     const fn new(sum: SumFn, dot_product: DotProductFn) -> Self {
         Self { sum, dot_product }
     }
 
     /// Create a scalar dispatch table (no SIMD acceleration).
+    #[cfg(any(
+        test,
+        not(feature = "std"),
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", not(target_feature = "simd128")),
+        not(any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "wasm32"
+        ))
+    ))]
     #[inline]
-    #[allow(dead_code)]
     const fn scalar() -> Self {
         Self {
             sum: scalar::sum,
@@ -68,14 +98,62 @@ impl DispatchTable {
     }
 }
 
+#[derive(Clone, Copy)]
+struct IndicatorDispatchTable {
+    first_non_finite: FirstNonFiniteFn,
+    typical_price: TypicalPriceFn,
+}
+
+impl IndicatorDispatchTable {
+    #[cfg(all(
+        feature = "std",
+        any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            all(target_arch = "wasm32", target_feature = "simd128")
+        )
+    ))]
+    #[inline]
+    const fn new(first_non_finite: FirstNonFiniteFn, typical_price: TypicalPriceFn) -> Self {
+        Self {
+            first_non_finite,
+            typical_price,
+        }
+    }
+
+    #[cfg(any(
+        not(feature = "std"),
+        target_arch = "x86_64",
+        all(target_arch = "wasm32", not(target_feature = "simd128")),
+        not(any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "wasm32"
+        ))
+    ))]
+    #[inline]
+    const fn scalar() -> Self {
+        Self {
+            first_non_finite: scalar::first_non_finite,
+            typical_price: scalar::typical_price,
+        }
+    }
+}
+
 /// Global dispatch table initialized once at startup.
 ///
-/// This `OnceLock` ensures thread-safe one-time initialization of the dispatch table.
-/// After initialization, accessing the dispatch table is as fast as a global variable.
+/// `LazyLock` provides thread-safe one-time initialization of the dispatch
+/// table. After initialization, access is a global load.
 #[cfg(feature = "std")]
-static DISPATCH: OnceLock<DispatchTable> = OnceLock::new();
+static DISPATCH: LazyLock<DispatchTable> = LazyLock::new(init_dispatch);
 #[cfg(not(feature = "std"))]
 static DISPATCH_SCALAR: DispatchTable = DispatchTable::scalar();
+
+#[cfg(feature = "std")]
+static INDICATOR_DISPATCH: LazyLock<IndicatorDispatchTable> =
+    LazyLock::new(init_indicator_dispatch);
+#[cfg(not(feature = "std"))]
+static INDICATOR_DISPATCH_SCALAR: IndicatorDispatchTable = IndicatorDispatchTable::scalar();
 
 /// Initialize the dispatch table with the best available SIMD implementation.
 ///
@@ -139,9 +217,10 @@ fn init_dispatch() -> DispatchTable {
         )
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
     {
-        // SIMD128 is enabled at compile-time
+        // A SIMD128 module is selected at compile time; scalar modules never
+        // reference the target-feature kernels.
         DispatchTable::new(
             |data| unsafe { wasm32::simd128::sum(data) },
             |a, b| unsafe {
@@ -154,8 +233,75 @@ fn init_dispatch() -> DispatchTable {
     }
 
     // Fall back to scalar implementation
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "wasm32")))]
+    #[cfg(not(any(
+        target_arch = "aarch64",
+        all(target_arch = "wasm32", target_feature = "simd128")
+    )))]
     DispatchTable::scalar()
+}
+
+#[cfg(feature = "std")]
+#[cold]
+fn init_indicator_dispatch() -> IndicatorDispatchTable {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::is_x86_feature_detected!("avx512f") {
+            return IndicatorDispatchTable::new(
+                |values| unsafe { x86_64::avx512::first_non_finite(values) },
+                |high, low, close, output| unsafe {
+                    x86_64::avx512::typical_price(high, low, close, output)
+                },
+            );
+        }
+        if std::is_x86_feature_detected!("avx2") {
+            return IndicatorDispatchTable::new(
+                |values| unsafe { x86_64::avx2::first_non_finite(values) },
+                |high, low, close, output| unsafe {
+                    x86_64::avx2::typical_price(high, low, close, output)
+                },
+            );
+        }
+        IndicatorDispatchTable::scalar()
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    {
+        IndicatorDispatchTable::new(
+            |values| unsafe { aarch64::neon::first_non_finite(values) },
+            |high, low, close, output| unsafe {
+                aarch64::neon::typical_price(high, low, close, output)
+            },
+        )
+    }
+
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        IndicatorDispatchTable::new(
+            |values| unsafe { wasm32::simd128::first_non_finite(values) },
+            |high, low, close, output| unsafe {
+                wasm32::simd128::typical_price(high, low, close, output)
+            },
+        )
+    }
+
+    #[cfg(not(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        all(target_arch = "wasm32", target_feature = "simd128")
+    )))]
+    IndicatorDispatchTable::scalar()
+}
+
+#[inline]
+fn get_indicator_dispatch() -> &'static IndicatorDispatchTable {
+    #[cfg(feature = "std")]
+    {
+        &INDICATOR_DISPATCH
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        &INDICATOR_DISPATCH_SCALAR
+    }
 }
 
 /// Get the global dispatch table, initializing it if necessary.
@@ -176,7 +322,7 @@ fn init_dispatch() -> DispatchTable {
 pub fn get_dispatch() -> &'static DispatchTable {
     #[cfg(feature = "std")]
     {
-        DISPATCH.get_or_init(init_dispatch)
+        &DISPATCH
     }
     #[cfg(not(feature = "std"))]
     {
@@ -186,37 +332,22 @@ pub fn get_dispatch() -> &'static DispatchTable {
 
 /// Returns the index of the first non-finite value, if any.
 ///
-/// AArch64 `std` builds use an explicit NEON all-finite scan and recover the
-/// exact first invalid lane on failure. Other targets and `no_std` builds use
-/// the portable scalar fallback.
+/// Accelerated `std` builds recover the exact first invalid lane on SIMD
+/// failure. Unsupported CPUs, architectures, and `no_std` builds use the
+/// portable scalar fallback.
 #[inline]
 pub(crate) fn first_non_finite(values: &[Float]) -> Option<usize> {
-    #[cfg(all(feature = "std", target_arch = "aarch64"))]
-    {
-        // SAFETY: NEON is part of the AArch64 baseline. The implementation
-        // performs unaligned loads only where a complete vector fits.
-        unsafe { aarch64::neon::first_non_finite(values) }
-    }
-
-    #[cfg(not(all(feature = "std", target_arch = "aarch64")))]
-    scalar::first_non_finite(values)
+    (get_indicator_dispatch().first_non_finite)(values)
 }
 
 /// Computes Typical Price into a caller-provided output buffer.
 ///
-/// AArch64 `std` builds use explicit NEON arithmetic. Other targets and
-/// `no_std` builds retain the portable scalar implementation.
+/// The public Indicator seam validates all inputs before this dispatched
+/// kernel runs. Unsupported CPUs, architectures, and `no_std` builds retain
+/// the portable scalar implementation.
 #[inline]
 pub(crate) fn typical_price(high: &[Float], low: &[Float], close: &[Float], output: &mut [Float]) {
-    #[cfg(all(feature = "std", target_arch = "aarch64"))]
-    {
-        // SAFETY: NEON is part of the AArch64 baseline, and the validated
-        // Indicator seam guarantees equal input lengths and sufficient output.
-        unsafe { aarch64::neon::typical_price(high, low, close, output) }
-    }
-
-    #[cfg(not(all(feature = "std", target_arch = "aarch64")))]
-    scalar::typical_price(high, low, close, output);
+    (get_indicator_dispatch().typical_price)(high, low, close, output);
 }
 
 /// Calculate the sum of all elements in a slice.
@@ -287,6 +418,26 @@ pub fn dot_product(a: &[Float], b: &[Float]) -> Float {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn active_indicator_lane_width() -> usize {
+        #[cfg(all(feature = "std", target_arch = "x86_64"))]
+        {
+            if std::is_x86_feature_detected!("avx512f") {
+                return if cfg!(feature = "f32") { 16 } else { 8 };
+            }
+            if std::is_x86_feature_detected!("avx2") {
+                return if cfg!(feature = "f32") { 8 } else { 4 };
+            }
+            return 1;
+        }
+
+        #[cfg(not(all(feature = "std", target_arch = "x86_64")))]
+        if cfg!(feature = "f32") {
+            4
+        } else {
+            2
+        }
+    }
 
     #[test]
     fn test_dispatch_initialization() {
@@ -407,7 +558,7 @@ mod tests {
 
     #[test]
     fn first_non_finite_dispatch_matches_scalar_for_short_vectors_tails_and_failures() {
-        let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+        let lane_width = active_indicator_lane_width();
         for len in [
             0,
             1,
@@ -459,7 +610,7 @@ mod tests {
 
     #[test]
     fn typical_price_dispatch_matches_scalar_fallback() {
-        let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+        let lane_width = active_indicator_lane_width();
         for len in [0, 1, lane_width, lane_width + 1, lane_width * 2 + 1, 257] {
             let high: Vec<Float> = (0..len)
                 .map(|index| index as Float + 3.0 as Float)

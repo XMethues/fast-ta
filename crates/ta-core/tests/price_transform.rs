@@ -11,6 +11,26 @@ fn assert_close(actual: Float, expected: Float) {
     );
 }
 
+fn typprice_simd_lane_width() -> usize {
+    #[cfg(all(feature = "std", target_arch = "x86_64"))]
+    {
+        if std::is_x86_feature_detected!("avx512f") {
+            return if cfg!(feature = "f32") { 16 } else { 8 };
+        }
+        if std::is_x86_feature_detected!("avx2") {
+            return if cfg!(feature = "f32") { 8 } else { 4 };
+        }
+        return 1;
+    }
+
+    #[cfg(not(all(feature = "std", target_arch = "x86_64")))]
+    if cfg!(feature = "f32") {
+        4
+    } else {
+        2
+    }
+}
+
 #[test]
 fn avgprice_medprice_typprice_wclprice_compute_expected_values() {
     let open = [1.0, 2.0, 3.0];
@@ -132,7 +152,7 @@ fn prepared_capacity_precedes_price_transform_input_alignment() {
 
 #[test]
 fn typprice_public_batch_matches_scalar_at_simd_boundaries() {
-    let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+    let lane_width = typprice_simd_lane_width();
     let lengths = [
         0,
         1,
@@ -199,7 +219,7 @@ fn typprice_public_batch_matches_scalar_at_simd_boundaries() {
 
 #[test]
 fn typprice_validates_all_input_before_simd_output_mutation() {
-    let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+    let lane_width = typprice_simd_lane_width();
     let len = lane_width * 2 + 1;
     let mut high = vec![3.0 as Float; len];
     let low = vec![1.0 as Float; len];
@@ -222,7 +242,7 @@ fn typprice_validates_all_input_before_simd_output_mutation() {
 
 #[test]
 fn typprice_non_finite_errors_preserve_named_slice_order_index_value_and_output() {
-    let lane_width = if cfg!(feature = "f32") { 4 } else { 2 };
+    let lane_width = typprice_simd_lane_width();
     let len = lane_width * 4 + 3;
     const SENTINEL: Float = -12_345.0 as Float;
 

@@ -1,4 +1,4 @@
 //! WebAssembly SIMD implementation
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(target_feature = "simd128")]
 pub mod simd128;
