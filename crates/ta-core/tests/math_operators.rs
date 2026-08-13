@@ -1,7 +1,7 @@
-use ta_core::math_operators::{
+use fast_ta::math_operators::{
     MAXINDEXConfig, ADD, DIV, MAX, MAXINDEX, MIN, MININDEX, MINMAX, MINMAXINDEX, MULT, SUB, SUM,
 };
-use ta_core::{Float, OutputRange};
+use fast_ta::{Float, OutputRange};
 
 #[test]
 fn arithmetic_operators_compute_expected_values() {

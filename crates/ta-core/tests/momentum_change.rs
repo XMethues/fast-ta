@@ -6,7 +6,7 @@ mod reference;
 use reference::{
     INPUT, MOM_EXPECTED, PERIOD, ROCP_EXPECTED, ROCR100_EXPECTED, ROCR_EXPECTED, ROC_EXPECTED,
 };
-use ta_core::{
+use fast_ta::{
     momentum::{
         MOMConfig, ROCConfig, ROCPConfig, ROCR100Config, ROCRConfig, MOM, ROC, ROCP, ROCR, ROCR100,
     },

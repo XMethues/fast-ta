@@ -3,11 +3,11 @@
 #[path = "fixtures/kama_mavp_reference.rs"]
 mod reference;
 
-use ta_core::overlap::{
+use fast_ta::overlap::{
     KAMABatchRunner, KAMAConfig, KAMAStream, MABatchRunner, MAConfig, MAVPBatchRunner, MAVPConfig,
     MAVPInput, MAVPStream, MAVPTick, PeriodMAType, KAMA, MA, MAVP,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 
@@ -66,7 +66,7 @@ fn kama_matches_independent_decimal_reference_in_every_execution_mode_and_select
     assert_eq!(reference::TALIB_KAMA_SOURCE, "src/ta_func/ta_KAMA.c");
     assert_eq!(reference::TALIB_MAVP_SOURCE, "src/ta_func/ta_MAVP.c");
     assert_execution_types::<KAMAConfig, KAMABatchRunner, KAMAStream>();
-    assert_execution_types::<MAConfig, MABatchRunner, ta_core::overlap::MAStream>();
+    assert_execution_types::<MAConfig, MABatchRunner, fast_ta::overlap::MAStream>();
 
     let input = floats(reference::INPUT);
     let config = KAMAConfig::new(reference::KAMA_PERIOD).unwrap();

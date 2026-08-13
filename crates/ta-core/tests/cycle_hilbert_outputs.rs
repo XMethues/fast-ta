@@ -5,7 +5,7 @@ mod inputs;
 #[path = "fixtures/ht_hilbert_outputs_reference.rs"]
 mod reference;
 
-use ta_core::{
+use fast_ta::{
     cycle::{
         HT_DCPHASEBatchRunner, HT_DCPHASEConfig, HT_DCPHASEStream, HT_PHASORBatchRunner,
         HT_PHASORConfig, HT_PHASORStream, HT_PHASORValue, HT_PHASORValuesMut, HT_SINEBatchRunner,

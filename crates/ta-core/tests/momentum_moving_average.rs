@@ -3,15 +3,15 @@
 #[path = "fixtures/moving_average_momentum_reference.rs"]
 mod reference;
 
-use ta_core::inventory::{function, ImplementationStatus};
-use ta_core::momentum::{
+use fast_ta::inventory::{function, ImplementationStatus};
+use fast_ta::momentum::{
     APOBatchRunner, APOConfig, APOStream, MACDBatchRunner, MACDConfig, MACDEXTBatchRunner,
     MACDEXTConfig, MACDEXTStream, MACDFIXBatchRunner, MACDFIXConfig, MACDFIXStream, MACDStream,
     MACDValuesMut, PPOBatchRunner, PPOConfig, PPOStream, TRIXBatchRunner, TRIXConfig, TRIXStream,
     APO, MACD, MACDEXT, MACDFIX, PPO, TRIX,
 };
-use ta_core::overlap::{MAConfig, PeriodMAType};
-use ta_core::{
+use fast_ta::overlap::{MAConfig, PeriodMAType};
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 

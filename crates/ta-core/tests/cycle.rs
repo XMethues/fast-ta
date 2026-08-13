@@ -1,7 +1,7 @@
 #[path = "fixtures/ht_dcperiod_reference.rs"]
 mod reference;
 
-use ta_core::{
+use fast_ta::{
     cycle::{
         HT_DCPERIODBatchRunner, HT_DCPERIODConfig, HT_DCPERIODStream, HT_DCPERIOD,
         HT_DCPERIOD_LOOKBACK,

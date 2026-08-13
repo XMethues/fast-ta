@@ -20,7 +20,7 @@ use support::{
     ohlc_fixture, output_len, series_fixture, PERIOD, REPEATED_SERIES_LEN as PROFILE_SIZE,
     STREAM_INSTRUMENTS, SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
-use ta_core::{
+use fast_ta::{
     cycle::{
         HT_DCPERIODConfig, HT_DCPHASEConfig, HT_PHASORConfig, HT_PHASORValuesMut, HT_SINEConfig,
         HT_SINEValuesMut, HT_TRENDMODEConfig, TrendMode, HT_DCPERIOD_LOOKBACK, HT_DCPHASE_LOOKBACK,
@@ -3015,7 +3015,7 @@ fn profile_mavp_execution() {
     }
 
     let period_count = MAXIMUM_PERIOD - MINIMUM_PERIOD + 1;
-    let raw_stream_bytes = period_count * core::mem::size_of::<ta_core::overlap::MAStream>()
+    let raw_stream_bytes = period_count * core::mem::size_of::<fast_ta::overlap::MAStream>()
         + (MINIMUM_PERIOD..=MAXIMUM_PERIOD)
             .map(|period| (period + 1) * core::mem::size_of::<Float>())
             .sum::<usize>();
@@ -3278,7 +3278,7 @@ fn profile_rolling_overlap_execution() {
     assert_zero_allocations("prepared/MIDPRICEConfig/repeated", profile);
 
     let (mut acc_stream, profile) = measure_allocations(|| acc.stream().unwrap());
-    let acc_stream_bytes = (PERIOD - 1) * core::mem::size_of::<ta_core::overlap::ACCBANDSValue>();
+    let acc_stream_bytes = (PERIOD - 1) * core::mem::size_of::<fast_ta::overlap::ACCBANDSValue>();
     assert_profile(
         "setup/ACCBANDSConfig/stream",
         profile,

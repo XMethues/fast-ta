@@ -3,7 +3,7 @@
 //! This crate provides WebAssembly bindings for the core technical analysis library
 //! using wasm-bindgen.
 
-use ta_core::{
+use fast_ta::{
     price_transform::{TYPPRICEConfig, TYPPRICEInput},
     simd::dispatch::active_indicator_backend,
     IndicatorConfig,

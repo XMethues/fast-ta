@@ -1,10 +1,10 @@
-use ta_core::statistic::{
+use fast_ta::statistic::{
     BETAConfig, CORRELConfig, LINEARREGConfig, LINEARREG_ANGLEConfig, LINEARREG_INTERCEPTConfig,
     LINEARREG_SLOPEConfig, PairInput, PairTick, STDDEVConfig, TSFConfig, VARConfig,
     VAR_with_default_nbdev, BETA, CORREL, LINEARREG, LINEARREG_ANGLE, LINEARREG_INTERCEPT,
     LINEARREG_SLOPE, STDDEV, TSF, VAR,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 

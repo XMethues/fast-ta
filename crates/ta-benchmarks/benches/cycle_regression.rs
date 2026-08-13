@@ -3,7 +3,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use ta_benchmarks::fixture::series_fixture;
-use ta_core::{
+use fast_ta::{
     cycle::{
         HT_DCPERIOD, HT_DCPERIOD_LOOKBACK, HT_DCPHASE, HT_DCPHASE_LOOKBACK, HT_PHASOR,
         HT_PHASOR_LOOKBACK, HT_SINE, HT_SINE_LOOKBACK, HT_TRENDMODE, HT_TRENDMODE_LOOKBACK,
@@ -77,7 +77,7 @@ fn bench_cycle_regression(c: &mut Criterion) {
         });
 
         let mut trendmode =
-            vec![ta_core::cycle::TrendMode::Cycle; size.saturating_sub(HT_TRENDMODE_LOOKBACK)];
+            vec![fast_ta::cycle::TrendMode::Cycle; size.saturating_sub(HT_TRENDMODE_LOOKBACK)];
         group.bench_with_input(BenchmarkId::new("HT_TRENDMODE", size), &size, |b, _| {
             b.iter(|| {
                 black_box(

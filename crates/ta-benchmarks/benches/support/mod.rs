@@ -1,4 +1,4 @@
-use ta_core::Float;
+use fast_ta::Float;
 
 pub(crate) const PERIOD: usize = 14;
 pub(crate) const REPEATED_SERIES_LEN: usize = 4_096;

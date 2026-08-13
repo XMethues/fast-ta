@@ -3,11 +3,11 @@
 #[path = "fixtures/momentum_composite_reference.rs"]
 mod reference;
 
-use ta_core::momentum::{
+use fast_ta::momentum::{
     BOPConfig, BOPInput, BOPTick, CCIConfig, CCIInput, CCITick, MFIConfig, MFIInput, MFITick,
     ULTOSCConfig, ULTOSCInput, ULTOSCTick, BOP, CCI, MFI, ULTOSC,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 

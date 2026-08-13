@@ -5,15 +5,15 @@
 #[path = "fixtures/overlap_rolling_reference.rs"]
 mod reference;
 
-use ta_core::inventory::{function, ImplementationStatus};
-use ta_core::overlap::{
+use fast_ta::inventory::{function, ImplementationStatus};
+use fast_ta::overlap::{
     ACCBANDSBatchRunner, ACCBANDSConfig, ACCBANDSInput, ACCBANDSStream, ACCBANDSTick,
     ACCBANDSValuesMut, BBANDSBatchRunner, BBANDSConfig, BBANDSStream, BBANDSValuesMut, MAConfig,
     MIDPOINTBatchRunner, MIDPOINTConfig, MIDPOINTStream, MIDPRICEBatchRunner, MIDPRICEConfig,
     MIDPRICEInput, MIDPRICEStream, MIDPRICETick, PeriodMAType, ACCBANDS, BBANDS, MIDPOINT,
     MIDPRICE,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 

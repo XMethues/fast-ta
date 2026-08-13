@@ -5,7 +5,7 @@ mod inputs;
 #[path = "fixtures/ht_trendmode_reference.rs"]
 mod reference;
 
-use ta_core::{
+use fast_ta::{
     cycle::{
         HT_DCPERIODConfig, HT_DCPHASEConfig, HT_PHASORConfig, HT_SINEConfig,
         HT_TRENDMODEBatchRunner, HT_TRENDMODEConfig, HT_TRENDMODEStream, TrendMode, HT_TRENDMODE,

@@ -3,8 +3,8 @@ use super::support::{
 };
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
-use ta_core::overlap::{HT_TRENDLINEConfig, MAMAConfig, MAMAValuesMut};
-use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use fast_ta::overlap::{HT_TRENDLINEConfig, MAMAConfig, MAMAValuesMut};
+use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
 const SIZES: &[usize] = &[64, 4_096, 65_536];
 const LIMIT_SWEEP: &[(Float, Float)] = &[

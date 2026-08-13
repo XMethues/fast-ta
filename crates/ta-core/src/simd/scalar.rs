@@ -25,7 +25,7 @@ use std::vec::Vec;
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::{simd::scalar::sum, Float};
+/// use fast_ta::{simd::scalar::sum, Float};
 ///
 /// let data: Vec<Float> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
 /// assert_eq!(sum(&data), 15.0);
@@ -56,7 +56,7 @@ pub fn sum(data: &[Float]) -> Float {
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::{simd::scalar::dot_product, Float};
+/// use fast_ta::{simd::scalar::dot_product, Float};
 ///
 /// let a: Vec<Float> = vec![1.0, 2.0, 3.0];
 /// let b: Vec<Float> = vec![4.0, 5.0, 6.0];
@@ -113,7 +113,7 @@ pub(crate) fn typical_price(high: &[Float], low: &[Float], close: &[Float], outp
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::{simd::scalar::rolling_sum, Float};
+/// use fast_ta::{simd::scalar::rolling_sum, Float};
 ///
 /// let data: Vec<Float> = vec![1.0, 2.0, 3.0, 4.0, 5.0];
 /// let result = rolling_sum(&data, 3);

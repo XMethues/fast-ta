@@ -8,7 +8,7 @@ use std::{
     time::Instant,
 };
 
-use ta_core::{
+use fast_ta::{
     price_transform::TYPPRICE,
     simd::dispatch::{
         active_indicator_backend,
@@ -178,7 +178,7 @@ fn performance_disposition(delta_percent: f64) -> &'static str {
     }
 }
 
-fn public_errors(backend: IndicatorBackend) -> (ta_core::TalibError, ta_core::TalibError) {
+fn public_errors(backend: IndicatorBackend) -> (fast_ta::TalibError, fast_ta::TalibError) {
     with_indicator_backend(backend, || {
         assert_eq!(active_indicator_backend(), backend);
         let mismatched =

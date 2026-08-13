@@ -6,7 +6,7 @@ mod reference;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
-use ta_core::pattern_recognition::{
+use fast_ta::pattern_recognition::{
     CDL2CROWSConfig, CDL3BLACKCROWSConfig, CDL3INSIDEConfig, CDL3LINESTRIKEConfig,
     CDL3OUTSIDEConfig, CDL3STARSINSOUTHConfig, CDL3WHITESOLDIERSConfig, CDLABANDONEDBABYConfig,
     CDLADVANCEBLOCKConfig, CDLBELTHOLDConfig, CDLBREAKAWAYConfig, CDLCLOSINGMARUBOZUConfig,
@@ -26,7 +26,7 @@ use ta_core::pattern_recognition::{
     CandleSettingType, CandleSettings, PatternDirection, PatternSignal, PatternStrength,
     Penetration,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 
@@ -1166,7 +1166,7 @@ fn assert_single_candle_boundary<C>(
     for<'a> C:
         IndicatorConfig<Input<'a> = CandleInput<'a>, OutputMut<'a> = &'a mut [PatternSignal]>,
 {
-    fn compute_one<C>(config: C, candle: Candle) -> ta_core::CompactOutput<Vec<PatternSignal>>
+    fn compute_one<C>(config: C, candle: Candle) -> fast_ta::CompactOutput<Vec<PatternSignal>>
     where
         C: 'static + IndicatorConfig<Output = Vec<PatternSignal>>,
         for<'a> C:
@@ -5902,13 +5902,13 @@ fn complete_pattern_recognition_catalogue_focused_smoke_qualifies_all_61_rows() 
         "each Pattern Recognition definition must have exactly one qualification row"
     );
 
-    let mut catalogue_names: Vec<_> = ta_core::inventory::TALIB_FUNCTIONS
+    let mut catalogue_names: Vec<_> = fast_ta::inventory::TALIB_FUNCTIONS
         .iter()
-        .filter(|info| info.group == ta_core::inventory::FunctionGroup::PatternRecognition)
+        .filter(|info| info.group == fast_ta::inventory::FunctionGroup::PatternRecognition)
         .map(|info| {
             assert_eq!(
                 info.status,
-                ta_core::inventory::ImplementationStatus::Implemented,
+                fast_ta::inventory::ImplementationStatus::Implemented,
                 "{}",
                 info.name
             );
@@ -5918,6 +5918,6 @@ fn complete_pattern_recognition_catalogue_focused_smoke_qualifies_all_61_rows() 
     catalogue_names.sort_unstable();
     assert_eq!(catalogue_names.len(), 61);
     assert_eq!(matrix_names, catalogue_names);
-    assert_eq!(ta_core::inventory::FUNCTION_COUNT, 161);
-    assert_eq!(ta_core::inventory::IMPLEMENTED_FUNCTION_COUNT, 161);
+    assert_eq!(fast_ta::inventory::FUNCTION_COUNT, 161);
+    assert_eq!(fast_ta::inventory::IMPLEMENTED_FUNCTION_COUNT, 161);
 }

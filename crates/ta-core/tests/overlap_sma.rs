@@ -1,5 +1,5 @@
-use ta_core::overlap::{SMAConfig, SMA};
-use ta_core::{Float, OutputRange};
+use fast_ta::overlap::{SMAConfig, SMA};
+use fast_ta::{Float, OutputRange};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(

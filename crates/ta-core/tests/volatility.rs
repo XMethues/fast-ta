@@ -1,8 +1,8 @@
-use ta_core::volatility::{
+use fast_ta::volatility::{
     ATRConfig, ATRInput, ATRTick, NATRConfig, NATRInput, NATRTick, TRANGEConfig, TRANGEInput,
     TRANGETick, ATR, NATR, TRANGE,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 

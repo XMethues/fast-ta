@@ -7,17 +7,17 @@
 //! type, prepared runner, and stream state at compile time so a future macro
 //! regression cannot drop an indicator from the public catalogue.
 
-use ta_core::cycle::{
+use fast_ta::cycle::{
     HT_DCPERIODBatchRunner, HT_DCPERIODConfig, HT_DCPERIODStream, HT_DCPHASEBatchRunner,
     HT_DCPHASEConfig, HT_DCPHASEStream, HT_PHASORBatchRunner, HT_PHASORConfig, HT_PHASORStream,
     HT_SINEBatchRunner, HT_SINEConfig, HT_SINEStream, HT_TRENDMODEBatchRunner, HT_TRENDMODEConfig,
     HT_TRENDMODEStream,
 };
-use ta_core::inventory::{
+use fast_ta::inventory::{
     function, FunctionGroup, ImplementationStatus, FUNCTION_COUNT, IMPLEMENTED_FUNCTION_COUNT,
     TALIB_FUNCTIONS,
 };
-use ta_core::math_operators::{
+use fast_ta::math_operators::{
     ADDBatchRunner, ADDConfig, ADDStream, DIVBatchRunner, DIVConfig, DIVStream, MAXBatchRunner,
     MAXConfig, MAXINDEXBatchRunner, MAXINDEXConfig, MAXINDEXStream, MAXStream, MINBatchRunner,
     MINConfig, MININDEXBatchRunner, MININDEXConfig, MININDEXStream, MINMAXBatchRunner,
@@ -25,7 +25,7 @@ use ta_core::math_operators::{
     MINStream, MULTBatchRunner, MULTConfig, MULTStream, SUBBatchRunner, SUBConfig, SUBStream,
     SUMBatchRunner, SUMConfig, SUMStream,
 };
-use ta_core::math_transform::{
+use fast_ta::math_transform::{
     ACOSBatchRunner, ACOSConfig, ACOSStream, ASINBatchRunner, ASINConfig, ASINStream,
     ATANBatchRunner, ATANConfig, ATANStream, CEILBatchRunner, CEILConfig, CEILStream,
     COSBatchRunner, COSConfig, COSHBatchRunner, COSHConfig, COSHStream, COSStream, EXPBatchRunner,
@@ -34,7 +34,7 @@ use ta_core::math_transform::{
     SINHBatchRunner, SINHConfig, SINHStream, SINStream, SQRTBatchRunner, SQRTConfig, SQRTStream,
     TANBatchRunner, TANConfig, TANHBatchRunner, TANHConfig, TANHStream, TANStream,
 };
-use ta_core::momentum::{
+use fast_ta::momentum::{
     ADXBatchRunner, ADXConfig, ADXRBatchRunner, ADXRConfig, ADXRStream, ADXStream, APOBatchRunner,
     APOConfig, APOStream, AROONBatchRunner, AROONConfig, AROONOSCBatchRunner, AROONOSCConfig,
     AROONOSCStream, AROONStream, BOPBatchRunner, BOPConfig, BOPStream, CCIBatchRunner, CCIConfig,
@@ -52,7 +52,7 @@ use ta_core::momentum::{
     TRIXStream, ULTOSCBatchRunner, ULTOSCConfig, ULTOSCStream, WILLRBatchRunner, WILLRConfig,
     WILLRStream,
 };
-use ta_core::overlap::{
+use fast_ta::overlap::{
     ACCBANDSBatchRunner, ACCBANDSConfig, ACCBANDSStream, BBANDSBatchRunner, BBANDSConfig,
     BBANDSStream, DEMABatchRunner, DEMAConfig, DEMAStream, EMABatchRunner, EMAConfig, EMAStream,
     HT_TRENDLINEBatchRunner, HT_TRENDLINEConfig, HT_TRENDLINEStream, KAMABatchRunner, KAMAConfig,
@@ -63,7 +63,7 @@ use ta_core::overlap::{
     T3BatchRunner, T3Config, T3Stream, TEMABatchRunner, TEMAConfig, TEMAStream, TRIMABatchRunner,
     TRIMAConfig, TRIMAStream, WMABatchRunner, WMAConfig, WMAStream,
 };
-use ta_core::pattern_recognition::{
+use fast_ta::pattern_recognition::{
     CDL2CROWSBatchRunner, CDL2CROWSConfig, CDL2CROWSStream, CDL3BLACKCROWSBatchRunner,
     CDL3BLACKCROWSConfig, CDL3BLACKCROWSStream, CDL3INSIDEBatchRunner, CDL3INSIDEConfig,
     CDL3INSIDEStream, CDL3LINESTRIKEBatchRunner, CDL3LINESTRIKEConfig, CDL3LINESTRIKEStream,
@@ -117,12 +117,12 @@ use ta_core::pattern_recognition::{
     CDLUPSIDEGAP2CROWSStream, CDLXSIDEGAP3METHODSBatchRunner, CDLXSIDEGAP3METHODSConfig,
     CDLXSIDEGAP3METHODSStream,
 };
-use ta_core::price_transform::{
+use fast_ta::price_transform::{
     AVGDEVBatchRunner, AVGDEVConfig, AVGDEVStream, AVGPRICEBatchRunner, AVGPRICEConfig,
     AVGPRICEStream, MEDPRICEBatchRunner, MEDPRICEConfig, MEDPRICEStream, TYPPRICEBatchRunner,
     TYPPRICEConfig, TYPPRICEStream, WCLPRICEBatchRunner, WCLPRICEConfig, WCLPRICEStream,
 };
-use ta_core::statistic::{
+use fast_ta::statistic::{
     BETABatchRunner, BETAConfig, BETAStream, CORRELBatchRunner, CORRELConfig, CORRELStream,
     LINEARREGBatchRunner, LINEARREGConfig, LINEARREGStream, LINEARREG_ANGLEBatchRunner,
     LINEARREG_ANGLEConfig, LINEARREG_ANGLEStream, LINEARREG_INTERCEPTBatchRunner,
@@ -130,16 +130,16 @@ use ta_core::statistic::{
     LINEARREG_SLOPEConfig, LINEARREG_SLOPEStream, STDDEVBatchRunner, STDDEVConfig, STDDEVStream,
     TSFBatchRunner, TSFConfig, TSFStream, VARBatchRunner, VARConfig, VARStream,
 };
-use ta_core::volatility::{
+use fast_ta::volatility::{
     ATRBatchRunner, ATRConfig, ATRStream, NATRBatchRunner, NATRConfig, NATRStream,
     TRANGEBatchRunner, TRANGEConfig, TRANGEStream,
 };
-use ta_core::volume::{
+use fast_ta::volume::{
     ADBatchRunner, ADConfig, ADOSCBatchRunner, ADOSCConfig, ADOSCStream, ADStream, OBVBatchRunner,
     OBVConfig, OBVStream,
 };
 
-use ta_core::{IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use fast_ta::{IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
 fn assert_execution_types<C, R, S>()
 where
@@ -926,7 +926,7 @@ fn non_talib_local_plan_extras_are_not_in_official_inventory() {
 
 #[test]
 fn momentum_change_family_is_implemented_through_the_public_execution_seam() {
-    use ta_core::momentum::{
+    use fast_ta::momentum::{
         MOMBatchRunner, MOMConfig, MOMStream, ROCBatchRunner, ROCConfig, ROCPBatchRunner,
         ROCPConfig, ROCPStream, ROCR100BatchRunner, ROCR100Config, ROCR100Stream, ROCRBatchRunner,
         ROCRConfig, ROCRStream, ROCStream,
@@ -947,7 +947,7 @@ fn momentum_change_family_is_implemented_through_the_public_execution_seam() {
 
 #[test]
 fn directional_movement_system_is_implemented_through_the_public_execution_seam() {
-    use ta_core::momentum::{
+    use fast_ta::momentum::{
         ADXBatchRunner, ADXConfig, ADXRBatchRunner, ADXRConfig, ADXRStream, ADXStream,
         DXBatchRunner, DXConfig, DXStream, MINUS_DIBatchRunner, MINUS_DIConfig, MINUS_DIStream,
         MINUS_DMBatchRunner, MINUS_DMConfig, MINUS_DMStream, PLUS_DIBatchRunner, PLUS_DIConfig,
@@ -973,7 +973,7 @@ fn directional_movement_system_is_implemented_through_the_public_execution_seam(
 
 #[test]
 fn composite_momentum_family_is_implemented_through_the_public_execution_seam() {
-    use ta_core::momentum::{
+    use fast_ta::momentum::{
         BOPBatchRunner, BOPConfig, BOPStream, CCIBatchRunner, CCIConfig, CCIStream, MFIBatchRunner,
         MFIConfig, MFIStream, ULTOSCBatchRunner, ULTOSCConfig, ULTOSCStream,
     };
@@ -992,7 +992,7 @@ fn composite_momentum_family_is_implemented_through_the_public_execution_seam() 
 
 #[test]
 fn moving_average_momentum_family_uses_the_public_execution_seam() {
-    use ta_core::momentum::{
+    use fast_ta::momentum::{
         APOBatchRunner, APOConfig, APOStream, MACDBatchRunner, MACDConfig, MACDEXTBatchRunner,
         MACDEXTConfig, MACDEXTStream, MACDFIXBatchRunner, MACDFIXConfig, MACDFIXStream, MACDStream,
         PPOBatchRunner, PPOConfig, PPOStream, TRIXBatchRunner, TRIXConfig, TRIXStream,
@@ -1014,7 +1014,7 @@ fn moving_average_momentum_family_uses_the_public_execution_seam() {
 
 #[test]
 fn hilbert_overlap_studies_use_the_public_execution_seam() {
-    use ta_core::overlap::{
+    use fast_ta::overlap::{
         HT_TRENDLINEBatchRunner, HT_TRENDLINEConfig, HT_TRENDLINEStream, MAMABatchRunner,
         MAMAConfig, MAMAStream,
     };
@@ -1031,7 +1031,7 @@ fn hilbert_overlap_studies_use_the_public_execution_seam() {
 
 #[test]
 fn range_position_momentum_family_uses_the_public_execution_seam() {
-    use ta_core::momentum::{
+    use fast_ta::momentum::{
         AROONBatchRunner, AROONConfig, AROONOSCBatchRunner, AROONOSCConfig, AROONOSCStream,
         AROONStream, STOCHBatchRunner, STOCHConfig, STOCHFBatchRunner, STOCHFConfig, STOCHFStream,
         STOCHRSIBatchRunner, STOCHRSIConfig, STOCHRSIStream, STOCHStream, WILLRBatchRunner,

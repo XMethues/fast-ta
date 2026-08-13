@@ -19,7 +19,7 @@ use support::{
     ohlc_fixture, output_len, series_fixture, PERIOD, REPEATED_SERIES_LEN, STREAM_INSTRUMENTS,
     SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
-use ta_core::{
+use fast_ta::{
     cycle::{
         HT_DCPERIODConfig, HT_DCPHASEConfig, HT_PHASORConfig, HT_PHASORValuesMut, HT_SINEConfig,
         HT_SINEValuesMut, HT_TRENDMODEConfig, TrendMode, HT_DCPERIOD_LOOKBACK, HT_DCPHASE_LOOKBACK,
@@ -74,7 +74,7 @@ const EXECUTION_MATRIX: &[(usize, usize)] = &[
     (65_536, 512),
 ];
 
-fn ma_ema_config(period: usize) -> ta_core::Result<MAConfig> {
+fn ma_ema_config(period: usize) -> fast_ta::Result<MAConfig> {
     MAConfig::new(period, PeriodMAType::EMA)
 }
 

@@ -78,7 +78,7 @@ impl TalibError {
     /// # Example
     ///
     /// ```rust
-    /// use ta_core::error::TalibError;
+    /// use fast_ta::error::TalibError;
     ///
     /// let err = TalibError::invalid_input("Input contains NaN values");
     /// ```
@@ -98,7 +98,7 @@ impl TalibError {
     /// # Example
     ///
     /// ```rust
-    /// use ta_core::error::TalibError;
+    /// use fast_ta::error::TalibError;
     ///
     /// let err = TalibError::invalid_period(0, "period must be greater than zero");
     /// ```
@@ -119,7 +119,7 @@ impl TalibError {
     /// # Example
     ///
     /// ```rust
-    /// use ta_core::error::TalibError;
+    /// use fast_ta::error::TalibError;
     ///
     /// let err = TalibError::insufficient_data(20, 10);
     /// ```
@@ -146,7 +146,7 @@ impl TalibError {
     /// # Example
     ///
     /// ```rust
-    /// use ta_core::error::TalibError;
+    /// use fast_ta::error::TalibError;
     ///
     /// let err = TalibError::invalid_parameter("alpha", "1.5", "value in [0.0, 1.0]");
     /// ```
@@ -167,7 +167,7 @@ impl TalibError {
     /// # Example
     ///
     /// ```rust
-    /// use ta_core::error::TalibError;
+    /// use fast_ta::error::TalibError;
     ///
     /// let err = TalibError::computation_error("Numerical overflow in calculation");
     /// ```
@@ -186,7 +186,7 @@ impl TalibError {
     /// # Example
     ///
     /// ```rust
-    /// use ta_core::error::TalibError;
+    /// use fast_ta::error::TalibError;
     ///
     /// let err = TalibError::not_implemented("Hull Moving Average with period > 100");
     /// ```
@@ -295,7 +295,7 @@ impl From<std::num::ParseIntError> for TalibError {
 /// # Example
 ///
 /// ```rust
-/// use ta_core::error::{Result, TalibError};
+/// use fast_ta::error::{Result, TalibError};
 ///
 /// fn calculate_something() -> Result<f64> {
 ///     // Returns Result<f64, TalibError>

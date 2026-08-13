@@ -1,11 +1,11 @@
 use super::support::{ohlc_fixture, OhlcFixture, REPEATED_SERIES_LEN as PROFILE_SIZE};
 use super::{assert_profile, assert_zero_allocations, print_profile};
 use std::hint::black_box;
-use ta_core::momentum::{
+use fast_ta::momentum::{
     BOPConfig, BOPInput, BOPTick, CCIConfig, CCIInput, CCITick, MFIConfig, MFIInput, MFITick,
     ULTOSCConfig, ULTOSCInput, ULTOSCTick,
 };
-use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
 #[inline]
 fn bop_input(fixture: &OhlcFixture) -> BOPInput<'_> {

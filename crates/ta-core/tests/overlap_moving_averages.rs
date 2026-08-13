@@ -1,8 +1,8 @@
-use ta_core::overlap::{
+use fast_ta::overlap::{
     DEMAConfig, EMAConfig, MAConfig, PeriodMAType, T3Config, T3_with_default_vfactor, TEMAConfig,
     TRIMAConfig, WMAConfig, DEMA, EMA, KAMA, MA, T3, T3_DEFAULT_VFACTOR, TEMA, TRIMA, WMA,
 };
-use ta_core::{Float, OutputRange};
+use fast_ta::{Float, OutputRange};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(
@@ -154,7 +154,7 @@ fn ma_dispatches_to_implemented_moving_averages() {
         direct.fill(0.0);
         let dispatched_range = MA(&real, 3, matype, &mut dispatched).unwrap();
         let direct_range = match matype {
-            PeriodMAType::SMA => ta_core::overlap::SMA(&real, 3, &mut direct).unwrap(),
+            PeriodMAType::SMA => fast_ta::overlap::SMA(&real, 3, &mut direct).unwrap(),
             PeriodMAType::EMA => EMA(&real, 3, &mut direct).unwrap(),
             PeriodMAType::WMA => WMA(&real, 3, &mut direct).unwrap(),
             PeriodMAType::DEMA => DEMA(&real, 3, &mut direct).unwrap(),
@@ -212,7 +212,7 @@ fn every_selectable_moving_average_uses_its_period() {
         let short = MAConfig::new(2, ma_type).unwrap();
         let long = MAConfig::new(3, ma_type).unwrap();
         assert!(
-            ta_core::IndicatorConfig::lookback(&short) < ta_core::IndicatorConfig::lookback(&long),
+            fast_ta::IndicatorConfig::lookback(&short) < fast_ta::IndicatorConfig::lookback(&long),
             "{ma_type:?} must apply its configured Period"
         );
     }

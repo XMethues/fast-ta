@@ -55,13 +55,13 @@ cargo build -p ta-py
 ### Rust 示例
 
 ```rust
-use ta_core::{
+use fast_ta::{
     overlap::SMAConfig,
     IndicatorConfig,
     StreamingComputation,
 };
 
-fn main() -> ta_core::Result<()> {
+fn main() -> fast_ta::Result<()> {
     let prices = [1.0, 2.0, 3.0, 4.0, 5.0];
     let config = SMAConfig::new(3)?;
 
@@ -88,13 +88,13 @@ fn main() -> ta_core::Result<()> {
 Prepared Batch Runner 可为固定容量预先准备状态，并在重复调用之间复用：
 
 ```rust
-use ta_core::{overlap::SMAConfig, IndicatorConfig, PreparedBatchRunner};
+use fast_ta::{overlap::SMAConfig, IndicatorConfig, PreparedBatchRunner};
 
 let config = SMAConfig::new(14)?;
 let mut runner = config.prepare_batch(4096)?;
 let mut output = vec![0.0; prices.len() - config.lookback()];
 let range = runner.compute_into(&prices, &mut output)?;
-# Ok::<(), ta_core::TalibError>(())
+# Ok::<(), fast_ta::TalibError>(())
 ```
 
 ## 执行模型

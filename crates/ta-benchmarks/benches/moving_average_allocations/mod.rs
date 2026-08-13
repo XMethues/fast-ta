@@ -1,10 +1,10 @@
 use super::support::{series_fixture, REPEATED_SERIES_LEN as PROFILE_SIZE};
 use super::{assert_profile, assert_zero_allocations, print_profile};
 use std::hint::black_box;
-use ta_core::momentum::{
+use fast_ta::momentum::{
     APOConfig, MACDConfig, MACDEXTConfig, MACDFIXConfig, MACDValuesMut, PPOConfig, TRIXConfig,
 };
-use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
 pub(super) fn profile_moving_average_momentum_execution() {
     let real = series_fixture(PROFILE_SIZE, 31);

@@ -1,9 +1,9 @@
-use ta_core::math_transform::{
+use fast_ta::math_transform::{
     ACOS, CEIL, COS, COSH, EXP, FLOOR, LN, LOG10, SIN, SINH, SQRT, TAN, TANH,
 };
-use ta_core::{Float, IndicatorConfig, OutputRange};
+use fast_ta::{Float, IndicatorConfig, OutputRange};
 
-type TransformFn = fn(&[Float], &mut [Float]) -> ta_core::Result<OutputRange>;
+type TransformFn = fn(&[Float], &mut [Float]) -> fast_ta::Result<OutputRange>;
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(
@@ -49,7 +49,7 @@ fn all_math_transform_functions_are_exported() {
 
 #[test]
 fn math_transform_configs_compute_expected_values() {
-    let sqrt_config = ta_core::math_transform::SQRTConfig::new();
+    let sqrt_config = fast_ta::math_transform::SQRTConfig::new();
     let owned = IndicatorConfig::compute(&sqrt_config, &[4.0 as Float, 9.0 as Float]).unwrap();
     assert_eq!(owned.range(), OutputRange::new(0, 2));
     assert_close(owned.values()[0], 2.0 as Float);

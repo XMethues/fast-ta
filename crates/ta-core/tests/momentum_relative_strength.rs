@@ -3,12 +3,12 @@
 #[path = "fixtures/relative_strength_reference.rs"]
 mod reference;
 
-use ta_core::inventory::{function, ImplementationStatus};
-use ta_core::momentum::{
+use fast_ta::inventory::{function, ImplementationStatus};
+use fast_ta::momentum::{
     CMOBatchRunner, CMOConfig, CMOStream, IMIBatchRunner, IMIConfig, IMIInput, IMIStream, IMITick,
     RSIBatchRunner, RSIConfig, RSIStream, CMO, IMI, RSI,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 

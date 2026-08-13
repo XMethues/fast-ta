@@ -4,11 +4,11 @@ use crate::support::{
 };
 use criterion::{BatchSize, Criterion, Throughput};
 use std::hint::black_box;
-use ta_core::overlap::{
+use fast_ta::overlap::{
     ACCBANDSConfig, ACCBANDSInput, ACCBANDSTick, ACCBANDSValuesMut, BBANDSConfig, BBANDSValuesMut,
     PeriodMAType,
 };
-use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 
 fn band_columns(count: usize) -> (Vec<Float>, Vec<Float>, Vec<Float>) {
     (

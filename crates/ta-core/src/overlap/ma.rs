@@ -21,7 +21,7 @@ use std::vec::Vec;
 /// `MAMA` is not Period-based and is never selectable here:
 ///
 /// ```compile_fail,E0599
-/// use ta_core::overlap::PeriodMAType;
+/// use fast_ta::overlap::PeriodMAType;
 ///
 /// let _ = PeriodMAType::MAMA;
 /// ```

@@ -4,7 +4,7 @@
 //! Compact Output, caller-owned output, Prepared Batch Runners, and
 //! independent Streaming Computation.
 
-use ta_core::{
+use fast_ta::{
     math_operators::{
         ADDConfig, BinaryInput, BinaryTick, DIVConfig, MAXConfig, MAXINDEXConfig, MINConfig,
         MININDEXConfig, MINMAXConfig, MINMAXINDEXConfig, MINMAXINDEXStreamValue,
@@ -67,7 +67,7 @@ fn compute_with_prepared_runner<'a, C: IndicatorConfig + 'a>(
     max_input_len: usize,
     input: C::Input<'a>,
     output: C::OutputMut<'a>,
-) -> ta_core::Result<OutputRange> {
+) -> fast_ta::Result<OutputRange> {
     let mut runner: C::BatchRunner = IndicatorConfig::prepare_batch(config, max_input_len)?;
     PreparedBatchRunner::<C>::compute_into(&mut runner, input, output)
 }

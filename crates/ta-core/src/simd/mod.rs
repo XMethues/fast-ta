@@ -16,7 +16,7 @@
 //! dispatch API:
 //!
 //! ```rust
-//! use ta_core::{simd, Float};
+//! use fast_ta::{simd, Float};
 //!
 //! let data: Vec<Float> = vec![1.0 as Float, 2.0 as Float, 3.0 as Float, 4.0 as Float];
 //! let result = simd::sum(&data);

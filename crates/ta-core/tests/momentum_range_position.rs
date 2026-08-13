@@ -1,10 +1,10 @@
-use ta_core::momentum::{
+use fast_ta::momentum::{
     AROONConfig, AROONOSCConfig, AROONValuesMut, AroonInput, AroonTick, STOCHConfig, STOCHFConfig,
     STOCHFValuesMut, STOCHRSIConfig, STOCHRSIValuesMut, STOCHValuesMut, StochasticInput,
     StochasticTick, WILLRConfig, AROON, AROONOSC, STOCH, STOCHF, STOCHRSI, WILLR,
 };
-use ta_core::overlap::PeriodMAType;
-use ta_core::{
+use fast_ta::overlap::PeriodMAType;
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 
@@ -452,7 +452,7 @@ fn streaming_matches_batch_then_reset_replays_for_every_definition() {
     let aroon_config = AROONConfig::new(5).unwrap();
     let expected_aroon = aroon_config.compute(aroon_input).unwrap().into_values();
     let mut aroon_stream = aroon_config.stream().unwrap();
-    let collect_aroon = |stream: &mut ta_core::momentum::AROONStream| {
+    let collect_aroon = |stream: &mut fast_ta::momentum::AROONStream| {
         high.iter()
             .zip(&low)
             .filter_map(|(&high, &low)| stream.next(AroonTick { high, low }).unwrap())
@@ -497,7 +497,7 @@ fn streaming_matches_batch_then_reset_replays_for_every_definition() {
         .unwrap()
         .into_values();
     let mut stoch_stream = stoch_config.stream().unwrap();
-    let collect_stoch = |stream: &mut ta_core::momentum::STOCHStream| {
+    let collect_stoch = |stream: &mut fast_ta::momentum::STOCHStream| {
         (0..high.len())
             .filter_map(|index| {
                 stream

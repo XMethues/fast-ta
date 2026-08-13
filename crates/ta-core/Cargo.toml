@@ -1,6 +1,6 @@
 [package]
 name = "fast-ta"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.89"
 authors = ["TA-Lib Rust Contributors"]
@@ -11,7 +11,7 @@ keywords = ["technical-analysis", "trading", "indicators", "ta-lib", "finance"]
 categories = ["algorithms", "data-structures", "mathematics", "no-std"]
 
 [lib]
-name = "ta_core"
+name = "fast_ta"
 
 [features]
 default = ["f64", "std"]

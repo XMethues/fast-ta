@@ -5,7 +5,7 @@ mod inputs;
 #[path = "fixtures/hilbert_overlap_reference.rs"]
 mod reference;
 
-use ta_core::{
+use fast_ta::{
     overlap::{
         HT_TRENDLINEBatchRunner, HT_TRENDLINEConfig, HT_TRENDLINEStream, MAMABatchRunner,
         MAMAConfig, MAMAStream, MAMAValuesMut, HT_TRENDLINE, HT_TRENDLINE_LOOKBACK, MAMA,

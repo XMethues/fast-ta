@@ -1,13 +1,13 @@
 use super::support::{ohlc_fixture, REPEATED_SERIES_LEN as PROFILE_SIZE};
 use super::{assert_profile, assert_zero_allocations, print_profile};
 use std::hint::black_box;
-use ta_core::momentum::{
+use fast_ta::momentum::{
     AROONConfig, AROONOSCConfig, AROONValuesMut, AroonInput, STOCHConfig, STOCHFConfig,
     STOCHFValuesMut, STOCHRSIConfig, STOCHRSIValuesMut, STOCHValuesMut, StochasticInput,
     WILLRConfig,
 };
-use ta_core::overlap::PeriodMAType;
-use ta_core::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use fast_ta::overlap::PeriodMAType;
+use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
 const AROON_PERIOD: usize = 14;
 const FAST_K_PERIOD: usize = 14;
 const SLOW_PERIOD: usize = 3;
@@ -322,7 +322,7 @@ pub(super) fn profile_range_position_execution() {
         for index in 0..PROFILE_SIZE {
             black_box(
                 aroon_stream
-                    .next(ta_core::momentum::AroonTick {
+                    .next(fast_ta::momentum::AroonTick {
                         high: ohlc.high[index],
                         low: ohlc.low[index],
                     })
@@ -368,7 +368,7 @@ pub(super) fn profile_range_position_execution() {
         for index in 0..PROFILE_SIZE {
             black_box(
                 willr_stream
-                    .next(ta_core::momentum::StochasticTick {
+                    .next(fast_ta::momentum::StochasticTick {
                         high: ohlc.high[index],
                         low: ohlc.low[index],
                         close: ohlc.close[index],

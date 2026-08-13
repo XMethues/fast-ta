@@ -591,7 +591,7 @@ pub mod qualification {
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::{simd::dispatch, Float};
+/// use fast_ta::{simd::dispatch, Float};
 ///
 /// let data: Vec<Float> = vec![1.0 as Float, 2.0 as Float, 3.0 as Float];
 /// let result = dispatch::sum(&data);
@@ -625,7 +625,7 @@ pub fn sum(data: &[Float]) -> Float {
 /// # Examples
 ///
 /// ```rust
-/// use ta_core::{simd::dispatch, Float};
+/// use fast_ta::{simd::dispatch, Float};
 ///
 /// let a: Vec<Float> = vec![1.0 as Float, 2.0 as Float, 3.0 as Float];
 /// let b: Vec<Float> = vec![4.0 as Float, 5.0 as Float, 6.0 as Float];

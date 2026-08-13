@@ -1,12 +1,12 @@
 #[path = "fixtures/directional_movement_reference.rs"]
 mod reference;
 
-use ta_core::momentum::{
+use fast_ta::momentum::{
     ADXConfig, ADXRConfig, DXConfig, DirectionalInput, DirectionalTick, MINUS_DIConfig,
     MINUS_DMConfig, PLUS_DIConfig, PLUS_DMConfig, ADX, ADXR, DX, MINUS_DI, MINUS_DM, PLUS_DI,
     PLUS_DM,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 

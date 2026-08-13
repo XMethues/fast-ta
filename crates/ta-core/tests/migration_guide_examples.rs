@@ -2,12 +2,12 @@
 //! `docs/agents/migration-guide.md`. Each section of the guide exposes a
 //! representative workload pattern that the contract tests below exercise.
 
-use ta_core::math_operators::{MINMAXConfig, MINMAXValuesMut};
-use ta_core::overlap::SMAConfig;
-use ta_core::price_transform::{AVGPRICEConfig, AVGPRICEInput};
-use ta_core::statistic::{CORRELConfig, CORRELStream, PairTick};
-use ta_core::volatility::{ATRConfig, ATRInput};
-use ta_core::{
+use fast_ta::math_operators::{MINMAXConfig, MINMAXValuesMut};
+use fast_ta::overlap::SMAConfig;
+use fast_ta::price_transform::{AVGPRICEConfig, AVGPRICEInput};
+use fast_ta::statistic::{CORRELConfig, CORRELStream, PairTick};
+use fast_ta::volatility::{ATRConfig, ATRInput};
+use fast_ta::{
     CompactOutput, Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation,
 };
 

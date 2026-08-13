@@ -13,21 +13,21 @@ use ta_benchmarks::catalogue_matrix::{
     VerifiedOutput, C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS, MATRIX, PRIMARY_COMPARISON,
     PYTHON_MODE, RUST_CALLER_MODE, RUST_OWNED_MODE, RUST_PREPARED_MODE, RUST_STREAMING_MODE,
 };
-use ta_core::cycle::HT_DCPHASEConfig;
-use ta_core::math_operators::{ADDConfig, BinaryInput, BinaryTick};
-use ta_core::math_transform::SINConfig;
-use ta_core::momentum::{
+use fast_ta::cycle::HT_DCPHASEConfig;
+use fast_ta::math_operators::{ADDConfig, BinaryInput, BinaryTick};
+use fast_ta::math_transform::SINConfig;
+use fast_ta::momentum::{
     ADXConfig, DirectionalInput, DirectionalTick, MACDConfig, MACDValuesMut, RSIConfig,
 };
-use ta_core::overlap::{BBANDSConfig, BBANDSValuesMut, PeriodMAType, SMAConfig};
-use ta_core::pattern_recognition::{
+use fast_ta::overlap::{BBANDSConfig, BBANDSValuesMut, PeriodMAType, SMAConfig};
+use fast_ta::pattern_recognition::{
     CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig, Candle, CandleInput, PatternSignal,
 };
-use ta_core::price_transform::{TYPPRICEConfig, TYPPRICEInput, TYPPRICETick};
-use ta_core::statistic::LINEARREGConfig;
-use ta_core::volatility::{ATRConfig, ATRInput, ATRTick};
-use ta_core::volume::{OBVConfig, OBVInput, OBVTick};
-use ta_core::{Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation};
+use fast_ta::price_transform::{TYPPRICEConfig, TYPPRICEInput, TYPPRICETick};
+use fast_ta::statistic::LINEARREGConfig;
+use fast_ta::volatility::{ATRConfig, ATRInput, ATRTick};
+use fast_ta::volume::{OBVConfig, OBVInput, OBVTick};
+use fast_ta::{Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation};
 
 const TA_SUCCESS: c_int = 0;
 const TALIB_VERSION: &str = "0.6.4";

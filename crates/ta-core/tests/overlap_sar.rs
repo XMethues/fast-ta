@@ -1,12 +1,12 @@
 #[path = "fixtures/sar_reference.rs"]
 mod reference;
 
-use ta_core::inventory::{function, ImplementationStatus};
-use ta_core::overlap::{
+use fast_ta::inventory::{function, ImplementationStatus};
+use fast_ta::overlap::{
     SARConfig, SAREXTConfig, SARInput, SARTick, SAR, SAREXT, SAR_DEFAULT_ACCELERATION,
     SAR_DEFAULT_MAXIMUM,
 };
-use ta_core::{
+use fast_ta::{
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
 };
 

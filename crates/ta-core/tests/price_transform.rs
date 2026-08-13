@@ -1,8 +1,8 @@
-use ta_core::price_transform::{
+use fast_ta::price_transform::{
     AVGDEVConfig, AVGPRICEConfig, AVGPRICEInput, MEDPRICEConfig, MEDPRICEInput, TYPPRICEConfig,
     TYPPRICEInput, WCLPRICEConfig, WCLPRICEInput, AVGDEV, AVGPRICE, MEDPRICE, TYPPRICE, WCLPRICE,
 };
-use ta_core::{Float, IndicatorConfig, OutputRange, PreparedBatchRunner, TalibError};
+use fast_ta::{Float, IndicatorConfig, OutputRange, PreparedBatchRunner, TalibError};
 
 fn assert_close(actual: Float, expected: Float) {
     assert!(

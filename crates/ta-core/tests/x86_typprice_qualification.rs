@@ -8,7 +8,7 @@ use std::{
     time::Instant,
 };
 
-use ta_core::{
+use fast_ta::{
     price_transform::TYPPRICE,
     simd::dispatch::{
         active_indicator_backend,
