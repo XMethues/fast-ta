@@ -1,14 +1,17 @@
 [package]
-name = "ta-core"
+name = "fast-ta"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.89"
 authors = ["TA-Lib Rust Contributors"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/rs-indicators"
-description = "Core library for technical analysis indicators - no_std compatible"
+repository = "https://github.com/XMethues/fast-ta"
+description = "High-performance technical analysis indicators with batch, prepared, and streaming APIs"
 keywords = ["technical-analysis", "trading", "indicators", "ta-lib", "finance"]
 categories = ["algorithms", "data-structures", "mathematics", "no-std"]
+
+[lib]
+name = "ta_core"
 
 [features]
 default = ["f64", "std"]

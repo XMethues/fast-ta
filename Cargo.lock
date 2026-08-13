@@ -298,6 +298,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fast-ta"
+version = "0.1.0"
+dependencies = [
+ "aligned-vec",
+ "criterion",
+ "proptest",
+ "quickcheck",
+ "wide",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -962,29 +973,18 @@ name = "ta-benchmarks"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "fast-ta",
  "serde_json",
- "ta-core",
-]
-
-[[package]]
-name = "ta-core"
-version = "0.1.0"
-dependencies = [
- "aligned-vec",
- "criterion",
- "proptest",
- "quickcheck",
- "wide",
 ]
 
 [[package]]
 name = "ta-py"
 version = "0.1.0"
 dependencies = [
+ "fast-ta",
  "numpy",
  "pyo3",
  "pyo3-build-config",
- "ta-core",
 ]
 
 [[package]]
@@ -992,7 +992,7 @@ name = "ta-wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
- "ta-core",
+ "fast-ta",
  "wasm-bindgen",
  "wasm-bindgen-test",
  "web-sys",

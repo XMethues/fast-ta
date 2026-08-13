@@ -4,7 +4,7 @@
 [![Rust 1.89+](https://img.shields.io/badge/rust-1.89%2B-blue.svg)](https://www.rust-lang.org/)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#许可证)
 
-面向批处理与实时数据流的 Rust 技术分析库。`ta-core` 已覆盖固定目录中的全部
+面向批处理与实时数据流的 Rust 技术分析库。`fast-ta` 已覆盖固定目录中的全部
 **161 个 TA-Lib 命名指标**，并为每个指标提供一致的 Rust-first 执行契约。
 
 > 当前版本为 `0.1.0`。指标目录与数学语义以 TA-Lib 为参考，但本项目不复刻
@@ -35,13 +35,13 @@
 cargo build
 
 # 测试核心库
-cargo test -p ta-core
+cargo test -p fast-ta
 
 # 使用 f32
-cargo test -p ta-core --no-default-features --features f32,std
+cargo test -p fast-ta --no-default-features --features f32,std
 
 # 检查 no_std
-cargo check -p ta-core --lib --no-default-features --features f64,core_error
+cargo check -p fast-ta --lib --no-default-features --features f64,core_error
 ```
 
 `ta-py` 需要本机 Python，因此不属于默认 workspace 构建：

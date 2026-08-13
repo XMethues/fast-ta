@@ -53,7 +53,7 @@ name = "pattern_recognition_baselines"
 harness = false
 
 [dependencies]
-ta-core = { path = "../ta-core" }
+ta-core = { package = "fast-ta", path = "../ta-core", version = "0.1.0" }
 serde_json = { version = "1.0", optional = true }
 
 [dev-dependencies]

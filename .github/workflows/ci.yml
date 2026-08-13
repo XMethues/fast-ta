@@ -51,33 +51,33 @@ jobs:
         if: matrix.mode == 'test'
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
-        run: cargo test -p ta-core --all-targets --verbose --target ${{ matrix.target }}
+        run: cargo test -p fast-ta --all-targets --verbose --target ${{ matrix.target }}
 
       - name: Check cross-compiled target
         if: matrix.mode == 'check'
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
-        run: cargo check -p ta-core --lib --verbose --target ${{ matrix.target }}
+        run: cargo check -p fast-ta --lib --verbose --target ${{ matrix.target }}
 
       - name: Test f32 correctness
         if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.rustflags == ''
         env:
           RUSTFLAGS: ""
-        run: cargo test -p ta-core --no-default-features --features f32,std
+        run: cargo test -p fast-ta --no-default-features --features f32,std
 
       - name: Check no-std float modes
         if: matrix.target == 'x86_64-unknown-linux-gnu' && matrix.rustflags == ''
         env:
           RUSTFLAGS: ""
         run: |
-          cargo check -p ta-core --lib --no-default-features --features f64,core_error
-          cargo check -p ta-core --lib --no-default-features --features f32,core_error
+          cargo check -p fast-ta --lib --no-default-features --features f64,core_error
+          cargo check -p fast-ta --lib --no-default-features --features f32,core_error
 
       - name: Run clippy
         if: matrix.mode == 'test'
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
-        run: cargo clippy -p ta-core --all-targets --verbose --target ${{ matrix.target }}
+        run: cargo clippy -p fast-ta --all-targets --verbose --target ${{ matrix.target }}
 
       - name: Run rustfmt check
         run: |

@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-To build the default workspace members (ta-core, ta-wasm, ta-benchmarks):
+To build the default workspace members (fast-ta, ta-wasm, ta-benchmarks):
 
 ```bash
 cargo build
@@ -10,27 +10,27 @@ cargo build
 
 ## Build Individual Crates
 
-### ta-core (Core Library)
+### fast-ta (Core Library)
 
 Default (f64):
 ```bash
-cargo build -p ta-core
+cargo build -p fast-ta
 ```
 
 With f32 precision:
 ```bash
-cargo build -p ta-core --no-default-features --features f32,std
+cargo build -p fast-ta --no-default-features --features f32,std
 ```
 
 Run tests:
 ```bash
-cargo test -p ta-core
+cargo test -p fast-ta
 ```
 
 CI enforces `f32` correctness on the supported stable x86_64 Linux host with:
 
 ```bash
-cargo test -p ta-core --no-default-features --features f32,std
+cargo test -p fast-ta --no-default-features --features f32,std
 ```
 
 Performance evidence is intentionally host-local and uses the default `f64`
@@ -228,7 +228,7 @@ rs-indicators/
 ## Default Members
 
 The following crates are built by default (without `--workspace`):
-- ta-core
+- fast-ta
 - ta-wasm
 - ta-benchmarks
 
