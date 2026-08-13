@@ -22,7 +22,7 @@ Each immutable configuration supplies owned Compact Output, caller-owned `comput
 
 ## Qualification evidence
 
-`crates/ta-core/tests/momentum_relative_strength.rs` covers the pinned ordinary vectors, source ranges and first outputs, batch/stream parity, warm-up, reset/replay, independent streams, rejected-tick state preservation, flat/all-gain/all-loss/alternating boundaries, immutable configuration periods, caller-output non-mutation, insufficient data, aligned lengths, finite observations, output capacity, prepared reuse, and oversize rejection. The same tests compile for default `f64` and supported `f32` with precision-specific numerical tolerances.
+`crates/fast-ta/tests/momentum_relative_strength.rs` covers the pinned ordinary vectors, source ranges and first outputs, batch/stream parity, warm-up, reset/replay, independent streams, rejected-tick state preservation, flat/all-gain/all-loss/alternating boundaries, immutable configuration periods, caller-output non-mutation, insufficient data, aligned lengths, finite observations, output capacity, prepared reuse, and oversize rejection. The same tests compile for default `f64` and supported `f32` with precision-specific numerical tolerances.
 
 The supported no-std and precision checks are:
 

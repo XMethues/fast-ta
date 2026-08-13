@@ -17,7 +17,7 @@ contractual change that every consumer must honour:
 
 All 100 implemented indicators expose this seam. The inventory test
 `every_implemented_indicator_exposes_the_full_execution_seam` in
-`crates/ta-core/tests/inventory.rs` cross-checks the catalogue and the
+`crates/fast-ta/tests/inventory.rs` cross-checks the catalogue and the
 execution types at compile time so adding a future indicator cannot ship
 without the seam. The fixed point of 100 implemented definitions covers
 the full non-pattern numerical catalogue through issue #17; Pattern
@@ -25,7 +25,7 @@ Recognition's 61 functions remain Planned until a separate stage.
 
 ## Public seam at a glance
 
-The three traits in `crates/ta-core/src/traits.rs` form the only public
+The three traits in `crates/fast-ta/src/traits.rs` form the only public
 execution surface. They are sealed: external implementations are not part of
 this API contract.
 
@@ -108,7 +108,7 @@ let range = config.compute_into(prices, &mut owned)?;
 
 The output-capacity check happens before any kernel runs: if `owned.len()`
 is short, `compute_into` returns
-[`TalibError::InvalidInput`](../../crates/ta-core/src/error.rs) without
+[`TalibError::InvalidInput`](../../crates/fast-ta/src/error.rs) without
 mutating `owned` (the error message names the missing capacity). The same
 pre-mutation rule applies to Prepared Batch Runners.
 
@@ -236,7 +236,7 @@ Batch and streaming agree under each Indicator Definition's numerical
 contract. Where the streaming path differs from the batch path (for example,
 strict validation order on invalid ticks, or batch-specific lookback
 enforcement), the difference is documented in the per-family contract
-tests in `crates/ta-core/tests/indicator_execution_contracts.rs`.
+tests in `crates/fast-ta/tests/indicator_execution_contracts.rs`.
 
 ## 5. Removal of implicit padding
 
@@ -381,7 +381,7 @@ pattern with a `PairTick { real0, real1 }` instead of a single `Float`.
 The seam contract is the same for new indicators. Follow these steps:
 
 1. **Inventory.** Add the function to
-   `crates/ta-core/src/inventory.rs` and mark it `Implemented` so
+   `crates/fast-ta/src/inventory.rs` and mark it `Implemented` so
    `every_implemented_indicator_exposes_the_full_execution_seam` will
    require its seam coverage at compile time.
 2. **Configuration.** Implement a `<NAME>Config` that holds only parameters.
@@ -397,7 +397,7 @@ The seam contract is the same for new indicators. Follow these steps:
    must return the stream to its initial state without reallocating
    buffers. Per-instrument streams must be fully independent.
 5. **Tests.** Extend the existing family suite under
-   `crates/ta-core/tests/` with the five contract checks called out in
+   `crates/fast-ta/tests/` with the five contract checks called out in
    `indicator_execution_contracts.rs`: pre-mutation validation, owned
    vs. caller-owned equality, prepared-batch reuse and oversize rejection,
    independent streams, and batch/stream parity. Add an inventory assertion

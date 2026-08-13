@@ -15,7 +15,7 @@ The mathematical reference is the official TA-Lib definition, not its C call sur
 - MIDPOINT: <https://github.com/TA-Lib/ta-lib/blob/main/src/ta_func/ta_MIDPOINT.c>
 - MIDPRICE: <https://github.com/TA-Lib/ta-lib/blob/main/src/ta_func/ta_MIDPRICE.c>
 
-`crates/ta-core/tests/fixtures/generate_overlap_rolling.py` records the independent Python TA-Lib reproduction, and `overlap_rolling_reference.rs` pins its compact vectors.
+`crates/fast-ta/tests/fixtures/generate_overlap_rolling.py` records the independent Python TA-Lib reproduction, and `overlap_rolling_reference.rs` pins its compact vectors.
 
 ## Decision
 

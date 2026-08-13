@@ -8,7 +8,7 @@ Accepted.
 
 ## Definition qualification
 
-Numerical reference evidence is pinned to TA-Lib v0.6.4 commit `43f9d5042ecc4bd367941846494ad907bf20ea50`; the release archive SHA-256 is `aa04066d17d69c73b1baaef0883414d3d56ab3775872d82916d1cdb376a3ae86`. `crates/ta-core/tests/fixtures/generate_momentum_composite.py` verifies that archive, builds it, calls all four C definitions through `ctypes`, checks each Lookback, and emits the checked-in ordinary-market vectors. The public-seam tests independently cover flat prices, a trend followed by reversal, zero volume, scale and translation invariants where definitionally valid, and boundedness for internally consistent non-negative OHLCV observations.
+Numerical reference evidence is pinned to TA-Lib v0.6.4 commit `43f9d5042ecc4bd367941846494ad907bf20ea50`; the release archive SHA-256 is `aa04066d17d69c73b1baaef0883414d3d56ab3775872d82916d1cdb376a3ae86`. `crates/fast-ta/tests/fixtures/generate_momentum_composite.py` verifies that archive, builds it, calls all four C definitions through `ctypes`, checks each Lookback, and emits the checked-in ordinary-market vectors. The public-seam tests independently cover flat prices, a trend followed by reversal, zero volume, scale and translation invariants where definitionally valid, and boundedness for internally consistent non-negative OHLCV observations.
 
 The edge contracts are definition-specific:
 

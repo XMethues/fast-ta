@@ -24,7 +24,7 @@ All definition-specific state is fixed-size: MAMA retains scalar phase and paire
 
 ## Numerical evidence
 
-`crates/ta-core/tests/fixtures/generate_hilbert_overlap.py` verifies the official TA-Lib 0.6.4 source archive SHA-256 `aa04066d17d69c73b1baaef0883414d3d56ab3775872d82916d1cdb376a3ae86`, builds commit `43f9d5042ecc4bd367941846494ad907bf20ea50`, and calls both definitions through `ctypes`. The checked-in vectors cover constant, linear-trend, 20-observation sine, chirp, and deterministic seeded-noise Observation Series. Tests apply explicit `f64` and `f32` tolerances to every public execution mode and independently cover compact alignment, limit boundaries and sensitivity, FAMA preservation, flat/trend/sine invariants, reset and replay, independent streams, input and parameter rejection, every output capacity, prepared capacity, and failure state preservation.
+`crates/fast-ta/tests/fixtures/generate_hilbert_overlap.py` verifies the official TA-Lib 0.6.4 source archive SHA-256 `aa04066d17d69c73b1baaef0883414d3d56ab3775872d82916d1cdb376a3ae86`, builds commit `43f9d5042ecc4bd367941846494ad907bf20ea50`, and calls both definitions through `ctypes`. The checked-in vectors cover constant, linear-trend, 20-observation sine, chirp, and deterministic seeded-noise Observation Series. Tests apply explicit `f64` and `f32` tolerances to every public execution mode and independently cover compact alignment, limit boundaries and sensitivity, FAMA preservation, flat/trend/sine invariants, reset and replay, independent streams, input and parameter rejection, every output capacity, prepared capacity, and failure state preservation.
 
 ## Allocation and peak-heap contract
 

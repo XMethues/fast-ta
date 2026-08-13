@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/ta-core",
+    "crates/fast-ta",
     "crates/ta-py",
     "crates/ta-wasm",
     "crates/ta-benchmarks",
 ]
 default-members = [
-    "crates/ta-core",
+    "crates/fast-ta",
     "crates/ta-wasm",
     "crates/ta-benchmarks",
 ]

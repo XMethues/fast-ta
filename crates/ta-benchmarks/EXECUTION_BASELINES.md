@@ -48,7 +48,7 @@ The current and ADR-0001 interfaces intentionally differ. This contract matrix i
 | Per-worker execution | Independent full indicator instances are the legacy predecessor workload, not Prepared Batch Runners. | Issue #3 replaces this predecessor with the target per-worker runner seam. |
 | Configuration and execution-state separation | Current indicator objects combine Indicator Configuration and Streaming Computation state. | Later migration work separates configuration from execution state. |
 
-Issue #2 therefore records predecessor behavior and workloads. It does not fabricate `prepare_batch`, a Prepared Batch Runner, or Compact Output APIs that issue #3 is responsible for introducing. `crates/ta-core/tests/indicator_execution_contracts.rs` fixes the current values, ranges, legacy unavailable-position representations, absolute `i32` indexes, output-capacity behavior, pre-mutation validation, and operational independence of separate streaming instances.
+Issue #2 therefore records predecessor behavior and workloads. It does not fabricate `prepare_batch`, a Prepared Batch Runner, or Compact Output APIs that issue #3 is responsible for introducing. `crates/fast-ta/tests/indicator_execution_contracts.rs` fixes the current values, ranges, legacy unavailable-position representations, absolute `i32` indexes, output-capacity behavior, pre-mutation validation, and operational independence of separate streaming instances.
 
 ## Reference environment
 
@@ -1089,7 +1089,7 @@ All 54 implemented indicators expose the sealed
 `IndicatorConfig` / `PreparedBatchRunner` / `StreamingComputation` seam
 across the four execution modes (`compute`, `compute_into`,
 `prepare_batch`, `stream`). The catalogue is locked to the seam by two
-compile-time tests in `crates/ta-core/tests/inventory.rs`:
+compile-time tests in `crates/fast-ta/tests/inventory.rs`:
 
 - `every_implemented_indicator_exposes_the_full_execution_seam` asserts
   the `(Config, BatchRunner, Stream)` triple for every implemented
@@ -1133,7 +1133,7 @@ Prepared Batch Runner capacity, independent stream state, and removal
 of implicit padding, with code samples for one-shot, caller-owned,
 Universe, parameter-sweep, per-worker prepared, and multi-instrument
 streaming workloads. The contract tests in
-`crates/ta-core/tests/migration_guide_examples.rs` exercise every code
+`crates/fast-ta/tests/migration_guide_examples.rs` exercise every code
 sample at compile and run time so the guide cannot drift from the
 public seam.
 
@@ -1778,7 +1778,7 @@ stream creation and nothing per tick.
 
 Checked-in reference prefixes are generated through TA-Lib 0.8.1 commit
 `e64d2ac896c595f38d65e44c812efbfdac8a64cf` for all six definitions. The
-generator in `crates/ta-core/tests/fixtures/generate_momentum_range_position.py`
+generator in `crates/fast-ta/tests/fixtures/generate_momentum_range_position.py`
 uses 50-digit Python `Decimal` arithmetic and verifies the AROON/OSC/stochastic
 recurrences independently without adding a TA-Lib runtime dependency. Contract
 tests cover pinned default-`f64` vectors and supported-`f32` tolerances, AROON

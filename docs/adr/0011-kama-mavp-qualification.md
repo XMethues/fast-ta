@@ -18,7 +18,7 @@ A Period of one is the identity definition with zero Lookback. MAVP's Lookback i
 
 ## Qualification evidence
 
-- `crates/ta-core/tests/fixtures/kama_mavp_reference.rs` pins TA-Lib KAMA/MAVP semantics at revision `e64d2ac896c595f38d65e44c812efbfdac8a64cf` and default-`f64` vectors generated independently with 50-digit Python `Decimal` arithmetic. `generate_kama_mavp.py` is the auditable generator. The behavior tests apply explicit `f64` and `f32` tolerances.
+- `crates/fast-ta/tests/fixtures/kama_mavp_reference.rs` pins TA-Lib KAMA/MAVP semantics at revision `e64d2ac896c595f38d65e44c812efbfdac8a64cf` and default-`f64` vectors generated independently with 50-digit Python `Decimal` arithmetic. `generate_kama_mavp.py` is the auditable generator. The behavior tests apply explicit `f64` and `f32` tolerances.
 - The public-seam tests cover direct and selector KAMA, MAVP owned and caller-owned Compact Output, repeated Prepared Batch Runner execution, independent streaming, reset/replay, adaptivity, integer bound clamping, flat input, source alignment, every qualified `PeriodMAType`, and failure non-mutation/state preservation.
 - Both modules select `Vec` from `alloc` without `std` and retain the crate's `f64`/`f32` feature-independent `Float` formulas. The supported checks are `cargo check -p ta-core --no-default-features --features f64` and `cargo check -p ta-core --no-default-features --features f32`; they exercise the same production definitions rather than alternate implementations.
 - KAMA caller-owned and prepared Batch Computation allocate zero bytes. Owned KAMA allocates exactly one Compact Output column. A KAMA stream allocates one ring of $(p+1)\times\text{size_of::<Float>()}$ bytes for $p>1$.

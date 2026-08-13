@@ -25,7 +25,7 @@ unscaled point difference.
 
 ## Qualification
 
-The independent fixture generator under `crates/ta-core/tests/fixtures` spells
+The independent fixture generator under `crates/fast-ta/tests/fixtures` spells
 out the five reference definitions separately from the Rust kernel and includes
 ordinary, exact-zero, near-zero, and negative-denominator cases. Public-seam
 tests qualify default `f64` and feature-selected `f32` execution, Compact Output

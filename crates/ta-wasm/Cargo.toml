@@ -19,7 +19,7 @@ simd = []
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-fast-ta = { path = "../ta-core", version = "0.2.0", features = ["std"] }
+fast-ta = { path = "../fast-ta", version = "0.2.0", features = ["std"] }
 wasm-bindgen = "0.2.126"
 web-sys = { version = "0.3.103", features = ["console"] }
 console_error_panic_hook = { version = "0.1.7", optional = true }

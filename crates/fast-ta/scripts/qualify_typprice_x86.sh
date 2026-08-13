@@ -23,7 +23,7 @@ export QUALIFICATION_WORKFLOW_JOB="${GITHUB_JOB:-local-x86-typprice}"
 if [[ -n "${GITHUB_RUN_ID:-}" && -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
   export QUALIFICATION_WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 else
-  export QUALIFICATION_WORKFLOW_RUN_URL="local://crates/ta-core/scripts/qualify_typprice_x86.sh"
+  export QUALIFICATION_WORKFLOW_RUN_URL="local://crates/fast-ta/scripts/qualify_typprice_x86.sh"
 fi
 if command -v lscpu >/dev/null 2>&1; then
   export QUALIFICATION_CPU="${QUALIFICATION_CPU:-$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | sed -n '1p')}"
