@@ -1,8 +1,6 @@
 //! Focused caller-owned Hilbert/Cycle regression measurements.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
-use ta_benchmarks::fixture::series_fixture;
 use fast_ta::{
     cycle::{
         HT_DCPERIOD, HT_DCPERIOD_LOOKBACK, HT_DCPHASE, HT_DCPHASE_LOOKBACK, HT_PHASOR,
@@ -10,6 +8,8 @@ use fast_ta::{
     },
     Float,
 };
+use std::hint::black_box;
+use ta_benchmarks::fixture::series_fixture;
 
 const SIZES: &[usize] = &[256, 4_096, 65_536];
 

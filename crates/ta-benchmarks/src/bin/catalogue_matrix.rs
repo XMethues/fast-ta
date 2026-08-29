@@ -7,12 +7,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
-use ta_benchmarks::catalogue_matrix::{
-    catalogue_fixture, fixture_checksum, read_raw_rows, render_report, timing_stats,
-    validate_outputs, write_raw_rows, BenchmarkRow, CaseKind, CaseSpec, Fixture, OutputValues,
-    VerifiedOutput, C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS, MATRIX, PRIMARY_COMPARISON,
-    PYTHON_MODE, RUST_CALLER_MODE, RUST_OWNED_MODE, RUST_PREPARED_MODE, RUST_STREAMING_MODE,
-};
 use fast_ta::cycle::HT_DCPHASEConfig;
 use fast_ta::math_operators::{ADDConfig, BinaryInput, BinaryTick};
 use fast_ta::math_transform::SINConfig;
@@ -28,6 +22,18 @@ use fast_ta::statistic::LINEARREGConfig;
 use fast_ta::volatility::{ATRConfig, ATRInput, ATRTick};
 use fast_ta::volume::{OBVConfig, OBVInput, OBVTick};
 use fast_ta::{Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation};
+use ta_benchmarks::catalogue_cases::{CaseKind, CaseSpec, MATRIX};
+use ta_benchmarks::catalogue_evidence::{
+    read_raw_rows, write_raw_rows, BenchmarkRow, C_DIRECT_MODE, FIXTURE_ID, INPUT_LENGTHS,
+    PRIMARY_COMPARISON, PYTHON_MODE, RUST_CALLER_MODE, RUST_OWNED_MODE, RUST_PREPARED_MODE,
+    RUST_STREAMING_MODE,
+};
+use ta_benchmarks::catalogue_execution::{CaseAdapter, CaseOperations};
+use ta_benchmarks::catalogue_matrix::{
+    catalogue_fixture, fixture_checksum, validate_outputs, Fixture, OutputValues, VerifiedOutput,
+};
+use ta_benchmarks::catalogue_report::render_report;
+use ta_benchmarks::catalogue_statistics::timing_stats;
 
 const TA_SUCCESS: c_int = 0;
 const TALIB_VERSION: &str = "0.6.4";
@@ -669,7 +675,7 @@ fn main() {
 fn run() -> Result<(), String> {
     if std::mem::size_of::<Float>() != std::mem::size_of::<f64>() {
         return Err(
-            "the pinned C/Python comparison requires ta-core's default f64 precision".to_owned(),
+            "the pinned C/Python comparison requires fast-ta's default f64 precision".to_owned(),
         );
     }
     let args = parse_args()?;
@@ -703,6 +709,7 @@ fn run() -> Result<(), String> {
         write_fixture(&fixture_dir, &fixture)?;
         let checksum = fixture_checksum(&fixture);
         for spec in MATRIX {
+            CaseAdapter::new(spec.kind).validate_spec(&spec)?;
             if args
                 .case
                 .as_deref()
@@ -1022,7 +1029,7 @@ fn make_row(
         os: provenance.os.clone(),
         arch: std::env::consts::ARCH.to_owned(),
         float_width: 64,
-        features: "ta-core=default(f64,std); ta-benchmarks=catalogue-matrix".to_owned(),
+        features: "fast-ta=default(f64,std); ta-benchmarks=catalogue-matrix".to_owned(),
         commit: provenance.commit.clone(),
         dirty: provenance.dirty,
     })
@@ -1065,82 +1072,150 @@ fn measure<'a>(
     })
 }
 
+struct RustVerification;
+
+impl<'a> CaseOperations<(RustMode, &'a Fixture)> for RustVerification {
+    type Output = Result<VerifiedOutput, String>;
+
+    fn sma(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single(
+            SMAConfig::new(14).map_err(display_error)?,
+            &fixture.close,
+            mode,
+        )
+    }
+    fn bbands(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_bbands(fixture, mode)
+    }
+    fn rsi(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single(
+            RSIConfig::new(14).map_err(display_error)?,
+            &fixture.close,
+            mode,
+        )
+    }
+    fn macd(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_macd(fixture, mode)
+    }
+    fn atr(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_atr(fixture, mode)
+    }
+    fn adx(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_adx(fixture, mode)
+    }
+    fn ht_dc_phase(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single(HT_DCPHASEConfig::new(), &fixture.close, mode)
+    }
+    fn cdl_doji(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_pattern(CDLDOJIConfig::default(), fixture, mode)
+    }
+    fn cdl_engulfing(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_pattern(CDLENGULFINGConfig::default(), fixture, mode)
+    }
+    fn cdl_3_white_soldiers(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_pattern(CDL3WHITESOLDIERSConfig::default(), fixture, mode)
+    }
+    fn linear_reg(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single(
+            LINEARREGConfig::new(14).map_err(display_error)?,
+            &fixture.close,
+            mode,
+        )
+    }
+    fn typ_price(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_typprice(fixture, mode)
+    }
+    fn obv(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_obv(fixture, mode)
+    }
+    fn sin(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single(SINConfig::new(), &fixture.close, mode)
+    }
+    fn add(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_add(fixture, mode)
+    }
+}
+
+struct RustOperation;
+
+type TimedOperation<'a> = Box<dyn FnMut() -> Result<(), String> + 'a>;
+
+impl<'a> CaseOperations<(RustMode, &'a Fixture)> for RustOperation {
+    type Output = Result<TimedOperation<'a>, String>;
+
+    fn sma(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single_operation(
+            SMAConfig::new(14).map_err(display_error)?,
+            &fixture.close,
+            mode,
+        )
+    }
+    fn bbands(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_bbands_operation(fixture, mode)
+    }
+    fn rsi(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single_operation(
+            RSIConfig::new(14).map_err(display_error)?,
+            &fixture.close,
+            mode,
+        )
+    }
+    fn macd(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_macd_operation(fixture, mode)
+    }
+    fn atr(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_atr_operation(fixture, mode)
+    }
+    fn adx(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_adx_operation(fixture, mode)
+    }
+    fn ht_dc_phase(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single_operation(HT_DCPHASEConfig::new(), &fixture.close, mode)
+    }
+    fn cdl_doji(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_pattern_operation(CDLDOJIConfig::default(), fixture, mode)
+    }
+    fn cdl_engulfing(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_pattern_operation(CDLENGULFINGConfig::default(), fixture, mode)
+    }
+    fn cdl_3_white_soldiers(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_pattern_operation(CDL3WHITESOLDIERSConfig::default(), fixture, mode)
+    }
+    fn linear_reg(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single_operation(
+            LINEARREGConfig::new(14).map_err(display_error)?,
+            &fixture.close,
+            mode,
+        )
+    }
+    fn typ_price(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_typprice_operation(fixture, mode)
+    }
+    fn obv(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_obv_operation(fixture, mode)
+    }
+    fn sin(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_single_operation(SINConfig::new(), &fixture.close, mode)
+    }
+    fn add(&mut self, (mode, fixture): (RustMode, &'a Fixture)) -> Self::Output {
+        rust_add_operation(fixture, mode)
+    }
+}
+
 fn rust_compute(
     spec: CaseSpec,
     mode: RustMode,
     fixture: &Fixture,
 ) -> Result<VerifiedOutput, String> {
-    match spec.kind {
-        CaseKind::Sma => rust_single(
-            SMAConfig::new(14).map_err(display_error)?,
-            &fixture.close,
-            mode,
-        ),
-        CaseKind::Bbands => rust_bbands(fixture, mode),
-        CaseKind::Rsi => rust_single(
-            RSIConfig::new(14).map_err(display_error)?,
-            &fixture.close,
-            mode,
-        ),
-        CaseKind::Macd => rust_macd(fixture, mode),
-        CaseKind::Atr => rust_atr(fixture, mode),
-        CaseKind::Adx => rust_adx(fixture, mode),
-        CaseKind::HtDcPhase => rust_single(HT_DCPHASEConfig::new(), &fixture.close, mode),
-        CaseKind::CdlDoji => rust_pattern(CDLDOJIConfig::default(), fixture, mode),
-        CaseKind::CdlEngulfing => rust_pattern(CDLENGULFINGConfig::default(), fixture, mode),
-        CaseKind::Cdl3WhiteSoldiers => {
-            rust_pattern(CDL3WHITESOLDIERSConfig::default(), fixture, mode)
-        }
-        CaseKind::LinearReg => rust_single(
-            LINEARREGConfig::new(14).map_err(display_error)?,
-            &fixture.close,
-            mode,
-        ),
-        CaseKind::TypPrice => rust_typprice(fixture, mode),
-        CaseKind::Obv => rust_obv(fixture, mode),
-        CaseKind::Sin => rust_single(SINConfig::new(), &fixture.close, mode),
-        CaseKind::Add => rust_add(fixture, mode),
-    }
+    CaseAdapter::new(spec.kind).execute(&mut RustVerification, (mode, fixture))
 }
 
 fn rust_operation<'a>(
     spec: CaseSpec,
     mode: RustMode,
     fixture: &'a Fixture,
-) -> Result<Box<dyn FnMut() -> Result<(), String> + 'a>, String> {
-    match spec.kind {
-        CaseKind::Sma => rust_single_operation(
-            SMAConfig::new(14).map_err(display_error)?,
-            &fixture.close,
-            mode,
-        ),
-        CaseKind::Bbands => rust_bbands_operation(fixture, mode),
-        CaseKind::Rsi => rust_single_operation(
-            RSIConfig::new(14).map_err(display_error)?,
-            &fixture.close,
-            mode,
-        ),
-        CaseKind::Macd => rust_macd_operation(fixture, mode),
-        CaseKind::Atr => rust_atr_operation(fixture, mode),
-        CaseKind::Adx => rust_adx_operation(fixture, mode),
-        CaseKind::HtDcPhase => rust_single_operation(HT_DCPHASEConfig::new(), &fixture.close, mode),
-        CaseKind::CdlDoji => rust_pattern_operation(CDLDOJIConfig::default(), fixture, mode),
-        CaseKind::CdlEngulfing => {
-            rust_pattern_operation(CDLENGULFINGConfig::default(), fixture, mode)
-        }
-        CaseKind::Cdl3WhiteSoldiers => {
-            rust_pattern_operation(CDL3WHITESOLDIERSConfig::default(), fixture, mode)
-        }
-        CaseKind::LinearReg => rust_single_operation(
-            LINEARREGConfig::new(14).map_err(display_error)?,
-            &fixture.close,
-            mode,
-        ),
-        CaseKind::TypPrice => rust_typprice_operation(fixture, mode),
-        CaseKind::Obv => rust_obv_operation(fixture, mode),
-        CaseKind::Sin => rust_single_operation(SINConfig::new(), &fixture.close, mode),
-        CaseKind::Add => rust_add_operation(fixture, mode),
-    }
+) -> Result<TimedOperation<'a>, String> {
+    CaseAdapter::new(spec.kind).execute(&mut RustOperation, (mode, fixture))
 }
 
 fn rust_single<C>(config: C, input: &[Float], mode: RustMode) -> Result<VerifiedOutput, String>

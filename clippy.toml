@@ -1,4 +1,4 @@
-# Clippy configuration for ta-core project
+# Clippy configuration for the fast-ta project
 # See https://github.com/rust-lang/rust-clippy#configuration for more options
 
 # Allow certain lints that are not applicable

@@ -1,0 +1,16 @@
+kind	id	family	definition	parameters	output_kind	output_arity
+Sma	SMA	Overlap Studies	SMA: Simple Moving Average	timeperiod=14	float	1
+Bbands	BBANDS	Overlap Studies	BBANDS: Bollinger Bands	timeperiod=20;nbdevup=2;nbdevdn=2;matype=SMA	float	3
+Rsi	RSI	Momentum Indicators	RSI: Relative Strength Index	timeperiod=14	float	1
+Macd	MACD	Momentum Indicators	MACD: Moving Average Convergence/Divergence	fastperiod=12;slowperiod=26;signalperiod=9	float	3
+Atr	ATR	Volatility Indicators	ATR: Average True Range	timeperiod=14	float	1
+Adx	ADX	Momentum Indicators	ADX: Average Directional Movement Index	timeperiod=14	float	1
+HtDcPhase	HT_DCPHASE	Cycle Indicators	HT_DCPHASE: Hilbert Transform Dominant Cycle Phase	none	float	1
+CdlDoji	CDLDOJI	Pattern Recognition	CDLDOJI: Doji	candle_settings=TA-Lib defaults	integer	1
+CdlEngulfing	CDLENGULFING	Pattern Recognition	CDLENGULFING: Engulfing Pattern	candle_settings=TA-Lib defaults	integer	1
+Cdl3WhiteSoldiers	CDL3WHITESOLDIERS	Pattern Recognition	CDL3WHITESOLDIERS: Three Advancing White Soldiers	candle_settings=TA-Lib defaults	integer	1
+LinearReg	LINEARREG	Statistic Functions	LINEARREG: Linear Regression endpoint	timeperiod=14	float	1
+TypPrice	TYPPRICE	Price Transform	TYPPRICE: Typical Price	none	float	1
+Obv	OBV	Volume Indicators	OBV: On Balance Volume	none	float	1
+Sin	SIN	Math Transform	SIN: Vector Trigonometric Sine	none	float	1
+Add	ADD	Math Operators	ADD: Vector Arithmetic Add	none	float	1

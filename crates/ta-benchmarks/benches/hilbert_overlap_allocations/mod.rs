@@ -1,8 +1,8 @@
 use super::support::{series_fixture, REPEATED_SERIES_LEN as PROFILE_SIZE};
 use super::{assert_profile, assert_zero_allocations, print_profile};
-use std::hint::black_box;
 use fast_ta::overlap::{HT_TRENDLINEConfig, MAMAConfig, MAMAValuesMut};
 use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use std::hint::black_box;
 
 pub(super) fn profile_hilbert_overlap_execution() {
     let input = series_fixture(PROFILE_SIZE, 29);

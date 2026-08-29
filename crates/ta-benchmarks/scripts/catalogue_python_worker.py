@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import csv
 import math
 from pathlib import Path
 import sys
@@ -42,7 +43,55 @@ PARAMETERS = {
     "LINEARREG": {"timeperiod": 14},
 }
 
-INTEGER_CASES = {"CDLDOJI", "CDLENGULFING", "CDL3WHITESOLDIERS"}
+def manifest_cases() -> dict[str, dict[str, str]]:
+    manifest_path = Path(__file__).resolve().parents[1] / "catalogue-cases.tsv"
+    with manifest_path.open(newline="", encoding="utf-8") as manifest:
+        rows = list(csv.DictReader(manifest, delimiter="\t"))
+    return {row["id"]: row for row in rows}
+
+
+CASE_METADATA = manifest_cases()
+if tuple(EXPRESSIONS) != tuple(CASE_METADATA):
+    raise RuntimeError(
+        "Python catalogue adapters must exactly match catalogue-cases.tsv: "
+        f"manifest={tuple(CASE_METADATA)!r}; adapters={tuple(EXPRESSIONS)!r}"
+    )
+if any(row["output_kind"] not in {"float", "integer"} for row in CASE_METADATA.values()):
+    raise RuntimeError("catalogue case manifest contains an unsupported output kind")
+INTEGER_CASES = {
+    case_id
+    for case_id, metadata in CASE_METADATA.items()
+    if metadata["output_kind"] == "integer"
+}
+
+def adapter_parameters(case_id: str) -> str:
+    parameters = PARAMETERS.get(case_id)
+    if parameters is None:
+        if case_id.startswith("CDL"):
+            return "candle_settings=TA-Lib defaults"
+        return "none"
+    if case_id == "BBANDS":
+        if parameters["matype"] != 0:
+            raise RuntimeError("BBANDS Python adapter must use SMA")
+        return (
+            f"timeperiod={parameters['timeperiod']};nbdevup={parameters['nbdevup']:g};"
+            f"nbdevdn={parameters['nbdevdn']:g};matype=SMA"
+        )
+    if case_id == "MACD":
+        return (
+            f"fastperiod={parameters['fastperiod']};slowperiod={parameters['slowperiod']};"
+            f"signalperiod={parameters['signalperiod']}"
+        )
+    return f"timeperiod={parameters['timeperiod']}"
+
+
+for adapter_id, metadata in CASE_METADATA.items():
+    actual_parameters = adapter_parameters(adapter_id)
+    if metadata["parameters"] != actual_parameters:
+        raise RuntimeError(
+            f"{adapter_id} Python adapter parameters {actual_parameters!r} "
+            f"do not match manifest {metadata['parameters']!r}"
+        )
 
 
 def version_text(value: object) -> str:
@@ -113,7 +162,7 @@ def semantic(fixture_dir: Path, output_dir: Path, case_id: str) -> None:
     fixture = load_fixture(fixture_dir)
     output = evaluate(case_id, fixture)
     columns = output if isinstance(output, tuple) else (output,)
-    expected_arity = 3 if case_id in {"BBANDS", "MACD"} else 1
+    expected_arity = int(CASE_METADATA[case_id]["output_arity"])
     if len(columns) != expected_arity:
         raise RuntimeError(f"{case_id} returned {len(columns)} output columns, expected {expected_arity}")
     begin = lookback(case_id)

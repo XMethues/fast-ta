@@ -464,9 +464,9 @@ nullability and alignment policy.
 The issue #16 end-to-end acceptance gate requires every item below to be
 green on the merged commit:
 
-- `cargo test -p ta-core --all-targets`
-- `cargo test -p ta-core --no-default-features --features f32,std`
-- `cargo clippy -p ta-core --all-targets` (no new warnings beyond the
+- `cargo test -p fast-ta --all-targets`
+- `cargo test -p fast-ta --no-default-features --features f32,std`
+- `cargo clippy -p fast-ta --all-targets` (no new warnings beyond the
   20-warning baseline)
 - `cargo fmt --all -- --check`
 - `cargo check -p ta-benchmarks --benches`

@@ -128,6 +128,10 @@ _Avoid_: Error, missing result
 A fixed initial observation span required by an Indicator Definition before its results are valid, beyond merely having enough inputs to evaluate its formula. It contributes to Lookback and Warm-up and is identical for every execution of that definition.
 _Avoid_: Unstable period, global compatibility setting
 
+**Performance Qualification**:
+A reproducible evaluation of an Indicator Definition and execution mode under fixed representative workloads, requiring semantic parity and recorded provenance before applying allocation, peak-memory, and stable performance-regression gates. Host-local timings are evidence for that qualification, not portable speedup claims.
+_Avoid_: Ad hoc benchmark, cross-host speed claim
+
 ## Result language
 
 **Pattern Signal**:

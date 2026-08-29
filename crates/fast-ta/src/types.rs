@@ -11,7 +11,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use ta_core::types::Float;
+//! use fast_ta::types::Float;
 //!
 //! let x: Float = 1.0;
 //! let y: Float = 2.0;

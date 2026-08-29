@@ -1,17 +1,17 @@
-//! Official TA-Lib function inventory and implementation ledger.
+//! Indicator Catalogue and Catalogue Coverage queries.
 //!
-//! This source-level ledger records the 161-function TA-Lib surface that
-//! `ta-core` intends to implement in Rust. It deliberately follows official
-//! TA-Lib groups rather than the older local planning documents, so future work
-//! can advance group-by-group without rediscovering scope.
+//! The catalogue records the 161 official TA-Lib-named Indicator Definitions
+//! and projects them by implementation status, family, and owning Rust module.
+//! Queries borrow the source-level table directly, so they remain allocation-free
+//! and available in `no_std` builds.
 
-/// Total official TA-Lib function count tracked by this ledger.
+/// Number of Indicator Definitions in the official catalogue.
 pub const FUNCTION_COUNT: usize = 161;
 
-/// Number of functions currently implemented in Rust `ta-core`.
+/// Number of Indicator Definitions in the current Catalogue Coverage.
 pub const IMPLEMENTED_FUNCTION_COUNT: usize = 161;
 
-/// Official TA-Lib function group.
+/// Official Indicator Definition family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FunctionGroup {
     /// Overlap Studies.
@@ -37,7 +37,7 @@ pub enum FunctionGroup {
 }
 
 impl FunctionGroup {
-    /// All official groups in TA-Lib display order.
+    /// All official families in TA-Lib display order.
     pub const ALL: &'static [Self] = &[
         Self::OverlapStudies,
         Self::MomentumIndicators,
@@ -51,7 +51,7 @@ impl FunctionGroup {
         Self::MathOperators,
     ];
 
-    /// Human-readable official group label.
+    /// Human-readable official family label.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::OverlapStudies => "Overlap Studies",
@@ -67,7 +67,7 @@ impl FunctionGroup {
         }
     }
 
-    /// Expected official function count for this group.
+    /// Expected official Indicator Definition count for this family.
     pub const fn expected_count(self) -> usize {
         match self {
             Self::OverlapStudies => 18,
@@ -83,7 +83,7 @@ impl FunctionGroup {
         }
     }
 
-    /// Rust module planned for this group.
+    /// Rust module that owns this family's implementations.
     pub const fn rust_module(self) -> &'static str {
         match self {
             Self::OverlapStudies => "overlap",
@@ -100,28 +100,28 @@ impl FunctionGroup {
     }
 }
 
-/// Implementation state for a TA-Lib function.
+/// Catalogue Coverage state for an Indicator Definition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ImplementationStatus {
-    /// Implemented in Rust `ta-core`.
+    /// Available for evaluation in `fast-ta`.
     Implemented,
-    /// Official TA-Lib function recorded for future Rust implementation.
+    /// Recorded in the Indicator Catalogue for future implementation.
     Planned,
 }
 
-/// One official TA-Lib function inventory record.
+/// One Indicator Definition in the official catalogue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FunctionInfo {
-    /// Uppercase TA-Lib function name.
+    /// Uppercase TA-Lib definition name.
     pub name: &'static str,
-    /// Official TA-Lib group.
+    /// Official definition family.
     pub group: FunctionGroup,
-    /// Current Rust implementation status.
+    /// Current Catalogue Coverage state.
     pub status: ImplementationStatus,
 }
 
 impl FunctionInfo {
-    /// Returns true when this function is implemented in Rust `ta-core`.
+    /// Returns true when this definition is in the current Catalogue Coverage.
     pub const fn is_implemented(self) -> bool {
         match self.status {
             ImplementationStatus::Implemented => true,
@@ -129,9 +129,14 @@ impl FunctionInfo {
         }
     }
 
-    /// Rust module for this function's official group.
-    pub const fn rust_module(self) -> &'static str {
+    /// Rust module that owns this definition's implementation.
+    pub const fn owner_module(self) -> &'static str {
         self.group.rust_module()
+    }
+
+    /// Rust module for this definition's official family.
+    pub const fn rust_module(self) -> &'static str {
+        self.owner_module()
     }
 }
 
@@ -145,7 +150,7 @@ macro_rules! function {
     };
 }
 
-/// Official TA-Lib function inventory in group order.
+/// Official Indicator Catalogue source table in family order.
 pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     // Overlap Studies — 18 functions.
     function!("ACCBANDS", OverlapStudies, Implemented),
@@ -320,7 +325,73 @@ pub const TALIB_FUNCTIONS: &[FunctionInfo] = &[
     function!("SUM", MathOperators, Implemented),
 ];
 
-/// Finds a TA-Lib function by uppercase name.
+/// Allocation-free query model for the Indicator Catalogue.
+///
+/// The model borrows the single source-level definition table. Its iterators
+/// preserve official catalogue order.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct IndicatorCatalogue;
+
+/// Queryable official Indicator Catalogue.
+pub const INDICATOR_CATALOGUE: IndicatorCatalogue = IndicatorCatalogue;
+
+impl IndicatorCatalogue {
+    /// Returns every Indicator Definition in official catalogue order.
+    pub const fn definitions(self) -> &'static [FunctionInfo] {
+        TALIB_FUNCTIONS
+    }
+
+    /// Looks up an Indicator Definition by its uppercase TA-Lib name.
+    pub fn definition(self, name: &str) -> Option<&'static FunctionInfo> {
+        TALIB_FUNCTIONS
+            .iter()
+            .find(|definition| definition.name == name)
+    }
+
+    /// Iterates over the current Catalogue Coverage in official catalogue order.
+    pub fn implemented_definitions(self) -> impl Iterator<Item = &'static FunctionInfo> + Clone {
+        TALIB_FUNCTIONS
+            .iter()
+            .filter(|definition| definition.is_implemented())
+    }
+
+    /// Looks up an implemented Indicator Definition by uppercase TA-Lib name.
+    pub fn implemented_definition(self, name: &str) -> Option<&'static FunctionInfo> {
+        self.definition(name)
+            .filter(|definition| definition.is_implemented())
+    }
+
+    /// Projects the Indicator Definitions belonging to one official family.
+    pub fn family(
+        self,
+        family: FunctionGroup,
+    ) -> impl Iterator<Item = &'static FunctionInfo> + Clone {
+        TALIB_FUNCTIONS
+            .iter()
+            .filter(move |definition| definition.group == family)
+    }
+
+    /// Counts the Indicator Definitions belonging to one official family.
+    pub fn family_count(self, family: FunctionGroup) -> usize {
+        self.family(family).count()
+    }
+
+    /// Projects implemented Indicator Definitions belonging to one family.
+    pub fn implemented_family(
+        self,
+        family: FunctionGroup,
+    ) -> impl Iterator<Item = &'static FunctionInfo> + Clone {
+        self.family(family)
+            .filter(|definition| definition.is_implemented())
+    }
+
+    /// Counts implemented Indicator Definitions belonging to one family.
+    pub fn implemented_family_count(self, family: FunctionGroup) -> usize {
+        self.implemented_family(family).count()
+    }
+}
+
+/// Finds an Indicator Definition by uppercase TA-Lib name.
 pub fn function(name: &str) -> Option<&'static FunctionInfo> {
-    TALIB_FUNCTIONS.iter().find(|info| info.name == name)
+    INDICATOR_CATALOGUE.definition(name)
 }

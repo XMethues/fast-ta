@@ -3,12 +3,12 @@ use super::support::{
     WORKERS,
 };
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
 use fast_ta::momentum::{
     APOConfig, MACDConfig, MACDEXTConfig, MACDValuesMut, PPOConfig, TRIXConfig,
 };
 use fast_ta::overlap::PeriodMAType;
 use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use std::hint::black_box;
 
 const SIZES: &[usize] = &[64, 4_096, 65_536];
 const KINDS: &[PeriodMAType] = &[

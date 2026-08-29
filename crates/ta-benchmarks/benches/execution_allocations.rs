@@ -11,15 +11,6 @@ mod hilbert_overlap_allocations;
 mod moving_average_allocations;
 mod range_position_allocations;
 mod support;
-use std::{
-    alloc::{GlobalAlloc, Layout, System},
-    hint::black_box,
-    sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
-};
-use support::{
-    ohlc_fixture, output_len, series_fixture, PERIOD, REPEATED_SERIES_LEN as PROFILE_SIZE,
-    STREAM_INSTRUMENTS, SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
-};
 use fast_ta::{
     cycle::{
         HT_DCPERIODConfig, HT_DCPHASEConfig, HT_PHASORConfig, HT_PHASORValuesMut, HT_SINEConfig,
@@ -66,6 +57,15 @@ use fast_ta::{
         ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
     },
     Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
+};
+use std::{
+    alloc::{GlobalAlloc, Layout, System},
+    hint::black_box,
+    sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
+};
+use support::{
+    ohlc_fixture, output_len, series_fixture, PERIOD, REPEATED_SERIES_LEN as PROFILE_SIZE,
+    STREAM_INSTRUMENTS, SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
 
 const REPEATED_MINMAX_CALLS: usize = 8;

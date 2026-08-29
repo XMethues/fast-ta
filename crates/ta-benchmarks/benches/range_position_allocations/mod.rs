@@ -1,6 +1,5 @@
 use super::support::{ohlc_fixture, REPEATED_SERIES_LEN as PROFILE_SIZE};
 use super::{assert_profile, assert_zero_allocations, print_profile};
-use std::hint::black_box;
 use fast_ta::momentum::{
     AROONConfig, AROONOSCConfig, AROONValuesMut, AroonInput, STOCHConfig, STOCHFConfig,
     STOCHFValuesMut, STOCHRSIConfig, STOCHRSIValuesMut, STOCHValuesMut, StochasticInput,
@@ -8,6 +7,7 @@ use fast_ta::momentum::{
 };
 use fast_ta::overlap::PeriodMAType;
 use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use std::hint::black_box;
 const AROON_PERIOD: usize = 14;
 const FAST_K_PERIOD: usize = 14;
 const SLOW_PERIOD: usize = 3;

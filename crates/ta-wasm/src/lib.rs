@@ -39,10 +39,10 @@ impl TyppriceResult {
     }
 }
 
-/// Computes TYPPRICE through ta-core's validated public Indicator path.
+/// Computes TYPPRICE through fast-ta's validated public Indicator path.
 ///
 /// JavaScript receives an `Error` for unequal input lengths or non-finite
-/// values, using the same validation messages as ta-core.
+/// values, using the same validation messages as fast-ta.
 #[wasm_bindgen]
 pub fn typprice(high: &[f64], low: &[f64], close: &[f64]) -> Result<TyppriceResult, JsError> {
     let output = TYPPRICEConfig::new()
@@ -61,7 +61,7 @@ pub fn typprice(high: &[f64], low: &[f64], close: &[f64]) -> Result<TyppriceResu
     })
 }
 
-/// Returns the active ta-core Indicator backend as a stable identifier.
+/// Returns the active fast-ta Indicator backend as a stable identifier.
 #[wasm_bindgen]
 pub fn typprice_backend() -> String {
     active_indicator_backend().as_str().to_owned()

@@ -1,11 +1,11 @@
-//! End-to-end inventory coverage for the Rust-first execution architecture.
+//! Public-seam coverage for the Indicator Catalogue and execution architecture.
 //!
-//! Every implemented indicator must expose the sealed
+//! Inventory tests exercise allocation-free catalogue queries and their
+//! invariants without maintaining a second definition registry. Compile-time
+//! trait assertions retain coverage of each implemented Indicator Definition's
 //! [`IndicatorConfig`]/[`PreparedBatchRunner`]/[`StreamingComputation`] seam
 //! across all four execution modes (`compute`, `compute_into`, `prepare_batch`,
-//! `stream`). Generic trait assertions exercise each indicator's configuration
-//! type, prepared runner, and stream state at compile time so a future macro
-//! regression cannot drop an indicator from the public catalogue.
+//! `stream`).
 
 use fast_ta::cycle::{
     HT_DCPERIODBatchRunner, HT_DCPERIODConfig, HT_DCPERIODStream, HT_DCPHASEBatchRunner,
@@ -15,7 +15,7 @@ use fast_ta::cycle::{
 };
 use fast_ta::inventory::{
     function, FunctionGroup, ImplementationStatus, FUNCTION_COUNT, IMPLEMENTED_FUNCTION_COUNT,
-    TALIB_FUNCTIONS,
+    INDICATOR_CATALOGUE,
 };
 use fast_ta::math_operators::{
     ADDBatchRunner, ADDConfig, ADDStream, DIVBatchRunner, DIVConfig, DIVStream, MAXBatchRunner,
@@ -150,237 +150,98 @@ where
 }
 
 #[test]
-fn inventory_contains_official_161_functions() {
+fn catalogue_lookup_by_definition_name_is_stable() {
+    let sma = INDICATOR_CATALOGUE
+        .definition("SMA")
+        .expect("SMA belongs to the Indicator Catalogue");
+
+    assert_eq!(sma.name, "SMA");
+    assert_eq!(sma.group, FunctionGroup::OverlapStudies);
+    assert!(core::ptr::eq(
+        sma,
+        INDICATOR_CATALOGUE.definition("SMA").unwrap()
+    ));
+    assert_eq!(function("SMA"), Some(sma));
+    assert!(INDICATOR_CATALOGUE.definition("sma").is_none());
+    assert!(INDICATOR_CATALOGUE.definition("NOT_A_DEFINITION").is_none());
+}
+
+#[test]
+fn catalogue_contains_the_official_161_definitions() {
     assert_eq!(FUNCTION_COUNT, 161);
-    assert_eq!(TALIB_FUNCTIONS.len(), FUNCTION_COUNT);
+    assert_eq!(INDICATOR_CATALOGUE.definitions().len(), FUNCTION_COUNT);
 }
 
 #[test]
-fn group_counts_match_official_talib_inventory() {
-    let expected = [
-        (FunctionGroup::OverlapStudies, 18),
-        (FunctionGroup::MomentumIndicators, 31),
-        (FunctionGroup::VolumeIndicators, 3),
-        (FunctionGroup::VolatilityIndicators, 3),
-        (FunctionGroup::PriceTransform, 5),
-        (FunctionGroup::CycleIndicators, 5),
-        (FunctionGroup::PatternRecognition, 61),
-        (FunctionGroup::StatisticFunctions, 9),
-        (FunctionGroup::MathTransform, 15),
-        (FunctionGroup::MathOperators, 11),
-    ];
+fn implemented_projection_matches_published_catalogue_coverage() {
+    let implemented = INDICATOR_CATALOGUE.implemented_definitions();
 
-    let mut total = 0;
-    for (group, count) in expected {
-        assert_eq!(group.expected_count(), count, "{:?} expected count", group);
-        assert_eq!(
-            TALIB_FUNCTIONS
-                .iter()
-                .filter(|info| info.group == group)
-                .count(),
-            count,
-            "{:?} actual count",
-            group
-        );
-        total += count;
-    }
-
-    assert_eq!(total, FUNCTION_COUNT);
-    assert_eq!(FunctionGroup::ALL.len(), 10);
-}
-
-#[test]
-fn function_names_are_unique() {
-    for (idx, info) in TALIB_FUNCTIONS.iter().enumerate() {
-        assert!(
-            TALIB_FUNCTIONS[idx + 1..]
-                .iter()
-                .all(|other| other.name != info.name),
-            "duplicate function name {}",
-            info.name
-        );
-    }
-}
-
-#[test]
-fn first_tranche_functions_are_marked_implemented() {
-    let implemented = [
-        "SMA",
-        "DEMA",
-        "EMA",
-        "MA",
-        "T3",
-        "TEMA",
-        "TRIMA",
-        "WMA",
-        "SAR",
-        "SAREXT",
-        "ACCBANDS",
-        "BBANDS",
-        "MIDPOINT",
-        "MIDPRICE",
-        "KAMA",
-        "MAVP",
-        "MAMA",
-        "HT_TRENDLINE",
-        "AVGDEV",
-        "AVGPRICE",
-        "MEDPRICE",
-        "TYPPRICE",
-        "WCLPRICE",
-        "HT_DCPERIOD",
-        "HT_DCPHASE",
-        "HT_PHASOR",
-        "HT_SINE",
-        "HT_TRENDMODE",
-        "AD",
-        "ADOSC",
-        "OBV",
-        "ATR",
-        "NATR",
-        "TRANGE",
-        "BETA",
-        "CORREL",
-        "LINEARREG",
-        "LINEARREG_ANGLE",
-        "LINEARREG_INTERCEPT",
-        "LINEARREG_SLOPE",
-        "STDDEV",
-        "TSF",
-        "VAR",
-        "ACOS",
-        "ASIN",
-        "ATAN",
-        "CEIL",
-        "COS",
-        "COSH",
-        "EXP",
-        "FLOOR",
-        "LN",
-        "LOG10",
-        "SIN",
-        "SINH",
-        "SQRT",
-        "TAN",
-        "TANH",
-        "ADD",
-        "DIV",
-        "MAX",
-        "MAXINDEX",
-        "MIN",
-        "MININDEX",
-        "MINMAX",
-        "MINMAXINDEX",
-        "MULT",
-        "SUB",
-        "SUM",
-        "MOM",
-        "ROC",
-        "ROCP",
-        "ROCR",
-        "ROCR100",
-        "RSI",
-        "CMO",
-        "IMI",
-        "PLUS_DM",
-        "MINUS_DM",
-        "PLUS_DI",
-        "MINUS_DI",
-        "DX",
-        "ADX",
-        "ADXR",
-        "BOP",
-        "CCI",
-        "MFI",
-        "ULTOSC",
-        "APO",
-        "PPO",
-        "MACD",
-        "MACDEXT",
-        "MACDFIX",
-        "TRIX",
-        "AROON",
-        "AROONOSC",
-        "STOCH",
-        "STOCHF",
-        "STOCHRSI",
-        "WILLR",
-        "CDLDOJI",
-        "CDLENGULFING",
-        "CDLBELTHOLD",
-        "CDLCLOSINGMARUBOZU",
-        "CDLDRAGONFLYDOJI",
-        "CDLGRAVESTONEDOJI",
-        "CDLHIGHWAVE",
-        "CDLLONGLEGGEDDOJI",
-        "CDLLONGLINE",
-        "CDLMARUBOZU",
-        "CDLRICKSHAWMAN",
-        "CDLSHORTLINE",
-        "CDLSPINNINGTOP",
-        "CDLTAKURI",
-        "CDLCOUNTERATTACK",
-        "CDLDARKCLOUDCOVER",
-        "CDLDOJISTAR",
-        "CDLHARAMI",
-        "CDLHARAMICROSS",
-        "CDLHOMINGPIGEON",
-        "CDLKICKING",
-        "CDLKICKINGBYLENGTH",
-        "CDLMATCHINGLOW",
-        "CDLHAMMER",
-        "CDLHANGINGMAN",
-        "CDLINNECK",
-        "CDLINVERTEDHAMMER",
-        "CDLONNECK",
-        "CDLPIERCING",
-        "CDLSEPARATINGLINES",
-        "CDLSHOOTINGSTAR",
-        "CDLTHRUSTING",
-        "CDL3INSIDE",
-        "CDL3OUTSIDE",
-        "CDLABANDONEDBABY",
-        "CDLEVENINGDOJISTAR",
-        "CDLEVENINGSTAR",
-        "CDLMORNINGDOJISTAR",
-        "CDLMORNINGSTAR",
-        "CDLUNIQUE3RIVER",
-        "CDL2CROWS",
-        "CDL3LINESTRIKE",
-        "CDLGAPSIDESIDEWHITE",
-        "CDLSTICKSANDWICH",
-        "CDLTASUKIGAP",
-        "CDLTRISTAR",
-        "CDLUPSIDEGAP2CROWS",
-        "CDLXSIDEGAP3METHODS",
-        "CDL3BLACKCROWS",
-        "CDL3STARSINSOUTH",
-        "CDL3WHITESOLDIERS",
-        "CDLADVANCEBLOCK",
-        "CDLCONCEALBABYSWALL",
-        "CDLIDENTICAL3CROWS",
-        "CDLSTALLEDPATTERN",
-        "CDLBREAKAWAY",
-        "CDLLADDERBOTTOM",
-        "CDLMATHOLD",
-        "CDLRISEFALL3METHODS",
-        "CDLHIKKAKE",
-        "CDLHIKKAKEMOD",
-    ];
-
-    assert_eq!(IMPLEMENTED_FUNCTION_COUNT, implemented.len());
+    assert_eq!(implemented.count(), IMPLEMENTED_FUNCTION_COUNT);
+    assert!(INDICATOR_CATALOGUE
+        .implemented_definitions()
+        .all(|definition| definition.is_implemented()));
     assert_eq!(
-        TALIB_FUNCTIONS
-            .iter()
-            .filter(|info| info.is_implemented())
-            .count(),
-        IMPLEMENTED_FUNCTION_COUNT
+        INDICATOR_CATALOGUE.implemented_definition("RSI"),
+        INDICATOR_CATALOGUE.definition("RSI")
     );
+    assert!(INDICATOR_CATALOGUE
+        .implemented_definition("NOT_A_DEFINITION")
+        .is_none());
+}
 
-    for name in implemented {
-        let info = function(name).unwrap_or_else(|| panic!("missing {name}"));
-        assert_eq!(info.status, ImplementationStatus::Implemented, "{name}");
-        assert!(!info.rust_module().is_empty());
+#[test]
+fn family_projection_matches_official_family_counts() {
+    let projected_count = FunctionGroup::ALL
+        .iter()
+        .copied()
+        .map(|family| {
+            let count = INDICATOR_CATALOGUE.family_count(family);
+            assert_eq!(count, family.expected_count(), "{family:?}");
+            assert!(INDICATOR_CATALOGUE
+                .family(family)
+                .all(|definition| definition.group == family));
+            count
+        })
+        .sum::<usize>();
+
+    assert_eq!(projected_count, FUNCTION_COUNT);
+}
+
+#[test]
+fn definitions_report_their_owning_rust_module() {
+    for family in FunctionGroup::ALL.iter().copied() {
+        assert!(INDICATOR_CATALOGUE
+            .family(family)
+            .all(|definition| definition.owner_module() == family.rust_module()));
+    }
+
+    assert_eq!(
+        INDICATOR_CATALOGUE
+            .definition("RSI")
+            .unwrap()
+            .owner_module(),
+        "momentum"
+    );
+    assert_eq!(
+        INDICATOR_CATALOGUE
+            .definition("CDLDOJI")
+            .unwrap()
+            .owner_module(),
+        "pattern_recognition"
+    );
+}
+
+#[test]
+fn definition_names_are_unique() {
+    let definitions = INDICATOR_CATALOGUE.definitions();
+    for (idx, definition) in definitions.iter().enumerate() {
+        assert!(
+            definitions[idx + 1..]
+                .iter()
+                .all(|other| other.name != definition.name),
+            "duplicate definition name {}",
+            definition.name
+        );
     }
 }
 
@@ -722,204 +583,23 @@ fn every_implemented_indicator_exposes_the_full_execution_seam() {
 }
 
 #[test]
-fn inventory_count_matches_execution_seam_coverage() {
-    // Cross-check: the count of distinct (Config, BatchRunner, Stream)
-    // triples wired through `every_implemented_indicator_exposes_the_full_execution_seam`
-    // equals the implemented function ledger. This locks the catalogue and the
-    // execution seam together so a new indicator cannot ship without both.
-    let seam_groups = [
-        "SMA",
-        "DEMA",
-        "EMA",
-        "MA",
-        "T3",
-        "TEMA",
-        "TRIMA",
-        "WMA",
-        "SAR",
-        "SAREXT",
-        "ACCBANDS",
-        "BBANDS",
-        "MIDPOINT",
-        "MIDPRICE",
-        "KAMA",
-        "MAVP",
-        "MAMA",
-        "HT_TRENDLINE",
-        "AVGDEV",
-        "AVGPRICE",
-        "MEDPRICE",
-        "TYPPRICE",
-        "WCLPRICE",
-        "HT_DCPERIOD",
-        "HT_DCPHASE",
-        "HT_PHASOR",
-        "HT_SINE",
-        "HT_TRENDMODE",
-        "AD",
-        "ADOSC",
-        "OBV",
-        "ATR",
-        "NATR",
-        "TRANGE",
-        "BETA",
-        "CORREL",
-        "LINEARREG",
-        "LINEARREG_ANGLE",
-        "LINEARREG_INTERCEPT",
-        "LINEARREG_SLOPE",
-        "STDDEV",
-        "TSF",
-        "VAR",
-        "ACOS",
-        "ASIN",
-        "ATAN",
-        "CEIL",
-        "COS",
-        "COSH",
-        "EXP",
-        "FLOOR",
-        "LN",
-        "LOG10",
-        "SIN",
-        "SINH",
-        "SQRT",
-        "TAN",
-        "TANH",
-        "ADD",
-        "DIV",
-        "MAX",
-        "MAXINDEX",
-        "MIN",
-        "MININDEX",
-        "MINMAX",
-        "MINMAXINDEX",
-        "MULT",
-        "SUB",
-        "SUM",
-        "MOM",
-        "ROC",
-        "ROCP",
-        "ROCR",
-        "ROCR100",
-        "RSI",
-        "CMO",
-        "IMI",
-        "PLUS_DM",
-        "MINUS_DM",
-        "PLUS_DI",
-        "MINUS_DI",
-        "DX",
-        "ADX",
-        "ADXR",
-        "BOP",
-        "CCI",
-        "MFI",
-        "ULTOSC",
-        "APO",
-        "PPO",
-        "MACD",
-        "MACDEXT",
-        "MACDFIX",
-        "TRIX",
-        "AROON",
-        "AROONOSC",
-        "STOCH",
-        "STOCHF",
-        "STOCHRSI",
-        "WILLR",
-        "CDLDOJI",
-        "CDLENGULFING",
-        "CDLBELTHOLD",
-        "CDLCLOSINGMARUBOZU",
-        "CDLDRAGONFLYDOJI",
-        "CDLGRAVESTONEDOJI",
-        "CDLHIGHWAVE",
-        "CDLLONGLEGGEDDOJI",
-        "CDLLONGLINE",
-        "CDLMARUBOZU",
-        "CDLRICKSHAWMAN",
-        "CDLSHORTLINE",
-        "CDLSPINNINGTOP",
-        "CDLTAKURI",
-        "CDLCOUNTERATTACK",
-        "CDLDARKCLOUDCOVER",
-        "CDLDOJISTAR",
-        "CDLHARAMI",
-        "CDLHARAMICROSS",
-        "CDLHOMINGPIGEON",
-        "CDLKICKING",
-        "CDLKICKINGBYLENGTH",
-        "CDLMATCHINGLOW",
-        "CDLHAMMER",
-        "CDLHANGINGMAN",
-        "CDLINNECK",
-        "CDLINVERTEDHAMMER",
-        "CDLONNECK",
-        "CDLPIERCING",
-        "CDLSEPARATINGLINES",
-        "CDLSHOOTINGSTAR",
-        "CDLTHRUSTING",
-        "CDL3INSIDE",
-        "CDL3OUTSIDE",
-        "CDLABANDONEDBABY",
-        "CDLEVENINGDOJISTAR",
-        "CDLEVENINGSTAR",
-        "CDLMORNINGDOJISTAR",
-        "CDLMORNINGSTAR",
-        "CDLUNIQUE3RIVER",
-        "CDL2CROWS",
-        "CDL3LINESTRIKE",
-        "CDLGAPSIDESIDEWHITE",
-        "CDLSTICKSANDWICH",
-        "CDLTASUKIGAP",
-        "CDLTRISTAR",
-        "CDLUPSIDEGAP2CROWS",
-        "CDLXSIDEGAP3METHODS",
-        "CDL3BLACKCROWS",
-        "CDL3STARSINSOUTH",
-        "CDL3WHITESOLDIERS",
-        "CDLADVANCEBLOCK",
-        "CDLCONCEALBABYSWALL",
-        "CDLIDENTICAL3CROWS",
-        "CDLSTALLEDPATTERN",
-        "CDLBREAKAWAY",
-        "CDLLADDERBOTTOM",
-        "CDLMATHOLD",
-        "CDLRISEFALL3METHODS",
-        "CDLHIKKAKE",
-        "CDLHIKKAKEMOD",
-    ];
-
+fn pattern_recognition_catalogue_has_no_remaining_planned_definitions() {
+    let family = FunctionGroup::PatternRecognition;
     assert_eq!(
-        seam_groups.len(),
-        IMPLEMENTED_FUNCTION_COUNT,
-        "execution-seam coverage must match the implemented indicator ledger",
+        INDICATOR_CATALOGUE.implemented_family_count(family),
+        INDICATOR_CATALOGUE.family_count(family)
     );
-    assert_eq!(
-        TALIB_FUNCTIONS
-            .iter()
-            .filter(|info| info.is_implemented())
-            .count(),
-        IMPLEMENTED_FUNCTION_COUNT,
-        "TALIB_FUNCTIONS ledger must record every implemented indicator",
-    );
+    assert!(INDICATOR_CATALOGUE
+        .implemented_family(family)
+        .all(|definition| definition.status == ImplementationStatus::Implemented));
 }
 
 #[test]
-fn pattern_recognition_catalogue_has_no_remaining_planned_functions() {
-    assert!(TALIB_FUNCTIONS.iter().all(|info| {
-        info.group != FunctionGroup::PatternRecognition
-            || info.status == ImplementationStatus::Implemented
-    }));
-}
-
-#[test]
-fn non_talib_local_plan_extras_are_not_in_official_inventory() {
+fn names_outside_the_indicator_catalogue_are_not_found() {
     for name in ["WWMA", "HMA", "VWAP"] {
         assert!(
-            function(name).is_none(),
-            "{name} should not be in TA-Lib inventory"
+            INDICATOR_CATALOGUE.definition(name).is_none(),
+            "{name} should not be in the Indicator Catalogue"
         );
     }
 }

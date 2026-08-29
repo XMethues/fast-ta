@@ -20,6 +20,7 @@ export QUALIFICATION_COMMIT="${QUALIFICATION_COMMIT:-$(git rev-parse HEAD)}"
 export QUALIFICATION_RUNTIME="${QUALIFICATION_RUNTIME:-$(rustc --version --verbose | tr '\n' ';')}"
 export QUALIFICATION_OS="${QUALIFICATION_OS:-$(sw_vers | tr '\n' ';')$(uname -srv)}"
 export QUALIFICATION_CPU="${QUALIFICATION_CPU:-$(sysctl -n machdep.cpu.brand_string)}"
+export QUALIFICATION_ARCHITECTURE="${QUALIFICATION_ARCHITECTURE:-$(uname -m)}"
 export QUALIFICATION_CPU_FEATURES="${QUALIFICATION_CPU_FEATURES:-$(sysctl -a 2>/dev/null | sed -n '/^hw\.optional\./p' | sort | tr '\n' ';')}"
 
 # Reuse the catalogue runner's checksum-verified TA-Lib 0.6.4 builder rather
@@ -49,22 +50,22 @@ trap - EXIT
 
 export QUALIFICATION_TALIB_LIBRARY="${talib_library}"
 export QUALIFICATION_OUTPUT="${output_dir}/aarch64_typprice_f64.jsonl"
-export QUALIFICATION_FEATURES="ta-core=f64,std,simd-qualification"
-export QUALIFICATION_COMMAND="cargo test --locked -p ta-core --release --no-default-features --features f64,std,simd-qualification --test aarch64_typprice_qualification -- qualify_public_typprice_on_aarch64 --exact --ignored --nocapture"
-cargo test --locked -p ta-core \
+export QUALIFICATION_CARGO_FEATURES="f64,simd-qualification"
+export QUALIFICATION_COMMAND="cargo test --locked -p ta-benchmarks --release --no-default-features --features f64,simd-qualification --test native_typprice_qualification -- qualify_public_typprice_native --exact --ignored --nocapture"
+cargo test --locked -p ta-benchmarks \
   --release \
   --no-default-features \
-  --features f64,std,simd-qualification \
-  --test aarch64_typprice_qualification \
-  -- qualify_public_typprice_on_aarch64 --exact --ignored --nocapture
+  --features f64,simd-qualification \
+  --test native_typprice_qualification \
+  -- qualify_public_typprice_native --exact --ignored --nocapture
 
 unset QUALIFICATION_TALIB_LIBRARY
 export QUALIFICATION_OUTPUT="${output_dir}/aarch64_typprice_f32.jsonl"
-export QUALIFICATION_FEATURES="ta-core=f32,std,simd-qualification"
-export QUALIFICATION_COMMAND="cargo test --locked -p ta-core --release --no-default-features --features f32,std,simd-qualification --test aarch64_typprice_qualification -- qualify_public_typprice_on_aarch64 --exact --ignored --nocapture"
-cargo test --locked -p ta-core \
+export QUALIFICATION_CARGO_FEATURES="f32,simd-qualification"
+export QUALIFICATION_COMMAND="cargo test --locked -p ta-benchmarks --release --no-default-features --features f32,simd-qualification --test native_typprice_qualification -- qualify_public_typprice_native --exact --ignored --nocapture"
+cargo test --locked -p ta-benchmarks \
   --release \
   --no-default-features \
-  --features f32,std,simd-qualification \
-  --test aarch64_typprice_qualification \
-  -- qualify_public_typprice_on_aarch64 --exact --ignored --nocapture
+  --features f32,simd-qualification \
+  --test native_typprice_qualification \
+  -- qualify_public_typprice_native --exact --ignored --nocapture

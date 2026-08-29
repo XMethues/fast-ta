@@ -3,14 +3,14 @@
 #[path = "fixtures/momentum_change_reference.rs"]
 mod reference;
 
-use reference::{
-    INPUT, MOM_EXPECTED, PERIOD, ROCP_EXPECTED, ROCR100_EXPECTED, ROCR_EXPECTED, ROC_EXPECTED,
-};
 use fast_ta::{
     momentum::{
         MOMConfig, ROCConfig, ROCPConfig, ROCR100Config, ROCRConfig, MOM, ROC, ROCP, ROCR, ROCR100,
     },
     Float, IndicatorConfig, OutputRange, PreparedBatchRunner, StreamingComputation, TalibError,
+};
+use reference::{
+    INPUT, MOM_EXPECTED, PERIOD, ROCP_EXPECTED, ROCR100_EXPECTED, ROCR_EXPECTED, ROC_EXPECTED,
 };
 
 #[cfg(feature = "f32")]

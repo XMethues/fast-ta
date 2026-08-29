@@ -10,14 +10,14 @@ use std::process::Command;
 use std::sync::Once;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use support::ohlc_fixture;
-use ta_benchmarks::pattern_shapes::PATTERN_SHAPES;
 use fast_ta::pattern_recognition::{
     CDL3BLACKCROWSConfig, CDL3WHITESOLDIERSConfig, CDLDOJIConfig, CDLENGULFINGConfig,
     CDLHIKKAKEConfig, CDLHIKKAKEMODConfig, CDLMORNINGSTARConfig, Candle, CandleInput,
     CandleRangeKind, CandleSetting, CandleSettingType, CandleSettings, PatternSignal, Penetration,
 };
 use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use support::ohlc_fixture;
+use ta_benchmarks::pattern_shapes::PATTERN_SHAPES;
 
 const SIZES: &[usize] = &[256, 4_096, 65_536];
 const LARGE_AVERAGE_PERIOD: usize = 200;

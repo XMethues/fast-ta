@@ -1,9 +1,10 @@
 use std::fs;
 use std::path::PathBuf;
 
-use ta_benchmarks::catalogue_matrix::{
+use ta_benchmarks::catalogue_evidence::read_report_evidence;
+use ta_benchmarks::catalogue_report::{
     read_criterion_diagnostics, read_cycle_regression, read_diagnostic_evidence,
-    read_platform_qualification, read_raw_rows, render_report_with_comparison,
+    read_platform_qualification, render_validated_report_with_comparison,
 };
 
 #[derive(Debug)]
@@ -26,8 +27,8 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let args = parse_args()?;
-    let rows = read_raw_rows(&args.raw)?;
-    let baseline_rows = read_raw_rows(&args.baseline)?;
+    let evidence = read_report_evidence(&args.raw).map_err(|error| error.to_string())?;
+    let baseline = read_report_evidence(&args.baseline).map_err(|error| error.to_string())?;
     let diagnostic_evidence = read_diagnostic_evidence(&args.diagnostic_evidence)?;
     let criterion_diagnostics = read_criterion_diagnostics(&args.criterion_diagnostics)?;
     let cycle_regression = read_cycle_regression(&args.cycle_regression)?;
@@ -36,9 +37,9 @@ fn run() -> Result<(), String> {
         .iter()
         .map(|path| read_platform_qualification(path))
         .collect::<Result<Vec<_>, _>>()?;
-    let report = render_report_with_comparison(
-        &rows,
-        &baseline_rows,
+    let report = render_validated_report_with_comparison(
+        &evidence,
+        &baseline,
         &diagnostic_evidence,
         &criterion_diagnostics,
         &cycle_regression,

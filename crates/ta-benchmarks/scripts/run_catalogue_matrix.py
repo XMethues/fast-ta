@@ -4,11 +4,8 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
-import csv
 import hashlib
 import json
-import math
 import os
 import stat
 from pathlib import Path
@@ -63,59 +60,6 @@ PUBLISHED_REPORT = BENCHMARK_CRATE / "CATALOGUE_MATRIX_REPORT.txt"
 CANONICAL_SAMPLES = 50
 CANONICAL_WARMUP_MS = 250
 CANONICAL_SAMPLE_MS = 10
-CASE_IDS = (
-    "SMA",
-    "BBANDS",
-    "RSI",
-    "MACD",
-    "ATR",
-    "ADX",
-    "HT_DCPHASE",
-    "CDLDOJI",
-    "CDLENGULFING",
-    "CDL3WHITESOLDIERS",
-    "LINEARREG",
-    "TYPPRICE",
-    "OBV",
-    "SIN",
-    "ADD",
-)
-INPUT_LENGTHS = (256, 4_096, 65_536)
-INPUT_CHECKSUMS = {
-    256: "fnv1a64:73fedfe0ae0a803f",
-    4_096: "fnv1a64:06be03be64d63c6c",
-    65_536: "fnv1a64:a4171d0a7611733a",
-}
-VARIANTS = (
-    ("fast-ta", "Owned Compact Output"),
-    ("fast-ta", "caller-owned Batch Computation"),
-    ("fast-ta", "Prepared Batch Runner"),
-    ("fast-ta", "Streaming Computation"),
-    ("TA-Lib C", "direct C caller-owned"),
-    ("TA-Lib Python", "official Python NumPy API"),
-)
-FIXED_PUBLICATION_FIELDS = {
-    "semantic_status": "verified",
-    "timing_status": "measured",
-    "sample_count": str(CANONICAL_SAMPLES),
-    "dirty": "false",
-    "fixture": "catalogue_fixture_v1:f64le",
-    "ta_lib_version": TALIB_VERSION,
-    "ta_lib_revision": TALIB_REVISION,
-    "python_binding_version": PYTHON_BINDING_VERSION,
-    "python_ta_lib_version": TALIB_VERSION,
-    "numpy_version": NUMPY_VERSION,
-    "float_width": "64",
-    "features": "ta-core=default(f64,std); ta-benchmarks=catalogue-matrix",
-}
-UNIFORM_PROVENANCE_FIELDS = (
-    "python_version",
-    "rustc",
-    "cpu",
-    "os",
-    "arch",
-    "commit",
-)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -414,190 +358,23 @@ def generate_report(args: argparse.Namespace, output_dir: Path) -> None:
 
 
 def validate_publishable(raw_path: Path) -> None:
-    with raw_path.open(newline="", encoding="utf-8") as raw:
-        reader = csv.DictReader(raw, delimiter="\t")
-        rows = list(reader)
-        fields = set(reader.fieldnames or ())
-
-    required_fields = {
-        "case_id",
-        "input_length",
-        "implementation",
-        "mode",
-        "indicator_family",
-        "indicator_definition",
-        "parameters",
-        "output_kind",
-        "output_arity",
-        "input_checksum",
-        "median_ns",
-        "ci95_lower_ns",
-        "ci95_upper_ns",
-        "throughput_observations_per_second",
-        "warmup_iterations",
-        "iterations_per_sample",
-        "outlier_count",
-        "outlier_low_count",
-        "outlier_high_count",
-        *FIXED_PUBLICATION_FIELDS,
-        *UNIFORM_PROVENANCE_FIELDS,
-    }
-    missing_fields = sorted(required_fields - fields)
-    if missing_fields:
-        raise RuntimeError(
-            "cannot publish raw rows missing fields: " + ", ".join(missing_fields)
-        )
-
-    expected = Counter(
-        (case_id, str(input_length), implementation, mode)
-        for case_id in CASE_IDS
-        for input_length in INPUT_LENGTHS
-        for implementation, mode in VARIANTS
+    run(
+        [
+            "cargo",
+            "run",
+            "--release",
+            "--quiet",
+            "-p",
+            "ta-benchmarks",
+            "--features",
+            "catalogue-matrix",
+            "--bin",
+            "catalogue-evidence",
+            "--",
+            str(raw_path),
+        ],
+        cwd=REPOSITORY,
     )
-    actual = Counter(
-        (
-            row["case_id"],
-            row["input_length"],
-            row["implementation"],
-            row["mode"],
-        )
-        for row in rows
-    )
-    if actual != expected:
-        missing = list((expected - actual).elements())
-        unexpected = list((actual - expected).elements())
-        raise RuntimeError(
-            "cannot publish incomplete case/input/mode matrix: "
-            f"missing={missing[:5]!r}; unexpected_or_duplicate={unexpected[:5]!r}"
-        )
-
-    for row_number, row in enumerate(rows, start=2):
-        positive_floats = {}
-        for field in (
-            "median_ns",
-            "ci95_lower_ns",
-            "ci95_upper_ns",
-            "throughput_observations_per_second",
-        ):
-            try:
-                value = float(row[field])
-            except (TypeError, ValueError) as error:
-                raise RuntimeError(
-                    f"cannot publish raw row {row_number}: invalid {field} {row[field]!r}"
-                ) from error
-            if not math.isfinite(value) or value <= 0.0:
-                raise RuntimeError(
-                    f"cannot publish raw row {row_number}: {field} must be positive and finite"
-                )
-            positive_floats[field] = value
-
-        positive_integers = {}
-        for field in (
-            "input_length",
-            "sample_count",
-            "warmup_iterations",
-            "iterations_per_sample",
-        ):
-            try:
-                value = int(row[field])
-            except (TypeError, ValueError) as error:
-                raise RuntimeError(
-                    f"cannot publish raw row {row_number}: invalid {field} {row[field]!r}"
-                ) from error
-            if value <= 0:
-                raise RuntimeError(
-                    f"cannot publish raw row {row_number}: {field} must be positive"
-                )
-            positive_integers[field] = value
-
-        outliers = {}
-        for field in ("outlier_count", "outlier_low_count", "outlier_high_count"):
-            try:
-                value = int(row[field])
-            except (TypeError, ValueError) as error:
-                raise RuntimeError(
-                    f"cannot publish raw row {row_number}: invalid {field} {row[field]!r}"
-                ) from error
-            if value < 0:
-                raise RuntimeError(
-                    f"cannot publish raw row {row_number}: {field} must be non-negative"
-                )
-            outliers[field] = value
-
-        median = positive_floats["median_ns"]
-        lower = positive_floats["ci95_lower_ns"]
-        upper = positive_floats["ci95_upper_ns"]
-        if not lower <= median <= upper:
-            raise RuntimeError(
-                f"cannot publish raw row {row_number}: 95% confidence interval "
-                "must contain median_ns"
-            )
-        expected_throughput = positive_integers["input_length"] * 1.0e9 / median
-        if not math.isclose(
-            positive_floats["throughput_observations_per_second"],
-            expected_throughput,
-            rel_tol=1.0e-4,
-            abs_tol=0.0,
-        ):
-            raise RuntimeError(
-                f"cannot publish raw row {row_number}: throughput is incoherent "
-                "with input_length and median_ns"
-            )
-        if (
-            outliers["outlier_count"]
-            != outliers["outlier_low_count"] + outliers["outlier_high_count"]
-            or outliers["outlier_count"] > positive_integers["sample_count"]
-        ):
-            raise RuntimeError(
-                f"cannot publish raw row {row_number}: outlier counts are "
-                "incoherent with sample_count"
-            )
-
-    for field, expected_value in FIXED_PUBLICATION_FIELDS.items():
-        invalid = sum(row[field] != expected_value for row in rows)
-        if invalid:
-            raise RuntimeError(
-                f"cannot publish: {invalid} rows have {field} other than "
-                f"{expected_value!r}"
-            )
-
-    for field in UNIFORM_PROVENANCE_FIELDS:
-        values = {row[field] for row in rows}
-        if len(values) != 1 or not next(iter(values), "") or "unavailable" in values:
-            raise RuntimeError(
-                f"cannot publish inconsistent {field} provenance: {values}"
-            )
-
-    for input_length, expected_checksum in INPUT_CHECKSUMS.items():
-        invalid = sum(
-            row["input_checksum"] != expected_checksum
-            for row in rows
-            if row["input_length"] == str(input_length)
-        )
-        if invalid:
-            raise RuntimeError(
-                f"cannot publish: {invalid} rows have noncanonical input checksum "
-                f"provenance for {input_length}"
-            )
-
-    definition_fields = (
-        "indicator_family",
-        "indicator_definition",
-        "parameters",
-        "output_kind",
-        "output_arity",
-    )
-    for case_id in CASE_IDS:
-        definitions = {
-            tuple(row[field] for field in definition_fields)
-            for row in rows
-            if row["case_id"] == case_id
-        }
-        if len(definitions) != 1:
-            raise RuntimeError(
-                f"cannot publish inconsistent case provenance for {case_id}: "
-                f"{definitions}"
-            )
 
 
 def publish(output_dir: Path) -> None:

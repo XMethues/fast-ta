@@ -11,9 +11,11 @@ keywords = ["benchmark", "performance", "technical-analysis", "indicators"]
 categories = ["development-tools::profiling", "development-tools::testing"]
 
 [features]
-default = []
+default = ["f64"]
+f32 = ["fast-ta/f32", "fast-ta/std"]
+f64 = ["fast-ta/f64", "fast-ta/std"]
 catalogue-matrix = ["dep:serde_json"]
-
+simd-qualification = ["dep:serde_json", "fast-ta/simd-qualification"]
 [[bin]]
 name = "catalogue-matrix"
 path = "src/bin/catalogue_matrix.rs"
@@ -23,6 +25,11 @@ required-features = ["catalogue-matrix"]
 name = "catalogue_matrix"
 path = "tests/catalogue_matrix.rs"
 required-features = ["catalogue-matrix"]
+
+[[test]]
+name = "native_typprice_qualification"
+path = "tests/native_typprice_qualification.rs"
+required-features = ["simd-qualification"]
 
 [[bin]]
 name = "catalogue-report"
@@ -53,7 +60,7 @@ name = "pattern_recognition_baselines"
 harness = false
 
 [dependencies]
-fast-ta = { path = "../fast-ta", version = "0.2.1" }
+fast-ta = { path = "../fast-ta", version = "0.2.1", default-features = false }
 serde_json = { version = "1.0", optional = true }
 
 [dev-dependencies]

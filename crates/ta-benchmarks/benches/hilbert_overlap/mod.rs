@@ -2,9 +2,9 @@ use super::support::{
     series_fixture, REPEATED_SERIES_LEN, STREAM_INSTRUMENTS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
 use fast_ta::overlap::{HT_TRENDLINEConfig, MAMAConfig, MAMAValuesMut};
 use fast_ta::{Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation};
+use std::hint::black_box;
 
 const SIZES: &[usize] = &[64, 4_096, 65_536];
 const LIMIT_SWEEP: &[(Float, Float)] = &[

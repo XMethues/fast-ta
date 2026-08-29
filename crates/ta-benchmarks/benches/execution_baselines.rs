@@ -14,11 +14,6 @@ mod rolling_overlap;
 mod support;
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
-use support::{
-    ohlc_fixture, output_len, series_fixture, PERIOD, REPEATED_SERIES_LEN, STREAM_INSTRUMENTS,
-    SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
-};
 use fast_ta::{
     cycle::{
         HT_DCPERIODConfig, HT_DCPHASEConfig, HT_PHASORConfig, HT_PHASORValuesMut, HT_SINEConfig,
@@ -63,6 +58,11 @@ use fast_ta::{
         ADConfig, ADInput, ADOSCConfig, ADOSCInput, ADOSCTick, ADTick, OBVConfig, OBVInput, OBVTick,
     },
     Float, IndicatorConfig, PreparedBatchRunner, StreamingComputation,
+};
+use std::hint::black_box;
+use support::{
+    ohlc_fixture, output_len, series_fixture, PERIOD, REPEATED_SERIES_LEN, STREAM_INSTRUMENTS,
+    SWEEP_PERIODS, UNIVERSE_INSTRUMENTS, WORKERS,
 };
 
 const SIZES: &[usize] = &[64, 4_096, 65_536];

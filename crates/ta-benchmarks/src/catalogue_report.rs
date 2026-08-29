@@ -1,0 +1,1833 @@
+//! Diagnostic evidence parsing and human report projection for Catalogue measurements.
+
+use crate::catalogue_cases::measurement_coverage;
+use crate::catalogue_evidence::{
+    clean, BenchmarkRow, ValidatedCatalogueEvidence, C_DIRECT_MODE, INPUT_LENGTHS, PYTHON_MODE,
+    RUST_CALLER_MODE, RUST_OWNED_MODE, RUST_PREPARED_MODE, RUST_STREAMING_MODE,
+};
+use crate::catalogue_statistics::validate_positive_timing_evidence;
+use crate::pattern_shapes::PATTERN_SHAPES;
+use serde_json::Value;
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+
+use std::path::Path;
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiagnosticEvidence {
+    pub captured_at_utc: String,
+    pub baseline_commit: String,
+    pub final_commit: String,
+    pub commands: BTreeMap<String, String>,
+    pub environment: BTreeMap<String, String>,
+    pub tickets: Vec<DiagnosticTicket>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiagnosticTicket {
+    pub ticket: u64,
+    pub ranked_hypotheses: Vec<Value>,
+    pub profile_or_compiler_evidence: Value,
+    pub criterion_comparisons: Vec<Value>,
+    pub semantic_comparisons: Vec<Value>,
+    pub required_neighbor_coverage: Vec<Value>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CriterionDiagnostics {
+    pub pre_commit: String,
+    pub final_commit: String,
+    pub environment: BTreeMap<String, String>,
+    pub measurements: Vec<CriterionDiagnosticMeasurement>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CriterionDiagnosticMeasurement {
+    pub ticket: u64,
+    pub case_id: String,
+    pub role: String,
+    pub revision: String,
+    pub command: String,
+    pub cwd: String,
+    pub benchmark_id: String,
+    pub timed_boundary: String,
+    pub sample_count: usize,
+    pub observations_per_iteration: usize,
+    pub median_ns: f64,
+    pub ci95_lower_ns: f64,
+    pub ci95_upper_ns: f64,
+    pub throughput_observations_per_second: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CycleRegressionEvidence {
+    pub command: String,
+    pub cwd: String,
+    pub os: String,
+    pub arch: String,
+    pub cpu: String,
+    pub seam: String,
+    pub measurements: Vec<CycleMeasurement>,
+    pub comparisons: Vec<CycleComparison>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CycleMeasurement {
+    pub indicator: String,
+    pub input_length: usize,
+    pub variant: String,
+    pub source_provenance: String,
+    pub sample_count: usize,
+    pub median_ns: f64,
+    pub ci95_lower_ns: f64,
+    pub ci95_upper_ns: f64,
+    pub throughput_observations_per_second: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CycleComparison {
+    pub indicator: String,
+    pub input_length: usize,
+    pub before_variant: String,
+    pub after_variant: String,
+    pub cursor_vs_baseline_percent: f64,
+    pub after_vs_baseline_percent: f64,
+    pub source_proof: String,
+    pub disposition: String,
+}
+
+pub fn read_diagnostic_evidence(path: &Path) -> Result<DiagnosticEvidence, String> {
+    let input =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    parse_diagnostic_evidence(&input)
+}
+
+pub fn parse_diagnostic_evidence(input: &str) -> Result<DiagnosticEvidence, String> {
+    let root: Value = serde_json::from_str(input)
+        .map_err(|error| format!("diagnostic evidence JSON: {error}"))?;
+    if json_string(&root, "schema")? != "fast-ta.issue-57-62.diagnostic-evidence.v1" {
+        return Err("unsupported diagnostic evidence schema".to_owned());
+    }
+    let baseline_revision = json_object(&root, "baseline_revision")?;
+    let final_revision = json_object(&root, "final_revision")?;
+    let commands = json_string_map(json_object(&root, "commands")?, "commands")?;
+    let environment = json_scalar_map(json_object(&root, "environment")?, "environment")?;
+    let artifacts = json_array(&root, "artifacts")?;
+    for required in [
+        "issue_57_62_criterion_diagnostics.json",
+        "issue_57_62_semantic_pre.tsv",
+        "issue_57_62_semantic_final.tsv",
+    ] {
+        if !artifacts.iter().any(|artifact| {
+            artifact
+                .get("path")
+                .and_then(Value::as_str)
+                .is_some_and(|path| path.ends_with(required))
+        }) {
+            return Err(format!(
+                "diagnostic evidence is missing artifact {required}"
+            ));
+        }
+    }
+    let mut tickets = Vec::new();
+    for value in json_array(&root, "tickets")? {
+        let ticket = json_u64(value, "ticket")?;
+        let ranked_hypotheses = json_array(value, "ranked_hypotheses")?.to_vec();
+        if !(3..=5).contains(&ranked_hypotheses.len()) {
+            return Err(format!(
+                "issue {ticket} must contain 3 to 5 ranked hypotheses"
+            ));
+        }
+        for (index, hypothesis) in ranked_hypotheses.iter().enumerate() {
+            if json_u64(hypothesis, "rank")? != index as u64 + 1 {
+                return Err(format!(
+                    "issue {ticket} hypotheses are not consecutively ranked"
+                ));
+            }
+            for key in ["hypothesis", "prediction", "status", "evidence"] {
+                json_nonempty_string(hypothesis, key)?;
+            }
+        }
+        let profile = value
+            .get("profile_or_compiler_evidence")
+            .filter(|candidate| candidate.is_object())
+            .ok_or_else(|| format!("issue {ticket} is missing profile/compiler evidence"))?
+            .clone();
+        for key in [
+            "artifact",
+            "artifact_sha256",
+            "benchmark_command",
+            "profile_command",
+            "benchmark_id",
+            "case",
+            "cwd",
+        ] {
+            json_nonempty_string(&profile, key)?;
+        }
+        let criterion_comparisons =
+            json_array(value, "criterion_same_session_comparisons")?.to_vec();
+        let semantic_comparisons =
+            json_array(value, "semantic_same_run_rust_c_comparisons")?.to_vec();
+        let required_neighbor_coverage = json_array(value, "required_neighbor_coverage")?.to_vec();
+        if criterion_comparisons.is_empty()
+            || semantic_comparisons.is_empty()
+            || required_neighbor_coverage.is_empty()
+        {
+            return Err(format!(
+                "issue {ticket} is missing Criterion, semantic, or neighboring-workload evidence"
+            ));
+        }
+        for comparison in &criterion_comparisons {
+            if json_u64(comparison, "ticket")? != ticket {
+                return Err(format!(
+                    "issue {ticket} contains a cross-ticket Criterion row"
+                ));
+            }
+            for key in ["case_id", "role", "disposition"] {
+                json_nonempty_string(comparison, key)?;
+            }
+            for key in [
+                "pre_median_ns",
+                "final_median_ns",
+                "change_percent",
+                "speedup",
+                "noise_gate_percent",
+            ] {
+                json_numeric(comparison, key)?;
+            }
+        }
+        for semantic in &semantic_comparisons {
+            if json_u64(semantic, "ticket")? != ticket {
+                return Err(format!(
+                    "issue {ticket} contains a cross-ticket semantic row"
+                ));
+            }
+            json_nonempty_string(semantic, "case_id")?;
+            json_nonempty_string(semantic, "disposition")?;
+            json_u64(semantic, "input_length")?;
+            json_bool(semantic, "input_checksum_match")?;
+            json_bool(semantic, "output_checksum_match")?;
+            for revision in ["pre", "final"] {
+                format_json_timing(json_object(semantic, &format!("{revision}_fast_ta"))?)?;
+                format_json_timing(json_object(semantic, &format!("{revision}_ta_lib_c"))?)?;
+                json_numeric(semantic, &format!("{revision}_rust_over_c"))?;
+            }
+        }
+        for neighbor in &required_neighbor_coverage {
+            json_nonempty_string(neighbor, "workload")?;
+            json_nonempty_string(neighbor, "status")?;
+        }
+        tickets.push(DiagnosticTicket {
+            ticket,
+            ranked_hypotheses,
+            profile_or_compiler_evidence: profile,
+            criterion_comparisons,
+            semantic_comparisons,
+            required_neighbor_coverage,
+        });
+    }
+    let actual = tickets
+        .iter()
+        .map(|ticket| ticket.ticket)
+        .collect::<BTreeSet<_>>();
+    let expected = (57_u64..=62).collect::<BTreeSet<_>>();
+    if actual != expected || tickets.len() != expected.len() {
+        return Err(
+            "diagnostic evidence must contain issues 57 through 62 exactly once".to_owned(),
+        );
+    }
+    tickets.sort_by_key(|ticket| ticket.ticket);
+    Ok(DiagnosticEvidence {
+        captured_at_utc: json_nonempty_string(&root, "captured_at_utc")?,
+        baseline_commit: json_nonempty_string(baseline_revision, "commit")?,
+        final_commit: json_nonempty_string(final_revision, "commit")?,
+        commands,
+        environment,
+        tickets,
+    })
+}
+
+pub fn read_criterion_diagnostics(path: &Path) -> Result<CriterionDiagnostics, String> {
+    let input =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    parse_criterion_diagnostics(&input)
+}
+
+pub fn parse_criterion_diagnostics(input: &str) -> Result<CriterionDiagnostics, String> {
+    let root: Value = serde_json::from_str(input)
+        .map_err(|error| format!("Criterion diagnostics JSON: {error}"))?;
+    if json_string(&root, "schema")? != "fast-ta.issue-57-62.criterion-diagnostics.v1" {
+        return Err("unsupported Criterion diagnostics schema".to_owned());
+    }
+    let mut measurements = Vec::new();
+    for value in json_array(&root, "measurements")? {
+        let median = json_object(value, "median")?;
+        let measurement = CriterionDiagnosticMeasurement {
+            ticket: json_u64(value, "ticket")?,
+            case_id: json_nonempty_string(value, "case_id")?,
+            role: json_nonempty_string(value, "role")?,
+            revision: json_nonempty_string(value, "revision")?,
+            command: json_nonempty_string(value, "command")?,
+            cwd: json_nonempty_string(value, "cwd")?,
+            benchmark_id: json_nonempty_string(value, "benchmark_id")?,
+            timed_boundary: json_nonempty_string(value, "timed_boundary")?,
+            sample_count: json_u64(value, "sample_count")? as usize,
+            observations_per_iteration: json_u64(value, "observations_per_iteration")? as usize,
+            median_ns: json_f64(median, "point_estimate_ns")?,
+            ci95_lower_ns: json_f64(median, "ci95_lower_ns")?,
+            ci95_upper_ns: json_f64(median, "ci95_upper_ns")?,
+            throughput_observations_per_second: json_f64(
+                value,
+                "throughput_observations_per_second",
+            )?,
+        };
+        if !(57..=62).contains(&measurement.ticket)
+            || !matches!(measurement.revision.as_str(), "pre" | "final")
+        {
+            return Err("Criterion measurement has unsupported ticket or revision".to_owned());
+        }
+        validate_positive_timing_evidence(
+            measurement.median_ns,
+            measurement.ci95_lower_ns,
+            measurement.ci95_upper_ns,
+            measurement.throughput_observations_per_second,
+            measurement.sample_count,
+            measurement.observations_per_iteration,
+        )
+        .map_err(|error| format!("Criterion {}: {error}", measurement.case_id))?;
+        measurements.push(measurement);
+    }
+    if measurements.is_empty() {
+        return Err("Criterion diagnostics has no measurements".to_owned());
+    }
+    let grouped = measurements
+        .iter()
+        .map(|measurement| {
+            (
+                measurement.ticket,
+                measurement.case_id.as_str(),
+                measurement.revision.as_str(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    for measurement in &measurements {
+        let other = if measurement.revision == "pre" {
+            "final"
+        } else {
+            "pre"
+        };
+        if !grouped.contains(&(measurement.ticket, measurement.case_id.as_str(), other)) {
+            return Err(format!(
+                "Criterion {} is missing its {other} measurement",
+                measurement.case_id
+            ));
+        }
+    }
+    let mut comparison_keys = BTreeSet::new();
+    for comparison in json_array(&root, "comparisons")? {
+        let ticket = json_u64(comparison, "ticket")?;
+        let case_id = json_nonempty_string(comparison, "case_id")?;
+        if !comparison_keys.insert((ticket, case_id.clone())) {
+            return Err(format!("duplicate Criterion comparison for {case_id}"));
+        }
+        let pre = measurements
+            .iter()
+            .find(|measurement| {
+                measurement.ticket == ticket
+                    && measurement.case_id == case_id
+                    && measurement.revision == "pre"
+            })
+            .ok_or_else(|| format!("Criterion comparison {case_id} has no pre measurement"))?;
+        let final_measurement = measurements
+            .iter()
+            .find(|measurement| {
+                measurement.ticket == ticket
+                    && measurement.case_id == case_id
+                    && measurement.revision == "final"
+            })
+            .ok_or_else(|| format!("Criterion comparison {case_id} has no final measurement"))?;
+        if json_f64(comparison, "pre_median_ns")? != pre.median_ns
+            || json_f64(comparison, "final_median_ns")? != final_measurement.median_ns
+        {
+            return Err(format!(
+                "Criterion comparison {case_id} medians do not match its measurements"
+            ));
+        }
+        json_nonempty_string(comparison, "disposition")?;
+    }
+    if comparison_keys.len() * 2 != grouped.len() {
+        return Err("Criterion comparisons do not cover every measurement pair".to_owned());
+    }
+    Ok(CriterionDiagnostics {
+        pre_commit: json_nonempty_string(json_object(&root, "pre_revision")?, "commit")?,
+        final_commit: json_nonempty_string(json_object(&root, "final_revision")?, "commit")?,
+        environment: json_scalar_map(json_object(&root, "environment")?, "environment")?,
+        measurements,
+    })
+}
+
+pub fn read_cycle_regression(path: &Path) -> Result<CycleRegressionEvidence, String> {
+    let input =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    parse_cycle_regression(&input)
+}
+
+pub fn parse_cycle_regression(input: &str) -> Result<CycleRegressionEvidence, String> {
+    let mut run = None;
+    let mut measurements = Vec::new();
+    let mut comparisons = Vec::new();
+    for (index, line) in input
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.is_empty())
+    {
+        let value: Value = serde_json::from_str(line)
+            .map_err(|error| format!("cycle regression JSONL row {}: {error}", index + 1))?;
+        match json_nonempty_string(&value, "record_type")?.as_str() {
+            "run" => {
+                if run.is_some() {
+                    return Err("cycle regression has multiple run records".to_owned());
+                }
+                if json_string(&value, "schema")? != "fast-ta.issue61.cycle-regression.v1" {
+                    return Err("unsupported cycle regression schema".to_owned());
+                }
+                let host = json_object(&value, "host")?;
+                run = Some((
+                    json_nonempty_string(&value, "command")?,
+                    json_nonempty_string(&value, "cwd")?,
+                    json_nonempty_string(host, "os")?,
+                    json_nonempty_string(host, "arch")?,
+                    json_nonempty_string(host, "cpu")?,
+                    json_nonempty_string(&value, "seam")?,
+                ));
+            }
+            "measurement" => {
+                let ci = json_array(&value, "median_95ci_ns")?;
+                if ci.len() != 2 {
+                    return Err("cycle measurement CI must have two bounds".to_owned());
+                }
+                let measurement = CycleMeasurement {
+                    indicator: json_nonempty_string(&value, "indicator")?,
+                    input_length: json_u64(&value, "size")? as usize,
+                    variant: json_nonempty_string(&value, "variant")?,
+                    source_provenance: json_nonempty_string(&value, "source_provenance")?,
+                    sample_count: json_u64(&value, "samples")? as usize,
+                    median_ns: json_f64(&value, "median_ns")?,
+                    ci95_lower_ns: ci[0]
+                        .as_f64()
+                        .ok_or_else(|| "cycle CI lower bound is not numeric".to_owned())?,
+                    ci95_upper_ns: ci[1]
+                        .as_f64()
+                        .ok_or_else(|| "cycle CI upper bound is not numeric".to_owned())?,
+                    throughput_observations_per_second: json_f64(
+                        &value,
+                        "throughput_observations_per_second",
+                    )?,
+                };
+                validate_positive_timing_evidence(
+                    measurement.median_ns,
+                    measurement.ci95_lower_ns,
+                    measurement.ci95_upper_ns,
+                    measurement.throughput_observations_per_second,
+                    measurement.sample_count,
+                    measurement.input_length,
+                )
+                .map_err(|error| format!("cycle {}: {error}", measurement.indicator))?;
+                measurements.push(measurement);
+            }
+            "comparison" => comparisons.push(CycleComparison {
+                indicator: json_nonempty_string(&value, "indicator")?,
+                input_length: json_u64(&value, "size")? as usize,
+                before_variant: json_nonempty_string(&value, "before_variant")?,
+                after_variant: json_nonempty_string(&value, "after_variant")?,
+                cursor_vs_baseline_percent: json_f64(&value, "cursor_vs_b156ac1_median_percent")?,
+                after_vs_baseline_percent: json_f64(&value, "after_vs_b156ac1_percent")?,
+                source_proof: json_nonempty_string(&value, "after_source_proof")?,
+                disposition: json_nonempty_string(&value, "disposition")?,
+            }),
+            other => return Err(format!("unsupported cycle record type {other:?}")),
+        }
+    }
+    let (command, cwd, os, arch, cpu, seam) =
+        run.ok_or_else(|| "cycle regression has no run record".to_owned())?;
+    if measurements.is_empty() || comparisons.is_empty() {
+        return Err("cycle regression is missing measurements or comparisons".to_owned());
+    }
+    for comparison in &comparisons {
+        for variant in ["b156ac1_modulo", comparison.before_variant.as_str()] {
+            if !measurements.iter().any(|measurement| {
+                measurement.indicator == comparison.indicator
+                    && measurement.input_length == comparison.input_length
+                    && measurement.variant == variant
+            }) {
+                return Err(format!(
+                    "cycle comparison {} {} is missing variant {variant}",
+                    comparison.indicator, comparison.input_length
+                ));
+            }
+        }
+    }
+    Ok(CycleRegressionEvidence {
+        command,
+        cwd,
+        os,
+        arch,
+        cpu,
+        seam,
+        measurements,
+        comparisons,
+    })
+}
+
+fn json_array<'a>(value: &'a Value, key: &str) -> Result<&'a [Value], String> {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .ok_or_else(|| format!("JSON value is missing array field {key:?}"))
+}
+
+fn json_object<'a>(value: &'a Value, key: &str) -> Result<&'a Value, String> {
+    value
+        .get(key)
+        .filter(|value| value.is_object())
+        .ok_or_else(|| format!("JSON value is missing object field {key:?}"))
+}
+
+fn json_string_map(value: &Value, name: &str) -> Result<BTreeMap<String, String>, String> {
+    value
+        .as_object()
+        .expect("json_object checked the value")
+        .iter()
+        .map(|(key, value)| {
+            value
+                .as_str()
+                .filter(|value| !value.is_empty())
+                .map(|value| (key.clone(), value.to_owned()))
+                .ok_or_else(|| format!("{name}.{key} must be a non-empty string"))
+        })
+        .collect()
+}
+
+fn json_scalar_map(value: &Value, name: &str) -> Result<BTreeMap<String, String>, String> {
+    value
+        .as_object()
+        .expect("json_object checked the value")
+        .iter()
+        .map(|(key, value)| {
+            let rendered = match value {
+                Value::String(value) if !value.is_empty() => value.clone(),
+                Value::Number(value) => value.to_string(),
+                Value::Bool(value) => value.to_string(),
+                _ => return Err(format!("{name}.{key} must be a non-empty scalar")),
+            };
+            Ok((key.clone(), rendered))
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlatformQualification {
+    pub artifact: String,
+    pub platform: String,
+    pub precision: String,
+    pub runtime: String,
+    pub profile: String,
+    pub cpu: String,
+    pub os: String,
+    pub commit: String,
+    pub workflow_run_id: String,
+    pub workflow_run_url: String,
+    pub workflow_job: String,
+    pub active_backend: String,
+    pub feature_flags: String,
+    pub measurements: Vec<QualificationMeasurement>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct QualificationMeasurement {
+    pub mode: String,
+    pub backend: String,
+    pub input_length: usize,
+    pub equivalent_to_scalar: bool,
+    pub semantic_status: String,
+    pub timing_status: String,
+    pub median_ns: f64,
+    pub ci95_lower_ns: f64,
+    pub ci95_upper_ns: f64,
+    pub throughput_observations_per_second: f64,
+    pub sample_count: usize,
+    pub timed_boundary: String,
+}
+
+pub fn read_platform_qualification(path: &Path) -> Result<PlatformQualification, String> {
+    let input =
+        fs::read_to_string(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+    parse_platform_qualification(&input, &path.display().to_string())
+}
+
+pub fn parse_platform_qualification(
+    input: &str,
+    artifact: &str,
+) -> Result<PlatformQualification, String> {
+    let mut metadata = None;
+    let mut has_aggregate_validation = false;
+    let mut validated_backends = BTreeSet::new();
+    let mut measurements = Vec::new();
+    for (index, line) in input
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.is_empty())
+    {
+        let value: Value = serde_json::from_str(line)
+            .map_err(|error| format!("{artifact} JSONL row {}: {error}", index + 1))?;
+        match json_string(&value, "record")?.as_str() {
+            "metadata" => {
+                if metadata.is_some() {
+                    return Err(format!("{artifact} has more than one metadata record"));
+                }
+                let active_backend = value
+                    .get("active_backend")
+                    .and_then(Value::as_str)
+                    .or_else(|| value.get("simd_backend").and_then(Value::as_str))
+                    .ok_or_else(|| format!("{artifact} metadata is missing a runtime backend"))?
+                    .to_owned();
+                let feature_flags = value
+                    .get("features")
+                    .and_then(Value::as_str)
+                    .filter(|features| !features.is_empty())
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        let cargo = value
+                            .get("cargo_features")?
+                            .as_str()
+                            .filter(|features| !features.is_empty())?;
+                        let target = value
+                            .get("target_features")?
+                            .as_str()
+                            .filter(|features| !features.is_empty())?;
+                        Some(format!("cargo_features={cargo}; target_features={target}"))
+                    })
+                    .or_else(|| {
+                        let flags = ["scalar_feature_flags", "simd_feature_flags"]
+                            .into_iter()
+                            .map(|key| {
+                                value
+                                    .get(key)
+                                    .and_then(Value::as_str)
+                                    .filter(|flag| !flag.is_empty())
+                                    .map(|flag| format!("{key}={flag}"))
+                            })
+                            .collect::<Option<Vec<_>>>()?;
+                        Some(flags.join("; "))
+                    })
+                    .ok_or_else(|| {
+                        format!("{artifact} metadata is missing string field \"features\"")
+                    })?;
+                let profile = value
+                    .get("profile")
+                    .and_then(Value::as_str)
+                    .or_else(|| value.get("rust_profile").and_then(Value::as_str))
+                    .filter(|profile| !profile.is_empty())
+                    .ok_or_else(|| {
+                        format!("{artifact} metadata is missing string field \"profile\"")
+                    })?
+                    .to_owned();
+                metadata = Some((
+                    json_string(&value, "platform")?,
+                    json_nonempty_string(&value, "precision")?,
+                    json_string(&value, "runtime")?,
+                    profile,
+                    json_string(&value, "cpu")?,
+                    json_nonempty_string(&value, "os")?,
+                    json_string(&value, "commit")?,
+                    json_identifier(&value, "workflow_run_id")?,
+                    json_string(&value, "workflow_run_url")?,
+                    json_identifier_alias(&value, "workflow_job", "workflow_job_id")?,
+                    active_backend,
+                    feature_flags,
+                ));
+            }
+            "measurement" => {
+                let measurement = QualificationMeasurement {
+                    mode: json_string(&value, "mode")?,
+                    backend: json_string(&value, "backend")?,
+                    input_length: json_u64(&value, "input_length")? as usize,
+                    equivalent_to_scalar: json_bool(&value, "equivalent_to_scalar")?,
+                    semantic_status: json_string(&value, "semantic_status")?,
+                    timing_status: json_string(&value, "timing_status")?,
+                    median_ns: json_f64(&value, "median_ns")?,
+                    ci95_lower_ns: json_f64(&value, "ci95_lower_ns")?,
+                    ci95_upper_ns: json_f64(&value, "ci95_upper_ns")?,
+                    throughput_observations_per_second: json_f64(
+                        &value,
+                        "throughput_observations_per_second",
+                    )?,
+                    sample_count: json_u64(&value, "sample_count")? as usize,
+                    timed_boundary: json_string(&value, "timed_boundary")?,
+                };
+                if !INPUT_LENGTHS.contains(&measurement.input_length) {
+                    return Err(format!(
+                        "{artifact} has unsupported input length {}",
+                        measurement.input_length
+                    ));
+                }
+                validate_positive_timing_evidence(
+                    measurement.median_ns,
+                    measurement.ci95_lower_ns,
+                    measurement.ci95_upper_ns,
+                    measurement.throughput_observations_per_second,
+                    measurement.sample_count,
+                    measurement.input_length,
+                )
+                .map_err(|error| format!("{artifact} measurement row {}: {error}", index + 1))?;
+                measurements.push(measurement);
+            }
+            "validation" => match validate_qualification_validation(&value, artifact, index + 1)? {
+                Some(backend) if !validated_backends.insert(backend.clone()) => {
+                    return Err(format!(
+                        "{artifact} has duplicate validation records for backend {backend:?}"
+                    ));
+                }
+                Some(_) => {}
+                None if has_aggregate_validation => {
+                    return Err(format!(
+                        "{artifact} has more than one aggregate validation record"
+                    ));
+                }
+                None => has_aggregate_validation = true,
+            },
+            other => return Err(format!("{artifact} has unsupported record type {other:?}")),
+        }
+    }
+    if !has_aggregate_validation && validated_backends.is_empty() {
+        return Err(format!("{artifact} has no validation records"));
+    }
+    let (
+        platform,
+        precision,
+        runtime,
+        profile,
+        cpu,
+        os,
+        commit,
+        workflow_run_id,
+        workflow_run_url,
+        workflow_job,
+        active_backend,
+        feature_flags,
+    ) = metadata.ok_or_else(|| format!("{artifact} has no metadata record"))?;
+    if measurements.is_empty() {
+        return Err(format!("{artifact} has no measurement records"));
+    }
+    for measurement in &measurements {
+        let is_direct_c =
+            measurement.backend == "ta-lib-c" && measurement.mode == "direct C caller-owned";
+        let needs_backend_validation = measurement.equivalent_to_scalar && !is_direct_c;
+        if needs_backend_validation
+            && !has_aggregate_validation
+            && !validated_backends.contains(&measurement.backend)
+        {
+            return Err(format!(
+                "{artifact} reports scalar equivalence for backend {:?} without a matching validation record",
+                measurement.backend
+            ));
+        }
+    }
+    Ok(PlatformQualification {
+        artifact: artifact.to_owned(),
+        platform,
+        precision,
+        runtime,
+        cpu,
+        os,
+        profile,
+        commit,
+        workflow_run_id,
+        workflow_run_url,
+        workflow_job,
+        active_backend,
+        feature_flags,
+        measurements,
+    })
+}
+
+fn json_string(value: &Value, key: &str) -> Result<String, String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("JSON record is missing string field {key:?}"))
+}
+
+fn json_nonempty_string(value: &Value, key: &str) -> Result<String, String> {
+    let parsed = json_string(value, key)?;
+    if parsed.is_empty() {
+        return Err(format!("JSON record has empty string field {key:?}"));
+    }
+    Ok(parsed)
+}
+
+fn json_u64(value: &Value, key: &str) -> Result<u64, String> {
+    value
+        .get(key)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("JSON record is missing integer field {key:?}"))
+}
+
+fn json_identifier(value: &Value, key: &str) -> Result<String, String> {
+    match value.get(key) {
+        Some(Value::String(value)) if !value.is_empty() => Ok(value.clone()),
+        Some(Value::Number(value)) if value.is_u64() => Ok(value.to_string()),
+        _ => Err(format!(
+            "JSON record is missing string or integer field {key:?}"
+        )),
+    }
+}
+
+fn json_identifier_alias(value: &Value, key: &str, alias: &str) -> Result<String, String> {
+    json_identifier(value, key).or_else(|_| json_identifier(value, alias))
+}
+
+fn json_f64(value: &Value, key: &str) -> Result<f64, String> {
+    value
+        .get(key)
+        .and_then(Value::as_f64)
+        .ok_or_else(|| format!("JSON record is missing numeric field {key:?}"))
+}
+
+fn validate_qualification_validation(
+    value: &Value,
+    artifact: &str,
+    row_number: usize,
+) -> Result<Option<String>, String> {
+    let invalid = |reason: &str| format!("{artifact} validation row {row_number} {reason}");
+    if value.get("exact_scalar_equivalence").is_some() {
+        for key in [
+            "public_boundary",
+            "exact_scalar_equivalence",
+            "error_semantics_verified",
+            "mismatched_length_error_equal_to_scalar",
+            "non_finite_error_equal_to_scalar",
+        ] {
+            if !json_bool(value, key)? {
+                return Err(invalid(&format!("has {key}=false")));
+            }
+        }
+        let backend = json_nonempty_string(value, "backend")?;
+        let observed_backend = json_string(value, "observed_backend")?;
+        if backend != observed_backend {
+            return Err(invalid("did not observe its requested backend"));
+        }
+        for key in ["precision", "mode"] {
+            if json_string(value, key)?.is_empty() {
+                return Err(invalid(&format!("has empty {key}")));
+            }
+        }
+        return Ok(Some(backend));
+    } else if value.get("errors_match_scalar").is_some() {
+        for key in [
+            "public_boundary",
+            "unequal_lengths_verified",
+            "non_finite_verified",
+            "short_output_verified",
+            "errors_match_scalar",
+        ] {
+            if !json_bool(value, key)? {
+                return Err(invalid(&format!("has {key}=false")));
+            }
+        }
+        let backend = json_nonempty_string(value, "backend")?;
+        for key in [
+            "unequal_lengths_error",
+            "non_finite_error",
+            "short_output_error",
+        ] {
+            if json_string(value, key)?.is_empty() {
+                return Err(invalid(&format!("has empty {key}")));
+            }
+        }
+        return Ok(Some(backend));
+    } else {
+        for key in ["unequal_lengths_verified", "non_finite_verified"] {
+            if !json_bool(value, key)? {
+                return Err(invalid(&format!("has {key}=false")));
+            }
+        }
+        for key in [
+            "scalar_unequal_lengths_error",
+            "scalar_non_finite_error",
+            "simd_unequal_lengths_error",
+            "simd_non_finite_error",
+        ] {
+            if json_string(value, key)?.is_empty() {
+                return Err(invalid(&format!("has empty {key}")));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn json_bool(value: &Value, key: &str) -> Result<bool, String> {
+    value
+        .get(key)
+        .and_then(Value::as_bool)
+        .ok_or_else(|| format!("JSON record is missing boolean field {key:?}"))
+}
+
+pub fn render_report(rows: &[BenchmarkRow]) -> Result<String, String> {
+    if rows.is_empty() {
+        return Err(
+            "cannot render an Indicator Catalogue matrix report without raw rows".to_owned(),
+        );
+    }
+    let first = &rows[0];
+    let mut report =
+        String::from("Pinned representative Indicator Catalogue performance matrix\n\n");
+    report.push_str(&format!(
+        "TA-Lib {} ({}) | Python {} binding {} / core {} | NumPy {} | float {}-bit\n",
+        first.ta_lib_version,
+        first.ta_lib_revision,
+        first.python_version,
+        first.python_binding_version,
+        first.python_ta_lib_version,
+        first.numpy_version,
+        first.float_width
+    ));
+    report.push_str(&format!(
+        "Commit {} (dirty: {}) | {} | {} {} | {}\n",
+        first.commit, first.dirty, first.cpu, first.os, first.arch, first.rustc
+    ));
+    report.push_str(if first.dirty {
+        "Run classification: diagnostic only; a dirty run cannot replace the canonical baseline.\n"
+    } else {
+        "Run classification: clean reference run; completeness and publication status follow.\n"
+    });
+    report.push_str("95% intervals are deterministic bootstrap confidence intervals for the median (10,000 resamples). Outliers use Tukey's 1.5 IQR fences. Rust/C ratios below use only same-run caller-owned rows with identical case, parameters, fixture, and input length.\n\n");
+    let coverage = measurement_coverage()?;
+    report.push_str(&format!(
+        "Executable measurement coverage: {}/{} implemented Indicator Definitions ({:.1}%); {} implemented definitions are not measured by this representative matrix.\n\n",
+        coverage.measured_count,
+        coverage.implemented_count,
+        coverage.measured_percent(),
+        coverage.unmeasured_count
+    ));
+    report.push_str("| Family | Measured | Implemented |\n|---|---:|---:|\n");
+    for (family, measured, implemented) in coverage.measured_by_family() {
+        report.push_str(&format!("| {family} | {measured} | {implemented} |\n"));
+    }
+    report.push('\n');
+
+    report.push_str("Representative matrix\n\n| Family | Definition | Parameters | Output |\n|---|---|---|---|\n");
+    let mut matrix = BTreeSet::new();
+    for row in rows {
+        matrix.insert((
+            row.indicator_family.clone(),
+            row.case_id.clone(),
+            row.parameters.clone(),
+            format!(
+                "{} x{}",
+                row.output_kind,
+                row.output_arity
+                    .map_or_else(|| "NA".to_owned(), |value| value.to_string())
+            ),
+        ));
+    }
+    for (family, case_id, parameters, output) in matrix {
+        report.push_str(&format!(
+            "| {family} | {case_id} | {parameters} | {output} |\n"
+        ));
+    }
+
+    let case_ids = rows
+        .iter()
+        .map(|row| row.case_id.as_str())
+        .collect::<BTreeSet<_>>();
+    report.push_str("\nPattern Recognition execution-shape coverage\n\n| Definition | Execution shape | Rationale |\n|---|---|---|\n");
+    for shape in PATTERN_SHAPES {
+        if case_ids.contains(shape.case_id) {
+            report.push_str(&format!(
+                "| {} | {} | {} |\n",
+                shape.case_id, shape.execution_shape, shape.rationale
+            ));
+        }
+    }
+
+    let pairs = primary_pairs(rows);
+    report.push_str("\nSame-run geometric Rust/C caller-owned summary\n\n| Input | Mode | Comparable cases | Geometric Rust/C latency ratio | Semantics |\n|---:|---|---:|---:|---|\n");
+    for input_length in INPUT_LENGTHS {
+        let ratios = pairs
+            .iter()
+            .filter(|pair| pair.input_length == input_length)
+            .map(|pair| pair.ratio)
+            .collect::<Vec<_>>();
+        if ratios.is_empty() {
+            report.push_str(&format!("| {input_length} | {RUST_CALLER_MODE} vs {C_DIRECT_MODE} | 0 | unavailable | no comparable measured pairs |\n"));
+        } else {
+            let geometric =
+                (ratios.iter().map(|ratio| ratio.ln()).sum::<f64>() / ratios.len() as f64).exp();
+            report.push_str(&format!("| {input_length} | {RUST_CALLER_MODE} vs {C_DIRECT_MODE} | {} | {geometric:.3}x | comparable only |\n", ratios.len()));
+        }
+    }
+
+    report.push_str("\nLarge-throughput optimization ordering\n\n| Rank | Definition | Rust/C latency ratio | Disposition |\n|---:|---|---:|---|\n");
+    let mut large = pairs
+        .into_iter()
+        .filter(|pair| pair.input_length == 65_536)
+        .collect::<Vec<_>>();
+    large.sort_by(|left, right| {
+        right
+            .ratio
+            .partial_cmp(&left.ratio)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| left.case_id.cmp(&right.case_id))
+    });
+    if large.is_empty() {
+        report.push_str("| - | - | unavailable | no comparable measured pairs |\n");
+    } else {
+        for (index, pair) in large.iter().enumerate() {
+            let disposition = if pair.ratio > 1.05 {
+                "remaining comparative gap above 5%"
+            } else if pair.ratio < 0.95 {
+                "fast-ta faster"
+            } else {
+                "parity band"
+            };
+            report.push_str(&format!(
+                "| {} | {} | {:.3}x | {disposition} |\n",
+                index + 1,
+                pair.case_id,
+                pair.ratio
+            ));
+        }
+    }
+
+    report.push_str("\nDetailed raw-row projection\n\n| Definition | Input | Implementation | Mode | Semantic | Comparison | Median | 95% CI | Throughput | Output Range |\n|---|---:|---|---|---|---|---:|---:|---:|---:|\n");
+    let mut ordered = rows.to_vec();
+    ordered.sort_by(|left, right| {
+        left.case_id
+            .cmp(&right.case_id)
+            .then_with(|| left.input_length.cmp(&right.input_length))
+            .then_with(|| left.implementation.cmp(&right.implementation))
+            .then_with(|| left.mode.cmp(&right.mode))
+    });
+    for row in &ordered {
+        let (median, ci, throughput) = if let Some(stats) = &row.stats {
+            (
+                format!("{:.3} us", stats.median_ns / 1_000.0),
+                format!(
+                    "[{:.3}, {:.3}] us",
+                    stats.ci95_lower_ns / 1_000.0,
+                    stats.ci95_upper_ns / 1_000.0
+                ),
+                format!(
+                    "{:.3} Mobs/s",
+                    stats.throughput_observations_per_second / 1.0e6
+                ),
+            )
+        } else {
+            (
+                "unavailable".to_owned(),
+                clean(&row.timing_reason),
+                "unavailable".to_owned(),
+            )
+        };
+        let range = match (row.output_begin, row.output_count) {
+            (Some(begin), Some(count)) => format!("{begin}..{}", begin + count),
+            _ => "unavailable".to_owned(),
+        };
+        let semantic = if row.semantic_reason.is_empty() {
+            row.semantic_status.clone()
+        } else {
+            format!("{}: {}", row.semantic_status, clean(&row.semantic_reason))
+        };
+        let comparison = if row.comparison_reason.is_empty() {
+            row.comparison_status.clone()
+        } else {
+            format!(
+                "{}: {}",
+                row.comparison_status,
+                clean(&row.comparison_reason)
+            )
+        };
+        report.push_str(&format!(
+            "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |\n",
+            row.case_id,
+            row.input_length,
+            row.implementation,
+            row.mode,
+            semantic,
+            comparison,
+            median,
+            ci,
+            throughput,
+            range
+        ));
+    }
+
+    report.push_str("\nSuppressed or unavailable results\n\n");
+    let failures = ordered
+        .iter()
+        .filter(|row| row.semantic_status != "verified" || row.timing_status != "measured")
+        .collect::<Vec<_>>();
+    if failures.is_empty() {
+        report.push_str("None. Every matrix row passed semantic verification before timing.\n");
+    } else {
+        for row in failures {
+            report.push_str(&format!(
+                "- {}/{}/{}: semantic={} ({}) timing={} ({})\n",
+                row.case_id,
+                row.input_length,
+                row.mode,
+                row.semantic_status,
+                clean(&row.semantic_reason),
+                row.timing_status,
+                clean(&row.timing_reason)
+            ));
+        }
+    }
+    Ok(report)
+}
+
+/// Renders the canonical comparison from evidence that already passed publication policy.
+pub fn render_validated_report_with_comparison(
+    evidence: &ValidatedCatalogueEvidence,
+    baseline: &ValidatedCatalogueEvidence,
+    diagnostic_evidence: &DiagnosticEvidence,
+    criterion_diagnostics: &CriterionDiagnostics,
+    cycle_regression: &CycleRegressionEvidence,
+    platform_qualifications: &[PlatformQualification],
+) -> Result<String, String> {
+    render_report_with_comparison(
+        evidence.rows(),
+        baseline.rows(),
+        diagnostic_evidence,
+        criterion_diagnostics,
+        cycle_regression,
+        platform_qualifications,
+    )
+}
+
+fn render_report_with_comparison(
+    rows: &[BenchmarkRow],
+    baseline_rows: &[BenchmarkRow],
+    diagnostic_evidence: &DiagnosticEvidence,
+    criterion_diagnostics: &CriterionDiagnostics,
+    cycle_regression: &CycleRegressionEvidence,
+    platform_qualifications: &[PlatformQualification],
+) -> Result<String, String> {
+    if baseline_rows.is_empty() {
+        return Err("clean pre-optimization baseline rows are required".to_owned());
+    }
+    if baseline_rows.iter().any(|row| row.dirty) {
+        return Err("the canonical pre-optimization baseline must be clean".to_owned());
+    }
+    if criterion_diagnostics.pre_commit != diagnostic_evidence.baseline_commit
+        || criterion_diagnostics.final_commit != diagnostic_evidence.final_commit
+    {
+        return Err("diagnostic and Criterion revision provenance do not match".to_owned());
+    }
+    let platform_set = platform_qualifications
+        .iter()
+        .map(|qualification| {
+            (
+                qualification.platform.as_str(),
+                qualification.precision.as_str(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    let required_platforms = [
+        ("x86_64", "f64"),
+        ("x86_64", "f32"),
+        ("aarch64", "f64"),
+        ("aarch64", "f32"),
+        ("wasm32-unknown-unknown", "f64"),
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+    if platform_qualifications.len() != 5 || platform_set != required_platforms {
+        return Err(
+            "exactly x86 f64/f32, AArch64 f64/f32, and WASM f64 qualifications are required"
+                .to_owned(),
+        );
+    }
+    let report = render_report(rows)?;
+    let marker = "\nDetailed raw-row projection\n";
+    let (summary, details) = report
+        .split_once(marker)
+        .ok_or_else(|| "generated report is missing the detailed-row marker".to_owned())?;
+    let first = rows
+        .first()
+        .ok_or_else(|| "cannot render a comparison report without raw rows".to_owned())?;
+    let baseline_first = baseline_rows
+        .first()
+        .ok_or_else(|| "clean pre-optimization baseline rows are required".to_owned())?;
+    let mut comparison = String::new();
+
+    let verified = rows
+        .iter()
+        .filter(|row| row.semantic_status == "verified")
+        .count();
+    let measured = rows
+        .iter()
+        .filter(|row| row.timing_status == "measured")
+        .count();
+    let sample_counts = rows
+        .iter()
+        .filter_map(|row| row.stats.as_ref().map(|stats| stats.sample_count))
+        .collect::<BTreeSet<_>>();
+    let clean_run = rows.iter().all(|row| !row.dirty);
+    comparison.push_str(
+        "\nRun completeness and semantic gate\n\n| Raw rows | Semantic verified | Measured | Sample counts | Provenance |\n|---:|---:|---:|---|---|\n",
+    );
+    comparison.push_str(&format!(
+        "| {} | {verified} | {measured} | {} | {} |\n",
+        rows.len(),
+        sample_counts
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        if clean_run {
+            "clean canonical final run"
+        } else {
+            "dirty diagnostic run"
+        }
+    ));
+    comparison.push_str(&format!(
+        "\nCanonical comparison baseline\n\nThe committed clean pre-optimization matrix is the sole comparison baseline: commit {} (dirty: {}), {} rows, {} on {} {}. The historical post-scalar dirty diagnostic is not an input to this report.\n",
+        baseline_first.commit,
+        baseline_first.dirty,
+        baseline_rows.len(),
+        clean(&baseline_first.cpu),
+        clean(&baseline_first.os),
+        clean(&baseline_first.arch)
+    ));
+
+    let current_pairs = primary_pairs(rows);
+    let current_by_case = current_pairs
+        .iter()
+        .cloned()
+        .map(|pair| ((pair.case_id.clone(), pair.input_length), pair))
+        .collect::<BTreeMap<_, _>>();
+
+    comparison.push_str(
+        "\nPer-case caller-owned Rust/C latency ratios\n\n| Definition | 256 | 4,096 | 65,536 | 65,536 disposition |\n|---|---:|---:|---:|---|\n",
+    );
+    let case_ids = current_pairs
+        .iter()
+        .map(|pair| pair.case_id.clone())
+        .collect::<BTreeSet<_>>();
+    for case_id in case_ids {
+        let ratios = INPUT_LENGTHS.map(|input_length| {
+            current_by_case
+                .get(&(case_id.clone(), input_length))
+                .map(|pair| pair.ratio)
+        });
+        let large_disposition = match ratios[2] {
+            Some(ratio) if ratio > 1.05 => "remaining gap above the 5% band",
+            Some(ratio) if ratio < 0.95 => "fast-ta faster",
+            Some(_) => "parity band",
+            None => "unavailable",
+        };
+        comparison.push_str(&format!(
+            "| {case_id} | {} | {} | {} | {large_disposition} |\n",
+            format_ratio(ratios[0]),
+            format_ratio(ratios[1]),
+            format_ratio(ratios[2])
+        ));
+    }
+
+    comparison.push_str(
+        "\nExecution-path cost summaries\n\nRatios are geometric path/C latency indices over matching cases. Only the caller-owned Rust/C row is a kernel comparison; the other rows expose distinct public or user-facing costs.\n\n| Input | Path | Cases | Geometric path/C ratio | Interpretation |\n|---:|---|---:|---:|---|\n",
+    );
+    let paths = [
+        (
+            "fast-ta",
+            RUST_OWNED_MODE,
+            "Owned Compact Output",
+            "API-owned compact allocation included",
+        ),
+        (
+            "fast-ta",
+            RUST_CALLER_MODE,
+            "caller-owned Rust/C kernel",
+            "primary comparable kernel seam",
+        ),
+        (
+            "fast-ta",
+            RUST_PREPARED_MODE,
+            "Prepared reuse",
+            "preparation and caller output allocation excluded",
+        ),
+        (
+            "fast-ta",
+            RUST_STREAMING_MODE,
+            "Streaming reset plus ticks",
+            "separate stateful execution cost",
+        ),
+        (
+            "TA-Lib Python",
+            PYTHON_MODE,
+            "official Python NumPy API",
+            "user-facing API-owned output cost",
+        ),
+    ];
+    for input_length in INPUT_LENGTHS {
+        for (implementation, mode, label, interpretation) in paths {
+            let ratios = path_ratios(rows, implementation, mode, input_length);
+            if ratios.is_empty() {
+                comparison.push_str(&format!(
+                    "| {input_length} | {label} | 0 | unavailable | {interpretation} |\n"
+                ));
+            } else {
+                comparison.push_str(&format!(
+                    "| {input_length} | {label} | {} | {:.3}x | {interpretation} |\n",
+                    ratios.len(),
+                    geometric_mean(&ratios)
+                ));
+            }
+        }
+    }
+
+    comparison.push_str(&format!(
+        "\nDurable issue 57–62 diagnostic evidence\n\nGenerated only from the diagnostic and Criterion JSON artifacts. The retired optimization-evidence TSV is not a numeric or narrative source. Capture: {}. Baseline revision: `{}`. Final diagnostic revision: `{}`.\n\nDiagnostic environment: {}.\n\nExact top-level reproduction commands\n\n| Purpose | Command |\n|---|---|\n",
+        clean(&diagnostic_evidence.captured_at_utc),
+        diagnostic_evidence.baseline_commit,
+        diagnostic_evidence.final_commit,
+        diagnostic_evidence
+            .environment
+            .iter()
+            .map(|(key, value)| format!("{key}={}", clean(value)))
+            .collect::<Vec<_>>()
+            .join("; ")
+    ));
+    for (purpose, command) in &diagnostic_evidence.commands {
+        comparison.push_str(&format!("| {} | `{}` |\n", clean(purpose), clean(command)));
+    }
+    for ticket in &diagnostic_evidence.tickets {
+        let profile = &ticket.profile_or_compiler_evidence;
+        comparison.push_str(&format!(
+            "\nIssue {} diagnostic record\n\nPre-change sampled/compiler artifact: `{}` (`sha256:{}`). Benchmark ID: `{}`. Working directory: `{}`.\n\n- Benchmark command: `{}`\n- Capture command: `{}`\n",
+            ticket.ticket,
+            clean(&json_nonempty_string(profile, "artifact")?),
+            clean(&json_nonempty_string(profile, "artifact_sha256")?),
+            clean(&json_nonempty_string(profile, "benchmark_id")?),
+            clean(&json_nonempty_string(profile, "cwd")?),
+            clean(&json_nonempty_string(profile, "benchmark_command")?),
+            clean(&json_nonempty_string(profile, "profile_command")?)
+        ));
+        if let Ok(hot_leaves) = json_array(profile, "ranked_hot_leaves") {
+            comparison.push_str(
+                "\nPre-change sampled hot leaves\n\n| Rank | Symbol | Samples |\n|---:|---|---:|\n",
+            );
+            for (index, leaf) in hot_leaves.iter().enumerate() {
+                comparison.push_str(&format!(
+                    "| {} | {} | {} |\n",
+                    index + 1,
+                    clean(&json_nonempty_string(leaf, "symbol")?),
+                    json_u64(leaf, "samples")?
+                ));
+            }
+        }
+        if let Some(compiler) = profile.get("compiler_evidence") {
+            comparison.push_str(&format!(
+                "\nCompiler/objdump evidence: `{}` (`sha256:{}`). Command: `{}`. Finding: {}. Instruction count: {}; packed f64 add/divide: {}/{}; scalar validation load sites: {}.\n",
+                clean(&json_nonempty_string(compiler, "artifact")?),
+                clean(&json_nonempty_string(compiler, "artifact_sha256")?),
+                clean(&json_nonempty_string(compiler, "command")?),
+                clean(&json_nonempty_string(compiler, "finding")?),
+                json_u64(compiler, "instruction_count")?,
+                json_u64(compiler, "packed_f64_add_instructions")?,
+                json_u64(compiler, "packed_f64_divide_instructions")?,
+                json_u64(compiler, "scalar_validation_load_sites")?
+            ));
+        }
+        comparison.push_str(
+            "\nRanked falsifiable hypotheses\n\n| Rank | Hypothesis | Prediction | Status | Evidence |\n|---:|---|---|---|---|\n",
+        );
+        for hypothesis in &ticket.ranked_hypotheses {
+            comparison.push_str(&format!(
+                "| {} | {} | {} | {} | {} |\n",
+                json_u64(hypothesis, "rank")?,
+                clean(&json_nonempty_string(hypothesis, "hypothesis")?),
+                clean(&json_nonempty_string(hypothesis, "prediction")?),
+                clean(&json_nonempty_string(hypothesis, "status")?),
+                clean(&json_nonempty_string(hypothesis, "evidence")?)
+            ));
+        }
+        comparison.push_str(
+            "\nRequired target and neighboring-workload dispositions\n\n| Workload | Disposition |\n|---|---|\n",
+        );
+        for neighbor in &ticket.required_neighbor_coverage {
+            comparison.push_str(&format!(
+                "| {} | {} |\n",
+                clean(&json_nonempty_string(neighbor, "workload")?),
+                clean(&json_nonempty_string(neighbor, "status")?)
+            ));
+        }
+    }
+
+    comparison.push_str(&format!(
+        "\nCriterion same-session before/after diagnostics\n\nAll values are parsed from the durable Criterion JSON. Environment: {}.\n\n| Ticket | Workload / role | Exact command and provenance | Pre median [95% CI] / throughput | Final median [95% CI] / throughput | Change | Disposition |\n|---:|---|---|---:|---:|---:|---|\n",
+        criterion_diagnostics
+            .environment
+            .iter()
+            .map(|(key, value)| format!("{key}={}", clean(value)))
+            .collect::<Vec<_>>()
+            .join("; ")
+    ));
+    let criterion_keys = criterion_diagnostics
+        .measurements
+        .iter()
+        .map(|measurement| (measurement.ticket, measurement.case_id.as_str()))
+        .collect::<BTreeSet<_>>();
+    for (ticket_number, case_id) in criterion_keys {
+        let pre = criterion_diagnostics
+            .measurements
+            .iter()
+            .find(|measurement| {
+                measurement.ticket == ticket_number
+                    && measurement.case_id == case_id
+                    && measurement.revision == "pre"
+            })
+            .expect("validated pre Criterion pair");
+        let final_measurement = criterion_diagnostics
+            .measurements
+            .iter()
+            .find(|measurement| {
+                measurement.ticket == ticket_number
+                    && measurement.case_id == case_id
+                    && measurement.revision == "final"
+            })
+            .expect("validated final Criterion pair");
+        let disposition = diagnostic_evidence
+            .tickets
+            .iter()
+            .find(|ticket| ticket.ticket == ticket_number)
+            .and_then(|ticket| {
+                ticket
+                    .criterion_comparisons
+                    .iter()
+                    .find(|value| value.get("case_id").and_then(Value::as_str) == Some(case_id))
+            })
+            .and_then(|value| value.get("disposition"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                format!("issue {ticket_number} {case_id} has no diagnostic disposition")
+            })?;
+        let change = (final_measurement.median_ns / pre.median_ns - 1.0) * 100.0;
+        comparison.push_str(&format!(
+            "| {ticket_number} | {} / {} | `{}`<br>cwd `{}`<br>benchmark `{}`<br>{} samples; {} | {:.3} us [{:.3}, {:.3}] / {:.3} Mobs/s | {:.3} us [{:.3}, {:.3}] / {:.3} Mobs/s | {change:+.1}% | {} |\n",
+            clean(case_id),
+            clean(&pre.role),
+            clean(&pre.command),
+            clean(&pre.cwd),
+            clean(&pre.benchmark_id),
+            pre.sample_count,
+            clean(&pre.timed_boundary),
+            pre.median_ns / 1_000.0,
+            pre.ci95_lower_ns / 1_000.0,
+            pre.ci95_upper_ns / 1_000.0,
+            pre.throughput_observations_per_second / 1.0e6,
+            final_measurement.median_ns / 1_000.0,
+            final_measurement.ci95_lower_ns / 1_000.0,
+            final_measurement.ci95_upper_ns / 1_000.0,
+            final_measurement.throughput_observations_per_second / 1.0e6,
+            clean(disposition)
+        ));
+    }
+
+    comparison.push_str(
+        "\nSame-run semantic Rust/C pairs\n\nThese values and checksums are parsed from the semantic pair records embedded in the durable diagnostic JSON.\n\n| Ticket | Definition | Input | Revision | fast-ta median [95% CI] / throughput | TA-Lib C median [95% CI] / throughput | Rust/C | Checksums / disposition |\n|---:|---|---:|---|---:|---:|---:|---|\n",
+    );
+    for ticket in &diagnostic_evidence.tickets {
+        for semantic in &ticket.semantic_comparisons {
+            for revision in ["pre", "final"] {
+                let rust = json_object(semantic, &format!("{revision}_fast_ta"))?;
+                let c = json_object(semantic, &format!("{revision}_ta_lib_c"))?;
+                let ratio = json_numeric(semantic, &format!("{revision}_rust_over_c"))?;
+                comparison.push_str(&format!(
+                    "| {} | {} | {} | {revision} | {} | {} | {:.3}x | input_match={}; output_match={}; {} |\n",
+                    ticket.ticket,
+                    clean(&json_nonempty_string(semantic, "case_id")?),
+                    json_u64(semantic, "input_length")?,
+                    format_json_timing(rust)?,
+                    format_json_timing(c)?,
+                    ratio,
+                    json_bool(semantic, "input_checksum_match")?,
+                    json_bool(semantic, "output_checksum_match")?,
+                    clean(&json_nonempty_string(semantic, "disposition")?)
+                ));
+            }
+        }
+    }
+
+    comparison.push_str(&format!(
+        "\nIssue 61 Hilbert cycle regression control\n\nCommand: `{}`. Working directory: `{}`. Host: {} / {} / {}. Timed seam: {}.\n\n| Indicator | Input | Cursor pre median [95% CI] / throughput | Final clean-revert median [95% CI] / throughput | Cursor vs baseline | Final vs baseline | Source proof and disposition |\n|---|---:|---:|---:|---:|---:|---|\n",
+        clean(&cycle_regression.command),
+        clean(&cycle_regression.cwd),
+        clean(&cycle_regression.cpu),
+        clean(&cycle_regression.os),
+        clean(&cycle_regression.arch),
+        clean(&cycle_regression.seam)
+    ));
+    for cycle_comparison in &cycle_regression.comparisons {
+        let before = cycle_regression
+            .measurements
+            .iter()
+            .find(|measurement| {
+                measurement.indicator == cycle_comparison.indicator
+                    && measurement.input_length == cycle_comparison.input_length
+                    && measurement.variant == cycle_comparison.before_variant
+            })
+            .expect("validated cycle pre measurement");
+        let after = cycle_regression
+            .measurements
+            .iter()
+            .find(|measurement| {
+                measurement.indicator == cycle_comparison.indicator
+                    && measurement.input_length == cycle_comparison.input_length
+                    && measurement.variant == "b156ac1_modulo"
+            })
+            .expect("validated cycle final measurement");
+        comparison.push_str(&format!(
+            "| {} | {} | {} | {} | {:+.1}% | {:+.1}% | {} — {} |\n",
+            clean(&cycle_comparison.indicator),
+            cycle_comparison.input_length,
+            format_cycle_timing(before),
+            format_cycle_timing(after),
+            cycle_comparison.cursor_vs_baseline_percent,
+            cycle_comparison.after_vs_baseline_percent,
+            clean(&cycle_comparison.source_proof),
+            clean(&cycle_comparison.disposition)
+        ));
+    }
+
+    let baseline_by_row = baseline_rows
+        .iter()
+        .map(|row| (comparison_row_key(row), row))
+        .collect::<BTreeMap<_, _>>();
+    let mut changes = rows
+        .iter()
+        .filter_map(|current| {
+            let baseline = baseline_by_row.get(&comparison_row_key(current))?;
+            let before = baseline.stats.as_ref()?;
+            let after = current.stats.as_ref()?;
+            let change = (after.median_ns / before.median_ns - 1.0) * 100.0;
+            (change.abs() > 5.0).then_some((*baseline, current, change))
+        })
+        .collect::<Vec<_>>();
+    changes.sort_by(|left, right| {
+        left.1
+            .case_id
+            .cmp(&right.1.case_id)
+            .then_with(|| left.1.input_length.cmp(&right.1.input_length))
+            .then_with(|| left.1.implementation.cmp(&right.1.implementation))
+            .then_with(|| left.1.mode.cmp(&right.1.mode))
+    });
+    comparison.push_str(&format!(
+        "\nComplete >5% clean pre/final classification\n\n{} matching raw rows changed by more than 5%. This list is exhaustive for measured rows shared by the two committed clean artifacts. An investigation classification is not a same-run causal claim; the matrices were separate clean runs, and external C/Python movement is retained as a control.\n\n| Definition | Input | Implementation | Mode | Pre median | Final median | Change | Classification |\n|---|---:|---|---|---:|---:|---:|---|\n",
+        changes.len()
+    ));
+    for (baseline, current, change) in changes {
+        let before = baseline.stats.as_ref().expect("change row has stats");
+        let after = current.stats.as_ref().expect("change row has stats");
+        comparison.push_str(&format!(
+            "| {} | {} | {} | {} | {:.3} us | {:.3} us | {change:+.1}% | {} |\n",
+            current.case_id,
+            current.input_length,
+            current.implementation,
+            current.mode,
+            before.median_ns / 1_000.0,
+            after.median_ns / 1_000.0,
+            clean_change_classification(current, change)
+        ));
+    }
+
+    comparison.push_str(
+        "\nRuntime platform qualification from committed JSONL\n\nThese rows are parsed from the named JSONL artifacts only after their validation records and numeric timing evidence pass schema checks. Speedup is scalar median divided by the matching backend median only when mode, precision, input size, and timed boundary match. A value below 1x means the accelerated backend was slower on this runner. Rows without a scalar measurement at the same boundary are not compared.\n\n| Artifact | Platform | Precision | Profile / features | Runtime / CPU / OS | Active backend | Equivalence | Workflow provenance | Commit |\n|---|---|---|---|---|---|---|---|---|\n",
+    );
+    for qualification in platform_qualifications {
+        let equivalent = qualification.measurements.iter().all(|measurement| {
+            measurement.equivalent_to_scalar
+                && measurement.semantic_status == "verified"
+                && measurement.timing_status == "measured"
+        });
+        comparison.push_str(&format!(
+            "| {} | {} | {} | {} / {} | {} / {} / {} | {} | {} | run [{}]({}), job {} | {} |\n",
+            clean(&qualification.artifact),
+            clean(&qualification.platform),
+            clean(&qualification.precision),
+            clean(&qualification.profile),
+            clean(&qualification.feature_flags),
+            clean(&qualification.runtime),
+            clean(&qualification.cpu),
+            clean(&qualification.os),
+            clean(&qualification.active_backend),
+            if equivalent {
+                "all measurement and validation rows verified"
+            } else {
+                "qualification contains an unverified row"
+            },
+            qualification.workflow_run_id,
+            clean(&qualification.workflow_run_url),
+            qualification.workflow_job,
+            qualification.commit
+        ));
+    }
+    comparison.push_str(
+        "\n| Platform | Precision | Input | Mode | Backend | Median [95% CI] | Throughput | Speedup vs matching scalar | Disposition |\n|---|---|---:|---|---|---:|---:|---:|---|\n",
+    );
+    for qualification in platform_qualifications {
+        let mut measurements = qualification.measurements.iter().collect::<Vec<_>>();
+        measurements.sort_by(|left, right| {
+            left.input_length
+                .cmp(&right.input_length)
+                .then_with(|| left.mode.cmp(&right.mode))
+                .then_with(|| left.backend.cmp(&right.backend))
+        });
+        for measurement in measurements {
+            let scalar = qualification.measurements.iter().find(|candidate| {
+                candidate.mode == measurement.mode
+                    && candidate.input_length == measurement.input_length
+                    && candidate.backend == "scalar"
+                    && candidate.timed_boundary == measurement.timed_boundary
+            });
+            let speedup = scalar.map(|scalar| scalar.median_ns / measurement.median_ns);
+            let disposition = qualification_disposition(measurement, speedup);
+            comparison.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {:.3} us [{:.3}, {:.3}] | {:.3} Mobs/s | {} | {disposition} |\n",
+                clean(&qualification.platform),
+                clean(&qualification.precision),
+                measurement.input_length,
+                clean(&measurement.mode),
+                clean(&measurement.backend),
+                measurement.median_ns / 1_000.0,
+                measurement.ci95_lower_ns / 1_000.0,
+                measurement.ci95_upper_ns / 1_000.0,
+                measurement.throughput_observations_per_second / 1.0e6,
+                format_ratio(speedup)
+            ));
+        }
+    }
+
+    comparison.push_str(
+        "\nValidation and allocation boundaries\n\nThe Rust matrix timings retain public finite-input validation, capacity, Output Range, and validation-before-mutation contracts. Validation and computation were not timed separately in the catalogue matrix; the direct C row is a comparative kernel reference, not evidence that Rust validation should be removed.\n\n| Implementation | Mode | Timed allocation/boundary evidence from raw rows |\n|---|---|---|\n",
+    );
+    let boundaries = rows
+        .iter()
+        .map(|row| {
+            (
+                row.implementation.clone(),
+                row.mode.clone(),
+                row.timed_boundary.clone(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    for (implementation, mode, boundary) in boundaries {
+        comparison.push_str(&format!(
+            "| {implementation} | {mode} | {} |\n",
+            clean(&boundary)
+        ));
+    }
+
+    comparison.push_str(&format!(
+        "\nFinal AArch64 qualification\n\nThe clean final matrix exercised the public TYPPRICE caller-owned path on {} / {} with architecture `{}` and commit {}. This is the only AArch64 timing claim; scalar fallback remains available. x86_64 and WASM claims above come only from their committed runtime JSONL artifacts.\n",
+        clean(&first.cpu),
+        clean(&first.os),
+        clean(&first.arch),
+        first.commit
+    ));
+
+    Ok(format!("{summary}{comparison}{marker}{details}"))
+}
+
+fn json_numeric(value: &Value, key: &str) -> Result<f64, String> {
+    value
+        .get(key)
+        .and_then(|value| {
+            value
+                .as_f64()
+                .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
+        })
+        .filter(|value| value.is_finite())
+        .ok_or_else(|| format!("JSON value is missing finite numeric field {key:?}"))
+}
+
+fn format_json_timing(value: &Value) -> Result<String, String> {
+    Ok(format!(
+        "{:.3} us [{:.3}, {:.3}] / {:.3} Mobs/s",
+        json_numeric(value, "median_ns")? / 1_000.0,
+        json_numeric(value, "ci95_lower_ns")? / 1_000.0,
+        json_numeric(value, "ci95_upper_ns")? / 1_000.0,
+        json_numeric(value, "throughput_observations_per_second")? / 1.0e6
+    ))
+}
+
+fn format_cycle_timing(value: &CycleMeasurement) -> String {
+    format!(
+        "{:.3} us [{:.3}, {:.3}] / {:.3} Mobs/s",
+        value.median_ns / 1_000.0,
+        value.ci95_lower_ns / 1_000.0,
+        value.ci95_upper_ns / 1_000.0,
+        value.throughput_observations_per_second / 1.0e6
+    )
+}
+
+fn comparison_row_key(
+    row: &BenchmarkRow,
+) -> (String, String, String, String, usize, String, usize) {
+    (
+        row.implementation.clone(),
+        row.case_id.clone(),
+        row.mode.clone(),
+        row.parameters.clone(),
+        row.input_length,
+        row.fixture.clone(),
+        row.float_width,
+    )
+}
+
+fn clean_change_classification(row: &BenchmarkRow, change: f64) -> &'static str {
+    if row.implementation != "fast-ta" {
+        return "external C/Python reference-path movement between clean runs; retained as host/run control, not attributed to fast-ta source";
+    }
+    if row.mode == RUST_STREAMING_MODE {
+        return "untouched Streaming neighbor; batch optimization does not explain this clean cross-run movement; no causal claim";
+    }
+    if row.case_id == "CDLDOJI" && change > 5.0 {
+        return "investigated clean regression: batch-only, source-correlated with migration to the shared single-setting helper; unresolved";
+    }
+    if row.case_id == "HT_DCPHASE" && change > 5.0 {
+        return "investigated clean large-input regression despite ring-wrap source change; unresolved";
+    }
+    if change < -5.0 {
+        return "clean batch improvement; targeted kernel work or shared SIMD finite-slice validation applies";
+    }
+    "clean batch regression above 5%; classified as unresolved"
+}
+
+fn qualification_disposition(
+    measurement: &QualificationMeasurement,
+    speedup: Option<f64>,
+) -> &'static str {
+    if !measurement.equivalent_to_scalar || measurement.semantic_status != "verified" {
+        "invalid for performance comparison: equivalence not verified"
+    } else if measurement.backend == "scalar" {
+        "scalar reference"
+    } else if let Some(speedup) = speedup {
+        if speedup > 1.05 {
+            "practical benefit on this runner"
+        } else if speedup < 0.95 {
+            "slower than scalar on this runner; no practical benefit"
+        } else {
+            "within the 5% band on this runner"
+        }
+    } else {
+        "no matching scalar row with the same timed boundary"
+    }
+}
+
+fn format_ratio(ratio: Option<f64>) -> String {
+    ratio.map_or_else(|| "unavailable".to_owned(), |ratio| format!("{ratio:.3}x"))
+}
+
+fn geometric_mean(ratios: &[f64]) -> f64 {
+    (ratios.iter().map(|ratio| ratio.ln()).sum::<f64>() / ratios.len() as f64).exp()
+}
+
+fn path_ratios(
+    rows: &[BenchmarkRow],
+    implementation: &str,
+    mode: &str,
+    input_length: usize,
+) -> Vec<f64> {
+    type Key = (String, String, usize, String, String);
+    let mut c = BTreeMap::<Key, f64>::new();
+    for row in rows {
+        if row.implementation != "TA-Lib C"
+            || row.mode != C_DIRECT_MODE
+            || row.input_length != input_length
+            || row.semantic_status != "verified"
+            || row.timing_status != "measured"
+        {
+            continue;
+        }
+        if let Some(stats) = &row.stats {
+            c.insert(
+                (
+                    row.case_id.clone(),
+                    row.parameters.clone(),
+                    row.input_length,
+                    row.fixture.clone(),
+                    row.input_checksum.clone(),
+                ),
+                stats.median_ns,
+            );
+        }
+    }
+    rows.iter()
+        .filter(|row| {
+            row.implementation == implementation
+                && row.mode == mode
+                && row.input_length == input_length
+                && row.semantic_status == "verified"
+                && row.timing_status == "measured"
+        })
+        .filter_map(|row| {
+            let stats = row.stats.as_ref()?;
+            let key = (
+                row.case_id.clone(),
+                row.parameters.clone(),
+                row.input_length,
+                row.fixture.clone(),
+                row.input_checksum.clone(),
+            );
+            c.get(&key).map(|c_ns| stats.median_ns / c_ns)
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug)]
+struct PrimaryPair {
+    case_id: String,
+    input_length: usize,
+    ratio: f64,
+}
+
+fn primary_pairs(rows: &[BenchmarkRow]) -> Vec<PrimaryPair> {
+    type Key = (String, String, usize, String, String);
+    let mut rust = BTreeMap::<Key, f64>::new();
+    let mut c = BTreeMap::<Key, f64>::new();
+    for row in rows {
+        if row.semantic_status != "verified"
+            || row.timing_status != "measured"
+            || row.comparison_status != "comparable"
+        {
+            continue;
+        }
+        let Some(stats) = &row.stats else { continue };
+        let key = (
+            row.case_id.clone(),
+            row.parameters.clone(),
+            row.input_length,
+            row.fixture.clone(),
+            row.input_checksum.clone(),
+        );
+        if row.implementation == "fast-ta" && row.mode == RUST_CALLER_MODE {
+            rust.insert(key, stats.median_ns);
+        } else if row.implementation == "TA-Lib C" && row.mode == C_DIRECT_MODE {
+            c.insert(key, stats.median_ns);
+        }
+    }
+    rust.into_iter()
+        .filter_map(|(key, rust_ns)| {
+            c.get(&key).map(|c_ns| PrimaryPair {
+                case_id: key.0,
+                input_length: key.2,
+                ratio: rust_ns / c_ns,
+            })
+        })
+        .collect()
+}

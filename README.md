@@ -155,7 +155,7 @@ python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py \
 ```text
 fast-ta/
 ├── crates/
-│   ├── ta-core/        # 指标、执行契约、验证与 SIMD
+│   ├── fast-ta/        # 指标、执行契约、验证与 SIMD
 │   ├── ta-py/          # Python 绑定
 │   ├── ta-wasm/        # wasm-bindgen 绑定
 │   └── ta-benchmarks/  # Criterion 与跨语言性能矩阵

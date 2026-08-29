@@ -1,16 +1,24 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
-
-use ta_benchmarks::catalogue_matrix::{
-    catalogue_fixture, fixture_checksum, parse_criterion_diagnostics, parse_cycle_regression,
-    parse_diagnostic_evidence, parse_platform_qualification, parse_raw_rows,
-    read_criterion_diagnostics, read_cycle_regression, read_diagnostic_evidence,
-    read_platform_qualification, read_raw_rows, render_report, render_report_with_comparison,
-    timing_stats, validate_outputs, write_raw_rows, BenchmarkRow, CaseKind, OutputValues,
-    TimingStats, VerifiedOutput, FIXTURE_ID, INPUT_LENGTHS, MATRIX, PATTERN_SHAPES, RAW_HEADER,
-    RUST_CALLER_MODE,
+use ta_benchmarks::catalogue_cases::{CaseKind, MATRIX};
+use ta_benchmarks::catalogue_evidence::{
+    parse_raw_rows, read_publishable_evidence, read_raw_rows, read_report_evidence,
+    validate_publishable_rows, write_raw_rows, BenchmarkRow, FIXTURE_ID, INPUT_LENGTHS,
+    PUBLICATION_POLICY, RAW_HEADER, RUST_CALLER_MODE,
 };
+use ta_benchmarks::catalogue_execution::CaseAdapter;
+use ta_benchmarks::catalogue_matrix::{
+    catalogue_fixture, fixture_checksum, validate_outputs, OutputValues, VerifiedOutput,
+};
+use ta_benchmarks::catalogue_report::{
+    parse_criterion_diagnostics, parse_cycle_regression, parse_diagnostic_evidence,
+    parse_platform_qualification, read_criterion_diagnostics, read_cycle_regression,
+    read_diagnostic_evidence, read_platform_qualification, render_report,
+    render_validated_report_with_comparison,
+};
+use ta_benchmarks::catalogue_statistics::{timing_stats, TimingStats};
+use ta_benchmarks::pattern_shapes::PATTERN_SHAPES;
 
 static NEXT_PATH: AtomicU64 = AtomicU64::new(0);
 
@@ -157,6 +165,10 @@ fn pattern_cases_cover_single_multi_and_setting_free_stateful_shapes() {
     }
 
     let report = render_report(&report_rows).expect("render Pattern shape metadata");
+    assert!(report.contains(
+        "Executable measurement coverage: 15/161 implemented Indicator Definitions (9.3%); 146 implemented definitions are not measured"
+    ));
+    assert!(report.contains("| Pattern Recognition | 3 | 61 |"));
     for shape in PATTERN_SHAPES {
         assert!(report.contains(shape.case_id));
         assert!(report.contains(shape.execution_shape));
@@ -293,6 +305,14 @@ fn raw_parser_rejects_malformed_numeric_evidence() {
     }
 }
 
+fn current_publication_rows(path: &std::path::Path) -> Vec<BenchmarkRow> {
+    let mut rows = read_raw_rows(path).expect("parse committed publication");
+    for row in &mut rows {
+        row.features = PUBLICATION_POLICY.features.to_owned();
+    }
+    rows
+}
+
 #[test]
 fn committed_raw_matrices_pass_report_parse_validation() {
     let baseline_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("baselines");
@@ -306,12 +326,98 @@ fn committed_raw_matrices_pass_report_parse_validation() {
 }
 
 #[test]
+fn publication_validation_returns_complete_canonical_evidence() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("baselines/catalogue_matrix_optimized.tsv");
+    let historical = read_report_evidence(&path).expect("validate immutable report evidence");
+    assert_eq!(historical.rows().len(), 270);
+    assert!(read_publishable_evidence(&path).is_err());
+
+    let evidence =
+        validate_publishable_rows(current_publication_rows(&path)).expect("current publication");
+    assert_eq!(evidence.provenance().python_version, "3.12.13");
+    assert_eq!(
+        evidence.provenance().commit,
+        "982dff9a5d49407f5294c88ca89f74f1ca5ed2f6"
+    );
+}
+
+#[test]
+fn publication_validation_requires_each_matrix_cell_exactly_once() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("baselines/catalogue_matrix_optimized.tsv");
+    let mut rows = current_publication_rows(&path);
+    rows.pop();
+    rows.push(rows[0].clone());
+
+    let error = validate_publishable_rows(rows).expect_err("duplicate cell must fail");
+    assert!(
+        error
+            .to_string()
+            .contains("incomplete case/input/mode matrix"),
+        "{error}"
+    );
+}
+
+#[test]
+fn publication_validation_owns_canonical_policy_and_provenance_gates() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("baselines/catalogue_matrix_optimized.tsv");
+    let canonical = current_publication_rows(&path);
+    let mutations = [
+        ("sample count", 0),
+        ("semantic status", 1),
+        ("input checksum", 2),
+        ("uniform provenance", 3),
+        ("case provenance", 4),
+    ];
+
+    for (name, mutation) in mutations {
+        let mut rows = canonical.clone();
+        match mutation {
+            0 => rows[0].stats.as_mut().expect("timing").sample_count = 49,
+            1 => rows[0].semantic_status = "unchecked".to_owned(),
+            2 => rows[0].input_checksum = "fnv1a64:wrong".to_owned(),
+            3 => rows[0].rustc = "unavailable".to_owned(),
+            4 => rows[0].parameters = "timeperiod=15".to_owned(),
+            _ => unreachable!(),
+        }
+        assert!(
+            validate_publishable_rows(rows).is_err(),
+            "{name} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn executable_adapter_contracts_match_the_case_manifest() {
+    for spec in MATRIX {
+        CaseAdapter::new(spec.kind)
+            .validate_spec(&spec)
+            .expect("executable adapter metadata must match manifest");
+    }
+}
+
+#[test]
+fn publication_validation_rejects_uniform_drift_from_case_manifest() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("baselines/catalogue_matrix_optimized.tsv");
+    let mut rows = current_publication_rows(&path);
+    for row in rows.iter_mut().filter(|row| row.case_id == "SMA") {
+        row.parameters = "timeperiod=15".to_owned();
+    }
+    let error = validate_publishable_rows(rows).expect_err("manifest drift must fail");
+    assert!(error.to_string().contains("catalogue-cases.tsv"), "{error}");
+}
+
+#[test]
 fn report_is_generated_from_all_committed_durable_evidence() {
     let baseline_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("baselines");
-    let rows = read_raw_rows(&baseline_dir.join("catalogue_matrix_optimized.tsv"))
-        .expect("parse final matrix");
-    let baseline = read_raw_rows(&baseline_dir.join("catalogue_matrix_pre_optimization.tsv"))
-        .expect("parse pre matrix");
+    let evidence = read_report_evidence(&baseline_dir.join("catalogue_matrix_optimized.tsv"))
+        .expect("validate final matrix");
+    let baseline =
+        read_report_evidence(&baseline_dir.join("catalogue_matrix_pre_optimization.tsv"))
+            .expect("validate pre matrix");
     let diagnostic =
         read_diagnostic_evidence(&baseline_dir.join("issue_57_62_diagnostic_evidence.json"))
             .expect("parse diagnostic evidence");
@@ -332,8 +438,8 @@ fn report_is_generated_from_all_committed_durable_evidence() {
     .collect::<Result<Vec<_>, _>>()
     .expect("parse five platform qualifications");
 
-    let report = render_report_with_comparison(
-        &rows,
+    let report = render_validated_report_with_comparison(
+        &evidence,
         &baseline,
         &diagnostic,
         &criterion,

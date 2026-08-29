@@ -1,4 +1,4 @@
-//! TA-Core: Core library for technical analysis indicators
+//! fast-ta: Technical analysis indicators for Rust
 //!
 //! This crate provides the core implementation of technical analysis indicators
 //! with `no_std` compatibility, SIMD optimizations, and conditional float precision.

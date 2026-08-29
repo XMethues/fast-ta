@@ -27,7 +27,7 @@ jobs:
       - name: Execute matching-boundary scalar, AVX2, and available AVX-512 qualification
         env:
           QUALIFICATION_COMMIT: ${{ github.sha }}
-        run: crates/fast-ta/scripts/qualify_typprice_x86.sh target/qualification/x86
+        run: crates/ta-benchmarks/scripts/qualify_typprice_x86.sh target/qualification/x86
 
       - name: Retain x86 timing and equivalence evidence
         if: always()
@@ -60,7 +60,7 @@ jobs:
       - name: Execute scalar and observed NEON public qualification
         env:
           QUALIFICATION_COMMIT: ${{ github.sha }}
-        run: crates/fast-ta/scripts/qualify_typprice_aarch64.sh target/qualification/aarch64
+        run: crates/ta-benchmarks/scripts/qualify_typprice_aarch64.sh target/qualification/aarch64
 
       - name: Retain AArch64 timing and equivalence evidence
         if: ${{ always() }}

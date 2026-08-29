@@ -92,12 +92,15 @@ python3 crates/ta-benchmarks/scripts/run_catalogue_matrix.py \
 ```
 
 The canonical matrix uses 50 timed samples, a 250 ms warm-up, and a 10 ms
-target per sample for every variant at 256, 4,096, and 65,536 observations. It
-contains `SMA(14)`, `BBANDS(20, 2, 2, SMA)`, `RSI(14)`,
-`MACD(12, 26, 9)`, `ATR(14)`, `ADX(14)`, `HT_DCPHASE`, `CDLDOJI`,
-`CDLENGULFING`, `CDL3WHITESOLDIERS`, `LINEARREG(14)`, `TYPPRICE`, `OBV`,
-`SIN`, and `ADD`. The three Pattern Recognition cases use immutable TA-Lib
-default Candle Settings. Each case reports fast-ta Owned Compact Output,
+target per sample for every variant at 256, 4,096, and 65,536 observations.
+`crates/ta-benchmarks/catalogue-cases.tsv` is the single case manifest consumed
+by the Rust build, Python orchestration, and Python adapter validation. Its 15
+representative cases measure 15 of the 161 implemented Indicator Definitions;
+the generated report records the 15/161 total, the 146-definition gap, and
+per-family measured/implemented counts. This is representative performance
+coverage, not a claim that every implemented definition is timed. The three
+Pattern Recognition cases use immutable TA-Lib default Candle Settings. Each
+case reports fast-ta Owned Compact Output,
 caller-owned
 Batch Computation, Prepared Batch Runner, and Streaming Computation separately,
 alongside direct caller-owned TA-Lib C and the official Python NumPy API. Only
@@ -219,7 +222,7 @@ cargo build --workspace
 rs-indicators/
 ├── Cargo.toml (workspace root)
 └── crates/
-    ├── ta-core/         # Core library (no_std)
+    ├── fast-ta/       # Core library (no_std)
     ├── ta-py/         # Python bindings (PyO3)
     ├── ta-wasm/       # WebAssembly bindings (wasm-bindgen)
     └── ta-benchmarks/ # Performance benchmarks (Criterion)

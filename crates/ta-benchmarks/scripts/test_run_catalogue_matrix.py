@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import importlib.util
 import io
@@ -78,90 +77,28 @@ class PublicationArgumentTests(unittest.TestCase):
 
 
 class PublicationMatrixTests(unittest.TestCase):
-    def rows(self) -> list[dict[str, str]]:
-        rows = []
-        for case_id in runner.CASE_IDS:
-            for input_length in runner.INPUT_LENGTHS:
-                for implementation, mode in runner.VARIANTS:
-                    row = {
-                        "case_id": case_id,
-                        "input_length": str(input_length),
-                        "implementation": implementation,
-                        "mode": mode,
-                        "indicator_family": f"family-{case_id}",
-                        "indicator_definition": f"definition-{case_id}",
-                        "parameters": "canonical",
-                        "output_kind": "float",
-                        "output_arity": "1",
-                        "input_checksum": runner.INPUT_CHECKSUMS[input_length],
-                        "median_ns": "1000",
-                        "ci95_lower_ns": "900",
-                        "ci95_upper_ns": "1100",
-                        "throughput_observations_per_second": str(
-                            input_length * 1.0e9 / 1000.0
-                        ),
-                        "warmup_iterations": "100",
-                        "iterations_per_sample": "10",
-                        "outlier_count": "2",
-                        "outlier_low_count": "1",
-                        "outlier_high_count": "1",
-                        "python_version": "3.12.0",
-                        "rustc": "rustc test",
-                        "cpu": "test cpu",
-                        "os": "test os",
-                        "arch": "test arch",
-                        "commit": "0123456789abcdef",
-                    }
-                    row.update(runner.FIXED_PUBLICATION_FIELDS)
-                    rows.append(row)
-        return rows
-
-    def write_rows(self, path: Path, rows: list[dict[str, str]]) -> None:
-        with path.open("w", newline="", encoding="utf-8") as raw:
-            writer = csv.DictWriter(raw, fieldnames=list(rows[0]), delimiter="\t")
-            writer.writeheader()
-            writer.writerows(rows)
-
-    def test_publishable_requires_each_expected_matrix_cell_exactly_once(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            raw = Path(temporary) / "raw.tsv"
-            rows = self.rows()
-            self.write_rows(raw, rows)
+    def test_publishable_delegates_policy_to_rust_evidence_command(self) -> None:
+        raw = Path("/tmp/catalogue-matrix-raw.tsv")
+        with mock.patch.object(runner, "run") as run:
             runner.validate_publishable(raw)
 
-            rows[-1] = rows[0].copy()
-            self.write_rows(raw, rows)
-            with self.assertRaisesRegex(RuntimeError, "incomplete case/input/mode matrix"):
-                runner.validate_publishable(raw)
-
-    def test_publishable_rejects_malformed_numeric_evidence(self) -> None:
-        mutations = (
-            ("median_ns", "NaN", "positive and finite"),
-            ("ci95_lower_ns", "-1", "positive and finite"),
-            ("ci95_upper_ns", "inf", "positive and finite"),
-            ("ci95_lower_ns", "1001", "confidence interval"),
-            (
-                "throughput_observations_per_second",
-                "1",
-                "throughput is incoherent",
-            ),
-            ("sample_count", "0", "sample_count must be positive"),
-            ("warmup_iterations", "0", "warmup_iterations must be positive"),
-            ("iterations_per_sample", "0", "iterations_per_sample must be positive"),
-            ("iterations_per_sample", "NA", "invalid iterations_per_sample"),
+        run.assert_called_once_with(
+            [
+                "cargo",
+                "run",
+                "--release",
+                "--quiet",
+                "-p",
+                "ta-benchmarks",
+                "--features",
+                "catalogue-matrix",
+                "--bin",
+                "catalogue-evidence",
+                "--",
+                str(raw),
+            ],
+            cwd=runner.REPOSITORY,
         )
-        with tempfile.TemporaryDirectory() as temporary:
-            raw = Path(temporary) / "raw.tsv"
-            for field, value, message in mutations:
-                with self.subTest(field=field):
-                    rows = self.rows()
-                    rows[0][field] = value
-                    self.write_rows(raw, rows)
-                    with self.assertRaisesRegex(RuntimeError, message):
-                        runner.validate_publishable(raw)
-
-    def test_committed_optimized_matrix_is_publishable(self) -> None:
-        runner.validate_publishable(runner.PUBLISHED_RAW)
 
 
 class SourceCacheTests(unittest.TestCase):
