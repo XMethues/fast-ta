@@ -5,7 +5,7 @@ edition = "2021"
 rust-version = "1.89"
 authors = ["TA-Lib Rust Contributors"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/rs-indicators"
+repository = "https://github.com/XMethues/fast-ta"
 description = "Python bindings for technical analysis indicators"
 keywords = ["python", "pyo3", "technical-analysis", "trading", "indicators"]
 categories = ["api-bindings", "wasm"]
@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 test = false
 
 [dependencies]
-fast-ta = { path = "../fast-ta", version = "0.2.1" }
+fast-ta = { path = "../fast-ta", version = "0.2.2" }
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
 numpy = "0.29.0"
 

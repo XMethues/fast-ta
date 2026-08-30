@@ -5,7 +5,7 @@ edition = "2021"
 rust-version = "1.89"
 authors = ["TA-Lib Rust Contributors"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/rs-indicators"
+repository = "https://github.com/XMethues/fast-ta"
 description = "WebAssembly bindings for technical analysis indicators"
 keywords = ["wasm", "webassembly", "javascript", "technical-analysis", "indicators"]
 categories = ["api-bindings", "wasm"]
@@ -19,7 +19,7 @@ simd = []
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-fast-ta = { path = "../fast-ta", version = "0.2.1", features = ["std"] }
+fast-ta = { path = "../fast-ta", version = "0.2.2", features = ["std"] }
 wasm-bindgen = "0.2.126"
 web-sys = { version = "0.3.103", features = ["console"] }
 console_error_panic_hook = { version = "0.1.7", optional = true }
